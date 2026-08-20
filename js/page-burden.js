@@ -180,6 +180,15 @@ const B2_TERM_SYMB = {
     '산정특례 결핵질환자':           ['V000'],
     '잠복결핵 감염자':               ['F009'],
   },
+  'hi-cs|차상위 2종: E,F — 외래#0': {
+    '건강검진 확진 의료비 지원':     ['F022'],
+    '조산아·저체중아':               ['F016'],
+    '산정특례 결핵질환자':           ['V000'],
+    '잠복결핵 감염자':               ['F009'],
+    '임신부':                        ['F015'],   // 이 표에 '고위험임신부' 는 없다
+    '1세미만':                       ['F024'],
+    '치매':                          ['V800', 'V810'],
+  },
 };
 /* 한 번만 훑는다 — replace 콜백이 끼워 넣은 HTML 은 다시 검사되지 않아 배지 속 글자에
    또 배지가 붙는 일이 없다. 긴 낱말을 먼저 놓아 짧은 낱말이 먼저 걸리지 않게 한다. */
@@ -420,9 +429,10 @@ function b2TableHtml(part, sec, rows, needle, cardId, pi, hoisted, tabKey){
           cls = 'note'; body = hilite(cell, needle);
         } else if (name === '비고'){
           cls = ''; body = cell ? b2Note(cell, needle) : '';
-        } else if (name === '구분'){
-          // 구분 칸은 낱말마다 특정기호 배지를 붙인다(B2_TERM_SYMB 에 등록된 표만)
-          cls = 'c-gubun';
+        } else if (name === '구분' || name === '세부'){
+          // 구분·세부 칸은 낱말마다 특정기호 배지를 붙인다(B2_TERM_SYMB 에 등록된 표만).
+          // 세부에도 임신부·조산아·1세미만 같은 낱말이 들어 있어 두 열을 같이 본다.
+          cls = (name === '구분') ? 'c-gubun' : 'c-detail';
           body = b2Terms(sub(hilite(cell, needle)), tkey);
         } else {
           cls  = b2ColClass(name, i);
