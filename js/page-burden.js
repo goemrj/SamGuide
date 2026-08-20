@@ -164,6 +164,36 @@ function b2Symbols(sec, label){
    행 이름으로 찾는 sec.codes 로는 붙일 수 없어 여기서 따로 붙인다. */
 const B2_LINE_SYMB = { '(임신부)': 'F015', '(1세미만)': 'F024' };
 
+/* 구분 칸 **안의 낱말**에 특정기호 배지를 붙인다.
+   sec.codes 는 "행 이름 → 기호" 라 한 칸에 낱말이 여럿이고 각각 기호가 다른 경우를 못 잡는다.
+   키는 표(tkey) → 낱말 → 기호. 낱말은 원문 글자 그대로 적는다 — 원문은 고치지 않는다.
+   원문에 글자로 적힌 기호(V191,V192,…)도 같이 배지로 바꾼다. */
+const B2_TERM_SYMB = {
+  'hi-cs|차상위 2종: E,F — 입원#0': {
+    '고위험임신부':                  ['F011'],
+    '치매':                          ['V800', 'V810'],
+    '6~15세':                        ['F020'],
+    '자연분만':                      ['F001'],
+    '6세미만':                        ['F019'],
+    '제왕절개분만':                  ['F013'],
+    '장기 등 기증자의 장기등 적출':  ['F017'],
+    '산정특례 결핵질환자':           ['V000'],
+    '잠복결핵 감염자':               ['F009'],
+  },
+};
+/* 한 번만 훑는다 — replace 콜백이 끼워 넣은 HTML 은 다시 검사되지 않아 배지 속 글자에
+   또 배지가 붙는 일이 없다. 긴 낱말을 먼저 놓아 짧은 낱말이 먼저 걸리지 않게 한다. */
+function b2Terms(html, tkey){
+  const map = B2_TERM_SYMB[tkey];
+  if (!map) return html;
+  // 낱말에 정규식 특수문자가 없어(한글·숫자·물결표) 따로 이스케이프하지 않는다.
+  const terms = Object.keys(map).sort((a, b) => b.length - a.length);
+  const re = new RegExp('(' + terms.join('|') + ')|(V[0-9]{3}(?:[, ]+V[0-9]{3})*)', 'g');
+  return html.replace(re, (m, term, codes) =>
+    term ? term + ' ' + map[term].map(b2Symb).join(' ')
+         : codes.split(',').map(s => s.trim()).filter(Boolean).map(b2Symb).join(' '));
+}
+
 /* 부담률 칸 그리기.
    · 줄바꿈(\n)은 그대로 줄을 나눈다 — (일반)/(임신부)/(1세미만) 이 한 줄에 뭉치지 않게.
    · 줄머리가 (임신부)·(1세미만) 이면 바로 뒤에 특정기호 배지를 붙인다.
@@ -390,6 +420,10 @@ function b2TableHtml(part, sec, rows, needle, cardId, pi, hoisted, tabKey){
           cls = 'note'; body = hilite(cell, needle);
         } else if (name === '비고'){
           cls = ''; body = cell ? b2Note(cell, needle) : '';
+        } else if (name === '구분'){
+          // 구분 칸은 낱말마다 특정기호 배지를 붙인다(B2_TERM_SYMB 에 등록된 표만)
+          cls = 'c-gubun';
+          body = b2Terms(sub(hilite(cell, needle)), tkey);
         } else {
           cls  = b2ColClass(name, i);
           body = b2Ref(/rate|c-mid/.test(cls) ? b2Rate(cell, needle) : sub(hilite(cell, needle)), cardId);
