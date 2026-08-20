@@ -19,17 +19,20 @@
     </div>
     <nav>
       
-      <button class="navbtn on" data-page="burden"><span class="ico">▤</span>본인부담금 규칙</button>
-      <button class="navbtn" data-page="calc"><span class="ico">▦</span>본인부담금 계산기</button>
-      <button class="navbtn" data-page="layout"><span class="ico">▥</span>SAM 파일 레이아웃</button>
-      <button class="navbtn" data-page="hangmok"><span class="ico">#</span>항 · 목 코드</button>
-      <button class="navbtn" data-page="detail"><span class="ico">▧</span>특정내역</button>
-      <button class="navbtn" data-page="special"><span class="ico">◎</span>산정특례 특정기호</button>
-      <button class="navbtn" data-page="pharm"><span class="ico">◈</span>약국 산정특례</button>
-      <button class="navbtn" data-page="injury"><span class="ico">△</span>상해외인</button>
-      <button class="navbtn" data-page="pilot"><span class="ico">✳</span>시범사업</button>
+      <!-- 아이콘은 인라인 SVG 선 아이콘이다. 이모지·유니코드 글리프는 글자색이 먹지 않아
+           선택된 항목에서 파랑이 되지 않고, 폰트에 따라 모양이 달라진다.
+           stroke="currentColor" 라 선택·hover 색을 그대로 따라간다. CDN 은 쓰지 않는다. -->
+      <button class="navbtn on" data-page="burden"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>본인부담금 규칙</button>
+      <button class="navbtn" data-page="calc"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h4"/></svg>본인부담금 계산기</button>
+      <button class="navbtn" data-page="layout"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>SAM 파일 레이아웃</button>
+      <button class="navbtn" data-page="hangmok"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>항 · 목 코드</button>
+      <button class="navbtn" data-page="detail"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>특정내역</button>
+      <button class="navbtn" data-page="special"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>산정특례 특정기호</button>
+      <button class="navbtn" data-page="pharm"><svg class="ico" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>약국 산정특례</button>
+      <button class="navbtn" data-page="injury"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4 3 19h18z"/><path d="M12 10v4M12 17h.01"/></svg>상해외인</button>
+      <button class="navbtn" data-page="pilot"><svg class="ico" viewBox="0 0 24 24"><path d="M8 3h8"/><path d="M10 3v6l-4 8a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-4-8V3"/></svg>시범사업</button>
       <!-- 메모장은 카테고리가 늘어도 항상 맨 아래 — 새 메뉴는 이 줄 위에 넣는다 -->
-      <button class="navbtn" data-page="memo"><span class="ico">✎</span>메모장</button>
+      <button class="navbtn" data-page="memo"><svg class="ico" viewBox="0 0 24 24"><path d="M17 3l4 4L8 20H4v-4z"/><path d="M14 6l4 4"/></svg>메모장</button>
     </nav>
     <div class="foot">
       브라우저 안에서만 동작하고 외부로 아무것도 보내지 않습니다.<br>
@@ -136,8 +139,8 @@
         <p>청구분야 → 레코드를 고르면 필드 위치 · 길이 · 코드값을 볼 수 있습니다. 위치와 길이는 모두 <b>바이트</b> 기준(EUC-KR, 한글 2byte)입니다.</p>
       </div>
 
-      <div class="toolbar"><div class="chips" id="lo-claims"></div></div>
-      <div class="toolbar"><div class="chips" id="lo-recs"></div></div>
+      <div class="toolbar"><div class="chips chips-seg" id="lo-claims"></div></div>
+      <div class="toolbar"><div class="chips chips-rec" id="lo-recs"></div></div>
 
       <div class="toolbar">
         <input class="field-input" id="lo-search" type="search" placeholder="항목명 · 설명 · 코드값 검색  (예: 특정내역, 산정특례, MT)">
@@ -158,7 +161,7 @@
         <p>진료내역(C) 레코드의 <b>항</b>과 <b>목</b> 코드. SAM 레이아웃 데이터에서 그대로 뽑았습니다.</p>
       </div>
 
-      <div class="toolbar"><div class="chips" id="hm-claims"></div></div>
+      <div class="toolbar"><div class="chips chips-seg" id="hm-claims"></div></div>
       <div class="toolbar">
         <input class="field-input" id="hm-search" type="search" style="flex:1;min-width:260px;"
                placeholder="항번호 · 목번호 · 이름 검색  (예: 투약, 특수장비, 100/50, 식대)">

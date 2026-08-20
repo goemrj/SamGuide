@@ -120,10 +120,13 @@ const COLW = (() => {
 function saveColW(){
   try { localStorage.setItem(COLW_KEY, JSON.stringify(COLW)); } catch (e) {}
 }
-/* 저장값은 열 개수가 지금과 같을 때만 쓴다 — 열을 감추거나 늘리면 자리가 어긋난다 */
+/* 저장값은 열 개수가 지금과 같을 때만 쓴다 — 열을 감추거나 늘리면 자리가 어긋난다.
+   0 이나 음수처럼 말이 안 되는 값이 섞이면 통째로 버린다 — 그대로 쓰면 열이 사라져
+   표를 읽을 수 없게 되고, 사용자는 "너비가 저절로 이상해졌다"로만 느낀다. */
 function colwOf(key, n){
   const v = COLW[key];
-  return (Array.isArray(v) && v.length === n) ? v : null;
+  if (!Array.isArray(v) || v.length !== n) return null;
+  return v.every(x => typeof x === 'number' && isFinite(x) && x >= 24) ? v : null;
 }
 /* 표를 가리키는 이름. 스스로 data-k 를 달아 둔 표(① 카드들)는 그것을 쓰고,
    나머지는 "화면id#표순서#열수" 로 만든다. */
