@@ -107,10 +107,11 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
 .card + .card{margin-top:16px;}
 .card-pad{padding:16px 18px;}
 .chips{display:flex; flex-wrap:wrap; gap:6px;}
-/* 칩은 두 모양이다 (모형과 같게)
-   .chips-seg — 청구분야처럼 "무엇을 보는지" 고르는 줄: 둥근 네모(8px), 고른 것은 파랑 채움
-   .chips-rec — 레코드처럼 그 안에서 다시 고르는 줄: pill(999px), 고른 것은 파랑 테두리·글자
-   그 밖의 칩(특정내역 분야 등)은 예전처럼 pill + 파랑 채움 */
+/* 칩은 두 모양이다 (모형과 같게). 어느 화면이든 필터 줄은 이 두 가지만 쓴다.
+   .chips-seg — 대분류(첫 줄, "무엇을 보는지"): 둥근 네모(8px), 고른 것은 파랑 채움 + 흰 글씨
+   .chips-rec — 소분류(둘째 줄, 그 안에서 다시 고르는 것): pill(999px),
+                고른 것은 밝은 하이라이트(--accent-tint 배경) + 파랑 테두리·글자
+   화면에 "대분류"·"소분류" 라는 글자는 넣지 않는다 — 모양으로만 구분한다. */
 .chip{
   border:1px solid var(--line-strong); background:#fff; color:var(--text-25);
   padding:6px 13px; border-radius:999px; font-size:13px; letter-spacing:-.01em; white-space:nowrap;
@@ -121,7 +122,7 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
 
 .chips-seg .chip{border-radius:8px; padding:7px 14px;}
 .chips-rec .chip{border-radius:999px;}
-.chips-rec .chip.on{background:#fff; border-color:var(--accent); color:var(--accent); font-weight:600;}
+.chips-rec .chip.on{background:var(--accent-tint); border-color:var(--accent); color:var(--accent); font-weight:600;}
 
 .field-input{
   border:1px solid var(--line); background:#fff; border-radius:4px;
@@ -311,6 +312,28 @@ table.fields.res tfoot td{border-top:1px solid var(--line); background:var(--gro
 .ftag.none{background:var(--group-tint); color:var(--note);}
 .ftag.old{background:#fff; color:var(--note-label); box-shadow:inset 0 0 0 1px var(--line);}
 .memo-item span{line-height:1.7;}
+
+/* 특정내역 표 — 열 너비는 page-detail.js 의 DT_COLW(%)가 <th> 인라인으로 넣는다.
+   표 자체는 카드 폭을 넘지 않고, 넘치는 글자는 칸 안에서 줄바꿈된다(좌우 스크롤 금지). */
+table.fields.dt{width:100%;}
+.dt-code{white-space:nowrap; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;}
+.dt-name{font-weight:600; letter-spacing:-.01em; color:var(--text);}
+.dt-rec{color:var(--text-2); font-size:11.5px;}
+.dt-fmt{font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--accent); line-height:1.6;}
+.dt-field{line-height:1.9;}
+.dt-when{font-size:11.5px; color:var(--text-2); font-variant-numeric:tabular-nums;}
+.dt-when .ftag.old{display:block; margin-top:3px;}
+.dt-guide-cell{color:var(--text-2); line-height:1.6;}
+.dt-note{font-size:12px;}
+.dt-open{
+  margin-top:6px; background:none; border:0; padding:0;
+  color:var(--accent); font-size:11.5px; font-weight:600; text-decoration:underline;
+}
+tr.dt-bodyrow td{background:var(--group-tint); padding:2px 16px 14px;}
+tr.dt-bodyrow .dt-sec{margin:8px 0 6px;}
+tr.dt-bodyrow pre.dt-body{background:var(--card); max-height:480px;}
+tr.dt-past .dt-code{color:var(--text-4);}
+table.fields.dt mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
 .dt-guide{
   margin-top:12px; padding:12px 14px; background:var(--accent-tint); border-radius:10px;

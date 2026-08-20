@@ -181,21 +181,17 @@
         <p>「특정내역코드_통합본」이 마스터, 「세부작성요령」(2025.8.1.) Ⅸ장 211~253쪽의 자세한 작성요령을 붙였습니다.</p>
       </div>
 
-      <div class="toolbar"><div class="chips" id="dt-fields"></div></div>
-      <div class="toolbar"><div class="chips" id="dt-recs"></div></div>
+      <div class="toolbar"><div class="chips chips-seg" id="dt-fields"></div></div>
+      <div class="toolbar"><div class="chips chips-rec" id="dt-recs"></div></div>
       <div class="toolbar">
         <input class="field-input" id="dt-search" type="search" style="flex:1;min-width:260px;"
                placeholder="구분코드 · 특정내역명 · 작성요령 본문 검색  (예: MT002, 특정기호, 산정특례)">
         <label class="saved-note"><input type="checkbox" id="dt-old"> 지난 판(종료된 항목)도 보기</label>
       </div>
 
-      <div class="memo-wrap">
-        <div class="card memo-list wide">
-          <div class="card-pad"><div id="dt-items"></div></div>
-        </div>
-        <div class="card memo-edit">
-          <div class="card-pad" id="dt-detail"></div>
-        </div>
+      <div class="card">
+        <div class="meta-bar" id="dt-meta"></div>
+        <div id="dt-table"></div>
       </div>
     </section>
 
@@ -203,10 +199,11 @@
     <section class="page" id="page-special">
       <div class="page-head">
         <h1>산정특례 특정기호</h1>
-        <p>특정기호 · 상병코드 · 상병일련번호 · 질환명 — 「산정특례 질환별 등록기준」(2026.1.1. 기준)</p>
+        <p>특정기호 · 상병코드 · 상병일련번호 · 질환명 — 「산정특례 질환별 등록기준」(2026.1.1. 기준)
+           과 본인부담 특례 F 기호(특정기호 목록, 2026.8.19. 기준)</p>
       </div>
 
-      <div class="toolbar"><div class="chips" id="sp-groups"></div></div>
+      <div class="toolbar"><div class="chips chips-seg" id="sp-groups"></div></div>
       <div class="toolbar">
         <input class="field-input" id="sp-search" type="search" style="flex:1;min-width:280px;"
                placeholder="특정기호 · 상병코드 · 질환명 검색  (예: V193, C34, 크론, F00.0)">
