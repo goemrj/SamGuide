@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/bit-computer-design-system-d6594b09-9988-4bc1-a213-c5492e16b914/colors_and_type.css">
+<link rel="stylesheet" href="_ds/bit-computer-design-system-d6594b09-9988-4bc1-a213-c5492e16b914/styles.css">
+<script src="_ds/bit-computer-design-system-d6594b09-9988-4bc1-a213-c5492e16b914/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; }
+  body { font-family:'Pretendard','Pretendard Variable',system-ui,sans-serif; background:#EFF2F6; color:#16233C; -webkit-font-smoothing:antialiased; }
+  a { color:#2F6BDE; text-decoration:none; }
+  a:hover { color:#1F51B0; text-decoration:underline; }
+  input { font-family:inherit; }
+</style>
+</helmet>
+
+<div style="display:flex; min-height:100vh; align-items:stretch; word-break:keep-all;">
+
+  <aside style="width:232px; flex:0 0 232px; background:#fff; color:#16233C; border-right:1px solid #E3E8EF; display:flex; flex-direction:column; position:sticky; top:0; height:100vh;">
+    <div style="padding:20px 20px 16px 20px; border-bottom:1px solid #E3E8EF; display:flex; align-items:center; gap:10px;">
+      <span style="width:26px; height:26px; flex:0 0 auto; border-radius:6px; background:#2F6BDE; color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;">S</span>
+      <div>
+        <div style="font-size:16px; font-weight:700; letter-spacing:-0.01em; color:#16233C;">SamGuide</div>
+        <div style="font-size:11.5px; color:#8593A9; margin-top:2px;">심사청구 점검 참고자료</div>
+      </div>
+    </div>
+    <nav style="padding:12px 12px; display:flex; flex-direction:column; gap:2px;">
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="7">
+        <sc-if value="{{ item.active }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ item.onClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:6px; background:#EAF1FF; color:#2F6BDE; font-size:13.5px; font-weight:600; cursor:pointer;">
+            <span style="font-size:12px; color:#7FA5EC; font-variant-numeric:tabular-nums;">{{ item.num }}</span>
+            <span>{{ item.label }}</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ item.inactive }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ item.onClick }}" style="display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:5px; color:#3E4C63; font-size:13.5px; font-weight:400; cursor:pointer;" style-hover="background:#F5F8FD; color:#16233C;">
+            <span style="font-size:12px; color:#8593A9; font-variant-numeric:tabular-nums;">{{ item.num }}</span>
+            <span>{{ item.label }}</span>
+          </div>
+        </sc-if>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto; padding:18px 20px 22px 20px; border-top:1px solid #E3E8EF; font-size:11.5px; line-height:1.7; color:#8593A9;">
+      브라우저 안에서만 동작하고 외부로 아무것도 보내지 않습니다.<br>메모는 이 PC 브라우저에 저장됩니다.
+    </div>
+  </aside>
+
+  <main style="flex:1; min-width:0; display:flex; flex-direction:column;">
+
+    <div ref="{{ barRef }}" style="position:sticky; top:0; z-index:30; background:rgba(255,255,255,0.96); backdrop-filter:blur(12px); border-bottom:1px solid #E3E8EF;">
+      <div style="padding:22px 32px 0 32px;">
+        <div style="display:flex; align-items:baseline; gap:14px;">
+          <h1 style="margin:0; font-size:26px; font-weight:700; letter-spacing:-0.02em; color:#16233C;">본인부담금 규칙</h1>
+          <span style="font-size:13px; color:#8593A9;">건강보험 · 차상위 · 의료급여 본인부담 산정 기준</span>
+        </div>
+      </div>
+
+      <div style="padding:16px 32px 0 32px; display:flex; gap:6px; flex-wrap:wrap;">
+        <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="5">
+          <sc-if value="{{ tab.active }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ tab.onClick }}" style="display:flex; align-items:center; gap:7px; padding:8px 15px; border:1px solid #2F6BDE; border-radius:5px; background:#2F6BDE; color:#fff; font-size:13.5px; font-weight:700; cursor:pointer; font-family:inherit;">
+              <span>{{ tab.label }}</span>
+              <span style="font-size:11.5px; font-weight:600; color:rgba(255,255,255,0.58); font-variant-numeric:tabular-nums;">{{ tab.count }}</span>
+            </button>
+          </sc-if>
+          <sc-if value="{{ tab.inactive }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ tab.onClick }}" style="display:flex; align-items:center; gap:7px; padding:8px 15px; border:1px solid #E3E8EF; border-radius:5px; background:#fff; color:#3E4C63; font-size:13.5px; font-weight:500; cursor:pointer; font-family:inherit;" style-hover="border-color:#2F6BDE; color:#2F6BDE;">
+              <span>{{ tab.label }}</span>
+              <span style="font-size:11.5px; color:#8593A9; font-variant-numeric:tabular-nums;">{{ tab.count }}</span>
+            </button>
+          </sc-if>
+        </sc-for>
+      </div>
+
+      <div style="padding:14px 32px 16px 32px; display:flex; align-items:center; gap:12px;">
+        <div style="flex:1; min-width:0; position:relative; display:flex; align-items:center;">
+          <span style="position:absolute; left:13px; font-size:13px; color:#8593A9;">⌕</span>
+          <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="구분 · 항목 · 계산식 · 비고 검색 (예: 임신부, 선별급여, F025)" style="width:100%; box-sizing:border-box; padding:9px 12px 9px 32px; border:1px solid #E3E8EF; border-radius:4px; background:#fff; font-size:13.5px; color:#16233C; outline:none;" style-focus="border-color:#2F6BDE; box-shadow:0 0 0 3px rgba(47,107,222,0.16);">
+        </div>
+        <div style="font-size:12.5px; color:#8593A9; white-space:nowrap; font-variant-numeric:tabular-nums;">{{ resultLabel }}</div>
+      </div>
+    </div>
+
+    <div style="padding:20px 32px 64px 32px;">
+      <div style="background:#fff; border:1px solid #E3E8EF; border-radius:7px; box-shadow:0 1px 2px rgba(22,35,60,0.05);">
+
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 20px; border-bottom:1px solid #E3E8EF; border-radius:7px 7px 0 0;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-size:15px; font-weight:600; color:#16233C;">{{ activeLabel }}</span>
+            <span style="padding:2px 8px; border-radius:3px; background:#EAF1FF; color:#2F6BDE; font-size:11.5px; font-weight:600;">{{ rounding }}</span>
+          </div>
+          <span style="font-size:11.5px; color:#8593A9;">{{ source }}</span>
+        </div>
+
+        <div ref="{{ colRef }}" style="position:sticky; top:{{ colTop }}; z-index:20; display:grid; grid-template-columns:minmax(240px,300px) 1fr; gap:0; background:#fff; border-bottom:1px solid #E3E8EF;">
+          <div style="padding:9px 20px; font-size:11.5px; font-weight:700; letter-spacing:0.04em; color:#8593A9;">항목</div>
+          <div style="padding:9px 20px; font-size:11.5px; font-weight:700; letter-spacing:0.04em; color:#8593A9;">본인부담 산정</div>
+        </div>
+
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+          <div style="display:flex; align-items:center; gap:9px; padding:8px 20px; background:#F5F8FD; border-top:1px solid #E3E8EF; border-bottom:1px solid #E3E8EF; position:sticky; top:{{ groupTop }}; z-index:10;">
+            <span style="width:3px; height:12px; background:#2F6BDE; border-radius:2px;"></span>
+            <span style="font-size:13px; font-weight:600; color:#16233C; letter-spacing:-0.01em;">{{ g.name }}</span>
+            <span style="font-size:11.5px; color:#8593A9; font-variant-numeric:tabular-nums;">{{ g.count }}건</span>
+          </div>
+
+          <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="8">
+            <div style="display:grid; grid-template-columns:minmax(240px,300px) 1fr; border-bottom:1px solid #EEF1F6;" style-hover="background:#F7F9FD;">
+              <div style="padding:9px 20px; display:flex; flex-wrap:wrap; align-items:baseline; gap:6px; align-content:start;">
+                <span style="font-size:13.5px; font-weight:500; color:#16233C; line-height:1.45;">{{ r.item }}</span>
+                <sc-for list="{{ r.codes }}" as="c" hint-placeholder-count="0">
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; font-weight:600; letter-spacing:0.02em; color:#2F6BDE; background:#EAF1FF; border-radius:3px; padding:1.5px 5px; white-space:nowrap;">{{ c }}</span>
+                </sc-for>
+              </div>
+              <div style="padding:9px 20px; display:flex; flex-direction:column; gap:5px; border-left:1px solid #EEF1F6;">
+                <div style="font-size:13.5px; line-height:1.5; color:#3E4C63; font-variant-numeric:tabular-nums; white-space:pre-wrap;"><sc-for list="{{ r.tokens }}" as="t" hint-placeholder-count="3"><sc-if value="{{ t.isNum }}" hint-placeholder-val="{{ false }}"><span style="font-weight:600; color:#2F6BDE;">{{ t.v }}</span></sc-if><sc-if value="{{ t.isTxt }}" hint-placeholder-val="{{ true }}"><span>{{ t.v }}</span></sc-if></sc-for></div>
+                <sc-if value="{{ r.note }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:8px; align-items:flex-start;">
+                    <span style="flex:0 0 auto; font-size:10.5px; font-weight:600; letter-spacing:0.04em; color:#A0ACBE; padding-top:2px;">비고</span>
+                    <span style="font-size:12.5px; line-height:1.55; color:#6B7A91;">{{ r.note }}</span>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </sc-for>
+
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:56px 20px; text-align:center; border-radius:0 0 7px 7px;">
+            <div style="font-size:14px; font-weight:600; color:#3E4C63;">표시할 규칙이 없습니다</div>
+            <div style="font-size:12.5px; color:#8593A9; margin-top:7px; line-height:1.7;">{{ emptyHint }}</div>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;hi_out&quot;,&quot;cs_out&quot;,&quot;hi_in&quot;,&quot;cs_in&quot;,&quot;aid&quot;],&quot;default&quot;:&quot;hi_out&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;동작&quot;},&quot;showCodeBadges&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;동작&quot;}}">
+const DATA = {
+  hi_out: {
+    label: "건강보험 외래", count: 79, rounding: "100원 미만 절사",
+    source: "출처: 총진료비,본인부담금 계산식.xlsx",
+    groups: [
+      { name: "상급종합병원", rows: [
+        { item: "일반환자", f: "진찰료총액 + 나머지 60%" },
+        { item: "일반환자 / 의약분업", codes: ["F003"], f: "진찰료총액 + 약가총액 * 30% + 나머지 60%" },
+        { item: "임신부", codes: ["F015"], f: "총진료비 40%" },
+        { item: "임신부 / 의약분업", f: "약값총액의 30% + 나머지 40%" },
+        { item: "1세이상 6세미만", f: "진찰료 총액 + 나머지 42% (일반본부의 70%)" },
+        { item: "1세미만", codes: ["F024"], f: "총진료비 20%" },
+        { item: "1세미만 / 의약분업", f: "약값총액의 21% + 나머지 20%" },
+        { item: "조산아・저체중아", codes: ["F016", "MT051"], f: "총진료비 5%" },
+        { item: "난임진료", codes: ["F021"], f: "진찰료총액 + 나머지 30%" },
+        { item: "경증질환 외래진료", codes: ["F025"], f: "총진료비 100% (종별가산 x)",
+          note: "선별급여 적용할 수 없음. 명세서 분리 (분리된 명세서 특정내역에 MT065(A) 기재" },
+        { item: "특수재료 및 관련 행위료", f: "T항 산정비용의 20% (6세미만 14%)" },
+        { item: "선별급여", f: "A:50 B:80 D:30 E:90" },
+        { item: "응급실 격리병상 격리관리료", f: "해당비용의 10%" },
+        { item: "18세미만 치아홈메우기", f: "해당비용의 10%" },
+        { item: "정신건강의학과 개인 및 집단정신치료", f: "해당비용의 40% (6세미만 : 28%)",
+          note: "1세 미만도 28%로 적용함 (정상적인 대면진료가 불가능한것을 가정하에 반영)" }
+      ]}
+    ]
+  },
+  cs_out:  { label: "차상위 외래",   count: 25,  rounding: "100원 미만 절사", source: "출처: 총진료비,본인부담금 계산식.xlsx", groups: [] },
+  hi_in:   { label: "건강보험 입원", count: 33,  rounding: "10원 미만 절사",  source: "출처: 총진료비,본인부담금 계산식.xlsx", groups: [] },
+  cs_in:   { label: "차상위 입원",   count: 23,  rounding: "10원 미만 절사",  source: "출처: 총진료비,본인부담금 계산식.xlsx", groups: [] },
+  aid:     { label: "의료급여",      count: 106, rounding: "정액 · 정률 혼합", source: "출처: 총진료비,본인부담금 계산식.xlsx", groups: [] }
+};
+
+const NAV = ["본인부담금 규칙","본인부담금 계산기","SAM 파일 레이아웃","항 · 목 코드","특정내역","산정특례 특정기호","메모장"];
+const CIRCLED = ["①","②","③","④","⑤","⑥","⑦"];
+
+class Component extends DCLogic {
+  state = { tab: null, nav: 0, q: "", topH: 210, colH: 37 };
+
+  componentDidMount() {
+    const bar = this.barRef && this.barRef.current;
+    const col = this.colRef && this.colRef.current;
+    const measure = () => {
+      const next = {};
+      if (bar) {
+        const h = Math.round(bar.getBoundingClientRect().height);
+        if (h && h !== this.state.topH) next.topH = h;
+      }
+      if (col) {
+        const h = Math.round(col.getBoundingClientRect().height);
+        if (h && h !== this.state.colH) next.colH = h;
+      }
+      if (Object.keys(next).length) this.setState(next);
+    };
+    if (typeof ResizeObserver !== "undefined") {
+      this.ro = new ResizeObserver(measure);
+      if (bar) this.ro.observe(bar);
+      if (col) this.ro.observe(col);
+    }
+    measure();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+    this.t1 = setTimeout(measure, 300);
+    this.t2 = setTimeout(measure, 1200);
+    window.addEventListener("resize", measure);
+    this.onResize = measure;
+  }
+
+  componentWillUnmount() {
+    if (this.ro) this.ro.disconnect();
+    clearTimeout(this.t1); clearTimeout(this.t2);
+    if (this.onResize) window.removeEventListener("resize", this.onResize);
+  }
+
+  tokens(s) {
+    const str = String(s), out = [], re = /\d+(?:[.,]\d+)?%|:\d+/g;
+    let last = 0, m;
+    while ((m = re.exec(str))) {
+      if (m.index > last) out.push({ v: str.slice(last, m.index), isTxt: true, isNum: false });
+      let v = m[0];
+      if (v[0] === ":") { out.push({ v: ":", isTxt: true, isNum: false }); v = v.slice(1); }
+      out.push({ v, isNum: true, isTxt: false });
+      last = m.index + m[0].length;
+    }
+    if (last < str.length) out.push({ v: str.slice(last), isTxt: true, isNum: false });
+    return out;
+  }
+
+  renderVals() {
+    const tabIds = Object.keys(DATA);
+    const active = this.state.tab || this.props.defaultTab || "hi_out";
+    const cur = DATA[active] || DATA.hi_out;
+    const q = this.state.q.trim().toLowerCase();
+    const showCodes = this.props.showCodeBadges !== false;
+    if (!this.barRef) this.barRef = React.createRef();
+    if (!this.colRef) this.colRef = React.createRef();
+
+    let total = 0;
+    const groups = cur.groups.map(g => {
+      const rows = g.rows.filter(r => {
+        if (!q) return true;
+        const hay = [g.name, r.item, r.f, r.note || "", (r.codes || []).join(" ")].join(" ").toLowerCase();
+        return hay.includes(q);
+      }).map(r => ({
+        item: r.item,
+        codes: showCodes ? (r.codes || []) : [],
+        tokens: this.tokens(r.f),
+        note: r.note || false
+      }));
+      total += rows.length;
+      return { name: g.name, count: rows.length, rows };
+    }).filter(g => g.rows.length > 0);
+
+    return {
+      barRef: this.barRef,
+      colRef: this.colRef,
+      colTop: (this.state.topH - 1) + "px",
+      groupTop: (this.state.topH - 1 + this.state.colH) + "px",
+      tabs: tabIds.map(id => ({
+        label: DATA[id].label, count: DATA[id].count,
+        active: id === active, inactive: id !== active,
+        onClick: () => this.setState({ tab: id, q: "" })
+      })),
+      nav: NAV.map((label, i) => ({
+        label, num: CIRCLED[i],
+        active: i === this.state.nav, inactive: i !== this.state.nav,
+        onClick: () => this.setState({ nav: i })
+      })),
+      groups,
+      isEmpty: groups.length === 0,
+      emptyHint: q
+        ? "검색어와 일치하는 규칙이 없습니다. 다른 키워드로 검색해 보세요."
+        : "이 탭의 원본 데이터가 아직 연결되지 않았습니다. index.html 또는 계산식 xlsx를 첨부해 주세요.",
+      activeLabel: cur.label,
+      rounding: cur.rounding,
+      source: cur.source,
+      query: this.state.q,
+      onQuery: e => this.setState({ q: e.target.value }),
+      resultLabel: q ? total + "건 표시 / 전체 " + cur.count + "건" : "전체 " + cur.count + "건"
+    };
+  }
+}
+
+</script>
+</body>
+</html>

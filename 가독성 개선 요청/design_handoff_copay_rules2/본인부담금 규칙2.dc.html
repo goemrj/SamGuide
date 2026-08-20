@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/bit-computer-design-system-d6594b09-9988-4bc1-a213-c5492e16b914/colors_and_type.css">
+<link rel="stylesheet" href="_ds/bit-computer-design-system-d6594b09-9988-4bc1-a213-c5492e16b914/styles.css">
+<script src="_ds/bit-computer-design-system-d6594b09-9988-4bc1-a213-c5492e16b914/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; background:#F3F4F6; }
+  * { box-sizing: border-box; }
+  body { word-break: keep-all; }
+  :root { --sg-fs: 14px; --sg-pad: 8px; --sg-zebra: #FBFCFE; --sg-vline: #F3F4F6; }
+  table.sg { border-collapse: collapse; width: auto; }
+  table.sg th { text-align:left; font-size:13px; font-weight:600; letter-spacing:0; color:#6B7280;
+    background:#FFFFFF; padding:8px 44px 8px 0; border-bottom:1px solid #E5E7EB;
+    white-space:nowrap; }
+  .sgScroll { display:contents; }
+  table.sg td { font-size:var(--sg-fs); line-height:1.5; color:#374151; padding:var(--sg-pad) 44px var(--sg-pad) 0;
+    border-bottom:1px solid #F3F4F6; vertical-align:top; text-align:left; }
+  table.sg th:first-child, table.sg td:first-child { padding-left:18px; }
+  table.sg.roomy th, table.sg.roomy td { padding-right:64px; }
+  table.sg.roomy th:first-child, table.sg.roomy td:first-child { padding-left:32px; }
+  table.sg.roomy th:last-child, table.sg.roomy td:last-child { padding-right:32px; }
+  table.sg td.law { display:none; }
+  table.sg tbody tr:nth-child(even) td { background: var(--sg-zebra); }
+  table.sg tbody tr:hover td { background:#F9FAFB; }
+  table.sg td.grp { background:#FFFFFF !important; font-weight:700; color:#111827; font-size:14px; white-space:nowrap; }
+  .rate { color:#374151; font-weight:500; font-variant-numeric:tabular-nums; }
+  .free { color:#374151; }
+  .law { color:#4B5563; font-size:13px; }
+  .noteTag { display:inline-block; min-width:64px; font-size:12px; font-weight:700; color:#2563EB; background:#EFF6FF; border-radius:3px; padding:1px 6px; margin-right:6px; }
+  .navi { display:flex; gap:8px; align-items:center; padding:7px 12px; border-radius:5px; font-size:15px; color:#4B5563; text-decoration:none; }
+  .navi:hover { background:#F9FAFB; color:#111827; text-decoration:none; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; border:1px solid #E5E7EB; background:#fff; color:#4B5563; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; }
+  .chip:hover { border-color:#D1D5DB; color:#111827; }
+  .chip.on { border-color:#2563EB; background:#EFF6FF; color:#2563EB; font-weight:600; }
+  .chip .n { font-variant-numeric:tabular-nums; color:#9CA3AF; }
+  .chip.on .n { color:#93C5FD; }
+</style>
+</helmet>
+
+<div style="display:flex; min-height:100vh; font-family:var(--font-sans); color:#111827">
+
+  <aside style="width:210px; flex:0 0 210px; background:#fff; border-right:1px solid #E5E7EB; height:100vh; position:sticky; top:0; display:flex; flex-direction:column">
+    <div style="display:flex; align-items:center; gap:9px; padding:14px 14px 12px; border-bottom:1px solid #F3F4F6">
+      <div style="width:30px; height:30px; flex:0 0 30px; border-radius:5px; background:#2563EB; color:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700">S</div>
+      <div>
+        <div style="font-size:17px; font-weight:700; letter-spacing:-0.01em">SamGuide</div>
+        <div style="font-size:12px; color:#6B7280">심사청구 점검 참고자료</div>
+      </div>
+    </div>
+    <nav style="display:flex; flex-direction:column; gap:1px; padding:8px 8px 0">
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">①</span>본인부담금 규칙</a>
+      <a class="navi" href="#" style="background:#EFF6FF; color:#2563EB; font-weight:600; box-shadow:inset 2px 0 0 #2563EB"><span style="font-size:11px; opacity:.6">②</span>본인부담금 규칙2</a>
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">③</span>본인부담금 계산기</a>
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">④</span>SAM 파일 레이아웃</a>
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">⑤</span>항 · 목 코드</a>
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">⑥</span>특정내역</a>
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">⑦</span>산정특례 특정기호</a>
+      <a class="navi" href="#"><span style="color:#9CA3AF; font-size:11px">⑧</span>메모장</a>
+    </nav>
+    <div style="margin-top:auto; padding:12px 14px; border-top:1px solid #F3F4F6; font-size:12px; line-height:1.6; color:#6B7280">
+      브라우저 안에서만 동작하고 외부로 아무것도 보내지 않습니다. 메모는 이 PC 브라우저에 저장됩니다.
+    </div>
+  </aside>
+
+  <main style="flex:1; min-width:0">
+
+    <div style="background:#fff; border-bottom:1px solid #E5E7EB; padding:12px 24px 10px">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap">
+        <h1 style="margin:0; font-size:24px; font-weight:700; letter-spacing:-0.02em">본인부담금 규칙2</h1>
+        <span style="font-size:13.5px; color:#6B7280; line-height:1.45; max-width:70ch">심평원 「본인부담기준 안내 — 본인부담률 및 부담액」을 그대로 옮긴 표입니다. ①(사내 엑셀)과 대조용.</span>
+        <span style="margin-left:auto; font-size:13px; color:#6B7280">출처 <b style="color:#2563EB">심평원 건강보험</b> · 2026.06.23. 수정</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap">
+        <div style="display:flex; gap:4px; padding:3px; background:#F3F4F6; border-radius:6px">
+          <button style="padding:5px 16px; border:0; border-radius:4px; background:#2563EB; color:#fff; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer">건강보험</button>
+          <button style="padding:5px 16px; border:0; border-radius:4px; background:transparent; color:#4B5563; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer" style-hover="color:#111827">의료급여</button>
+        </div>
+
+        <span style="width:1px; height:20px; background:#E5E7EB; margin:0 4px"></span>
+
+        <div style="display:flex; gap:5px; flex-wrap:wrap">
+          <button class="chip on">입원진료시</button>
+          <button class="chip">외래진료시</button>
+          <button class="chip">차상위 본인부담경감대상자</button>
+          <button class="chip">기타</button>
+        </div>
+
+        <div style="margin-left:auto; display:flex; align-items:center; gap:8px; height:34px; padding:0 12px; border:1px solid #D1D5DB; border-radius:5px; background:#fff; min-width:320px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#9CA3AF; flex:0 0 15px"><circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line></svg>
+          <input placeholder="대상 · 코드 · 부담률 검색 (예: M003, 자연분만, 무료, CT)" style="flex:1; min-width:0; border:0; outline:none; font-family:inherit; font-size:14px; color:#111827">
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:16px 24px 48px; display:flex; flex-direction:column; gap:16px">
+      <section style="flex:0 0 auto; background:#fff; border:1px solid #E5E7EB; border-radius:6px; box-shadow:var(--shadow-1)">
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #E5E7EB">
+          <h2 style="margin:0; font-size:17px; font-weight:700; letter-spacing:-0.01em">건강보험 입원 본인부담률</h2>
+          <span style="margin-left:auto; font-size:12.5px; color:#9CA3AF">식대총액 · 끝수계산은 전 구분 공통 (장기 적출 제외)</span>
+        </div>
+        <table class="sg roomy">
+          <thead>
+            <tr><th>구분</th><th>요양급여비용총액</th><th>식대총액</th><th>끝수계산</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-weight:600; color:#111827">일반환자</td>
+              <td><span class="rate">총액의 20%</span></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">15세 이하 <span style="font-weight:400; color:#6B7280">(2세 미만 영유아 제외)</span></td>
+              <td><span class="rate">총액의 5%</span></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">2세 미만 영유아</td>
+              <td><span class="free">면제</span></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">자연분만</td>
+              <td></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">고위험 임신부</td>
+              <td><span class="rate">총액의 10%</span></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">제왕절개분만</td>
+              <td><span class="free">면제</span></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">선택입원군 <span style="font-weight:400; color:#6B7280">(요양병원 해당)</span></td>
+              <td><span class="rate">총액의 40%</span></td>
+              <td style="color:#4B5563">식대총액의 50%</td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+            <tr>
+              <td style="font-weight:600; color:#111827">장기 등 기증자의 장기등 적출</td>
+              <td><span class="free">면제</span></td>
+              <td><span class="free">면제</span> <a href="#note2" style="font-size:12.5px">주2)</a></td>
+              <td style="color:#6B7280">10원 미만 절사</td>
+            </tr>
+          </tbody>
+        </table>
+        <div id="note2" style="display:flex; gap:8px; padding:8px 14px; background:#F9FAFB; border-top:1px solid #E5E7EB; border-radius:0 0 5px 5px; font-size:12.5px; color:#6B7280">
+          <b style="color:#4B5563">주2)</b><span>관련근거: 보건복지부 고시 제2017-118호(2017.6.30.)</span>
+        </div>
+      </section>
+
+      <section style="flex:0 0 auto; background:#fff; border:1px solid #E5E7EB; border-radius:6px; box-shadow:var(--shadow-1)">
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #E5E7EB">
+          <h2 style="margin:0; font-size:17px; font-weight:700; letter-spacing:-0.01em"><span style="color:#9CA3AF; margin-right:6px">주1)</span>본인부담률을 달리 운영하고 있는 특정 항목 및 본인부담률</h2>
+        </div>
+        <div class="sgScroll">
+        <table class="sg">
+          <thead>
+            <tr><th>구분</th><th>항목</th><th>본인부담률</th><th>비고</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="grp" rowspan="5">일반환자<br>해당 항목</td>
+              <td style="font-weight:600">특수장비</td>
+              <td class="law"></td>
+              <td><span class="rate">S항 산정비용 × 외래 본인부담률</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">격리입원료</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 10%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">16일 이상 입원료 본인부담률 차등</td>
+              <td class="law"></td>
+              <td><span class="rate">16~30일 5% 상향<br>31일~ 10% 상향</span></td>
+              <td style="font-size:13px; color:#4B5563; line-height:1.6">
+                <div style="display:flex; gap:6px"><span class="noteTag">제외대상</span><span>장기입원 불가피 환자(F014), 보훈, 산정특례 및 차상위 등 본인부담경감환자</span></div>
+                <div style="display:flex; gap:6px; margin-top:4px"><span class="noteTag">확대 ’20.1.1.~</span><span>4인실 이상 입원료(상급종합병원 5인실 이상) → 병원급 이상 2인실 이상 입원료(치과병원 · 요양병원 · 정신병원 제외)</span></div>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">16세 이상 18세 이하 아동의 치아홈메우기</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 10%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">상급종합병원 4인실 입원료</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 30%</span></td>
+              <td></td>
+            </tr>
+
+            <tr>
+              <td class="grp" rowspan="10">공통<br>적용 항목</td>
+              <td style="font-weight:600">선별급여 항목</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 30 · 50(60) · 80 · 90%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">2 · 3인실 입원료 — 상급종합병원 <span style="font-weight:400; color:#6B7280">(’18.7.1.~)</span></td>
+              <td class="law" rowspan="5"></td>
+              <td><span class="rate">2인실 50% / 3인실 40%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">2 · 3인실 입원료 — 종합병원 <span style="font-weight:400; color:#6B7280">(’18.7.1.~)</span></td>
+              <td><span class="rate">2인실 40% / 3인실 30%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">2 · 3인실 입원료 — 병원 · 한방병원 <span style="font-weight:400; color:#6B7280">(’19.7.1.~)</span></td>
+              <td><span class="rate">2인실 40% / 3인실 30%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">2 · 3인실 입원료 — 요양병원 중 의료재활시설, 정신병원 <span style="font-weight:400; color:#6B7280">(’19.7.1.~’19.10.31.)</span></td>
+              <td><span class="rate">2 · 3인실: 시행령 별표2에 따른 본인부담률</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">2 · 3인실 입원료 — 요양병원 중 의료재활시설, 정신병원 <span style="font-weight:400; color:#6B7280">(’19.11.1.~)</span></td>
+              <td><span class="rate">2인실 40% / 3인실 30%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">한방 추나요법</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 50% 또는 80%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">원격협의진찰료 자문료</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 0%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">상급종합병원 회송료</td>
+              <td class="law"></td>
+              <td><span class="rate">해당 비용의 0%</span></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td style="font-weight:600">코로나 치료제</td>
+              <td class="law"></td>
+              <td><span class="rate">경구제 5% / 주사제 1.6%</span></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;촘촘하게&quot;,&quot;보통&quot;,&quot;여유 있게&quot;],&quot;default&quot;:&quot;촘촘하게&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;표 밀도&quot;},&quot;zebra&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;표 밀도&quot;},&quot;columnLines&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;표 밀도&quot;}}">
+class Component extends DCLogic {
+  applyVars() {
+    const d = this.props.density ?? "보통";
+    const map = {
+      "촘촘하게": { fs: "13.5px", pad: "5px" },
+      "보통": { fs: "14px", pad: "8px" },
+      "여유 있게": { fs: "15px", pad: "12px" }
+    };
+    const v = map[d] || map["보통"];
+    const r = document.documentElement.style;
+    r.setProperty("--sg-fs", v.fs);
+    r.setProperty("--sg-pad", v.pad);
+    r.setProperty("--sg-zebra", (this.props.zebra ?? true) ? "#FBFCFE" : "#FFFFFF");
+    r.setProperty("--sg-vline", (this.props.columnLines ?? true) ? "#EDF1F6" : "transparent");
+  }
+  componentDidMount() { this.applyVars(); }
+  componentDidUpdate() { this.applyVars(); }
+  renderVals() { return {}; }
+}
+
+</script>
+</body>
+</html>

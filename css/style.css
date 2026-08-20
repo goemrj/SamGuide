@@ -1,0 +1,610 @@
+/* ---------- SamGuide — 심사청구 점검 참고자료 모음 ----------
+   색·타이포는 「본인부담금 규칙2 가독성 개선」 핸드오프의 토큰을 따른다.
+   아래 목록이 전부이고 여기 없는 색은 쓰지 않는다.
+   (앞선 핸드오프의 #2F6BDE 계열을 이 판이 대체했다 — 두 파랑을 섞어 쓰지 않는다.)  */
+:root{
+  --bg:#F3F4F6;             /* 페이지 배경 */
+  --card:#FFFFFF;           /* 사이드바 · 툴바 · 카드 */
+  --line:#E5E7EB;           /* 경계선 */
+  --line-strong:#D1D5DB;    /* 경계선 강 — 입력 테두리 */
+  --line-2:#F3F4F6;         /* 헤어라인 · 트랙 */
+  --text:#111827;           /* 텍스트 강 — 제목 · 구분 */
+  --text-2:#374151;         /* 텍스트 본문 — 표 셀 */
+  --text-25:#4B5563;        /* 텍스트 보조 — 내비 · 칩 */
+  --text-3:#6B7280;         /* 텍스트 캡션 — 표 헤더 · 출처 · 각주 */
+  --text-4:#9CA3AF;         /* 텍스트 흐림 — 원문자 · 보조 문구 */
+  --note:#4B5563;           /* 비고 본문 */
+  --note-label:#9CA3AF;
+  --accent:#2563EB;
+  --accent-hover:#1D4ED8;
+  --accent-2:#93C5FD;       /* 액센트 보조 */
+  --accent-tint:#EFF6FF;    /* 액센트 배경 tint */
+  --group-tint:#F9FAFB;     /* 배경 alt */
+  --row-hover:#F9FAFB;
+  --note-bg:#FAFBFC;        /* 장애인 비고 열 — 표 가시성 개선 핸드오프(--cp-note-bg) */
+  --focus:0 0 0 3px rgba(37,99,235,.16);
+  --radius:6px;             /* 카드 */
+  --shadow:0 1px 2px rgba(14,26,44,.06);
+  --mono:'JetBrains Mono', ui-monospace, 'D2Coding', Consolas, monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Pretendard','Pretendard Variable','Apple SD Gothic Neo','Malgun Gothic',system-ui,-apple-system,sans-serif;
+  background:var(--bg); color:var(--text);
+  font-size:13px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  word-break:keep-all;      /* 한글이 어절 중간에서 끊기지 않게 */
+}
+button{font-family:inherit;font-size:inherit;cursor:pointer;}
+input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
+
+/* ---------- 레이아웃 골격 ---------- */
+#app{display:flex; min-height:100vh; align-items:stretch;}
+
+#sidebar{
+  width:210px; flex:0 0 210px; background:var(--card); color:var(--text-25);
+  border-right:1px solid var(--line);
+  padding:0; position:sticky; top:0; height:100vh;
+  display:flex; flex-direction:column;
+}
+#sidebar .brand{
+  display:flex; align-items:center; gap:9px;
+  padding:14px 14px 12px; border-bottom:1px solid var(--line-2);
+}
+#sidebar .brand .mark{
+  flex:0 0 auto; width:30px; height:30px; border-radius:5px;
+  background:var(--accent); color:#fff; font-size:15px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+#sidebar .brand b{display:block; font-size:17px; font-weight:700; letter-spacing:-.01em; color:var(--text);}
+#sidebar .brand span{display:block; font-size:12px; color:var(--text-3); margin-top:1px;}
+
+#sidebar nav{padding:8px 8px 0; display:flex; flex-direction:column; gap:1px;}
+.navbtn{
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+  background:transparent; border:0; color:var(--text-25);
+  padding:7px 12px; border-radius:5px; font-size:13px; font-weight:600;
+}
+.navbtn:hover{background:var(--group-tint); color:var(--text);}
+.navbtn.on{
+  background:var(--accent-tint); color:var(--accent); font-weight:700;
+  box-shadow:inset 2px 0 0 var(--accent);
+}
+/* 사이드바 아이콘 — 이모지를 걷어내고 단색 글리프로 뒀다(모형과 같게).
+   색은 글자색을 따라가므로 선택된 항목에서 함께 파랑이 된다. */
+.navbtn .ico{width:15px; text-align:center; font-size:13px; line-height:1; opacity:.55;}
+.navbtn.on .ico{opacity:1;}
+.navbtn:hover .ico{opacity:.9;}
+#sidebar .foot{
+  margin-top:auto; padding:12px 14px; border-top:1px solid var(--line-2);
+  font-size:12px; line-height:1.6; color:var(--text-3);
+}
+
+#main{flex:1; min-width:0; padding:24px 32px 56px;}
+.page{display:none;}
+.page.on{display:block;}
+/* 상단 바는 스크롤해도 위에 붙어 있고, ① 과 같은 **흰 띠**로 본문과 구분한다.
+   .page-top 은 common.js 의 wrapPageTops() 가 제목(.page-head)과 뒤따르는 툴바들을
+   묶어 만든 상자다. #main 의 패딩(24/32px)만큼 밖으로 빼내 좌우를 꽉 채운다.
+   표의 머리줄은 이 띠 아래에 붙는다 — 높이를 setStickTop() 이 재서 --stick 으로 넘긴다. */
+.page-top{
+  position:sticky; top:0; z-index:30;
+  margin:-24px -32px 16px; padding:18px 32px 12px;
+  background:var(--card); border-bottom:1px solid var(--line);
+}
+.page-head{margin:0 0 12px;}
+.page-head h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.02em;}
+.page-head p{margin:7px 0 0; color:var(--text-3); font-size:12px;}
+/* 흰 띠 안에서는 툴바 사이 간격만 두고 아래 여백은 띠가 맡는다 */
+.page-top .toolbar{margin-bottom:8px;}
+.page-top .toolbar:last-child{margin-bottom:0;}
+
+.card{background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);}
+.card + .card{margin-top:16px;}
+.card-pad{padding:16px 18px;}
+
+/* ---------- 레이아웃 뷰어 ---------- */
+.toolbar{display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:11px;}
+.chips{display:flex; flex-wrap:wrap; gap:5px;}
+.chip{
+  border:1px solid var(--line); background:#fff; color:var(--text-2);
+  padding:5px 12px; border-radius:999px; font-size:12px; letter-spacing:-.01em; white-space:nowrap;
+}
+.chip:hover{border-color:var(--accent); color:var(--text);}
+.chip.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+.chip small{opacity:.65; margin-left:4px; font-size:11px; font-weight:400;}
+
+.field-input{
+  border:1px solid var(--line); background:#fff; border-radius:4px;
+  padding:7px 11px; font-size:12.5px; outline:none; min-width:0;
+}
+.field-input:focus{border-color:var(--accent); box-shadow:var(--focus);}
+#lo-search{flex:1; min-width:210px;}
+#lo-pos{width:130px;}
+
+.meta-bar{
+  display:flex; flex-wrap:wrap; gap:16px; align-items:baseline;
+  padding:9px 16px; border-bottom:1px solid var(--line-2); color:var(--text-2); font-size:11.5px;
+}
+.meta-bar b{color:var(--text); font-weight:600;}
+.meta-note{color:var(--text-3); font-size:11px; margin-left:auto;}
+
+/* 다른 카테고리의 표도 ① 본인부담금 규칙과 같은 형식으로 맞춘다
+   (「표 가시성 개선 및 구조 재설계」 핸드오프 값 — 머리줄 회색 띠 · 12px, 본문 13px,
+    칸 여백 8/16px, 행·열 구분선 1px, 머리줄 고정). 계산기의 작은 표(.items·.res)는
+   아래에 따로 규칙이 있어 그쪽 값이 이긴다. */
+table.fields{
+  border-collapse:collapse; table-layout:auto; width:100%;
+  word-break:keep-all;
+}
+table.fields.fixed{table-layout:fixed;}
+table.fields th{
+  position:sticky; top:var(--stick, 0px); z-index:2;
+  text-align:left; white-space:normal;
+  background:var(--bg); color:var(--text-3);
+  font-size:12px; font-weight:500; letter-spacing:0;
+  padding:9px 16px;
+  border-bottom:1px solid var(--line-strong); border-right:1px solid var(--line);
+}
+table.fields td{
+  padding:8px 16px; vertical-align:top; overflow-wrap:anywhere;
+  font-size:13px; line-height:1.5; color:var(--text-2);
+  border-bottom:1px solid var(--line); border-right:1px solid var(--line);
+}
+table.fields th:last-child, table.fields td:last-child{border-right:0;}
+table.fields tr:last-child td{border-bottom:0;}
+table.fields tr.hit{background:var(--accent-tint);}
+table.fields tr:hover td{background:var(--group-tint);}
+table.fields tr.hit:hover td{background:var(--accent-tint);}
+.c-pos{white-space:nowrap; font-variant-numeric:tabular-nums; color:var(--text-2);}
+.c-len{white-space:nowrap; font-variant-numeric:tabular-nums; text-align:right; color:var(--text-2);}
+.c-type{white-space:nowrap;}
+.c-name{font-weight:600; letter-spacing:-.01em;}
+.c-desc{color:var(--text-2);}
+.tag{display:inline-block; padding:0 6px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:.01em;}
+/* 팔레트에 액센트 외의 색이 없으므로 an/n 구분은 채움과 테두리로만 준다 */
+.tag.an{background:var(--accent-tint); color:var(--accent);}
+.tag.n{background:#fff; color:var(--text-2); box-shadow:inset 0 0 0 1px var(--line);}
+.tag.fmt{background:var(--group-tint); color:var(--note); margin-left:4px;}
+.rec-src{color:var(--text-3); font-size:11.5px; white-space:nowrap;}
+
+.codes{margin-top:4px; display:flex; flex-wrap:wrap; gap:3px;}
+.code{
+  display:inline-flex; align-items:baseline; gap:5px;
+  background:var(--group-tint); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:11px;
+}
+.code b{font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;}
+.code span{color:var(--text-2);}
+.code.mark b{color:var(--accent-hover);}
+.more{
+  background:none; border:0; color:var(--accent); font-size:12px; padding:2px 4px; text-decoration:underline;
+}
+.empty{padding:30px 14px; text-align:center; color:var(--text-3); font-size:12px;}
+
+/* ---------- 메모장 ---------- */
+.memo-wrap{display:flex; gap:14px; align-items:flex-start;}
+.memo-list{width:214px; flex:0 0 214px;}
+.memo-list .card-pad{padding:10px;}
+.memo-item{
+  display:block; width:100%; text-align:left; background:transparent; border:0;
+  padding:6px 9px; border-radius:5px; margin-bottom:2px;
+}
+.memo-item:hover{background:var(--group-tint);}
+.memo-item.on{background:var(--accent-tint);}
+.memo-item b{display:block; font-size:12px; font-weight:600; letter-spacing:-.01em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.memo-item span{display:block; font-size:10.5px; color:var(--text-3); margin-top:1px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+/* 검색으로 걸린 본문 조각 — 제목 아래 한 줄만 */
+.memo-item .snip{font-size:10.5px; color:var(--text-3); line-height:1.5;}
+.memo-item mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+.memo-edit{flex:1; min-width:0;}
+#memo-title{width:100%; border:0; border-bottom:1px solid var(--line); border-radius:0;
+  font-size:14px; font-weight:600; padding:5px 2px 8px; outline:none; letter-spacing:-.02em;}
+#memo-title:focus{border-bottom-color:var(--accent);}
+#memo-body{
+  width:100%; min-height:430px; border:0; outline:none; resize:vertical;
+  padding:10px 2px; line-height:1.65; font-size:12.5px;
+}
+.btn{border:1px solid var(--line); background:#fff; color:var(--text-2); padding:5px 11px; font-size:12px; border-radius:5px;}
+.btn:hover{border-color:var(--accent); color:var(--text);}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+.btn.primary:hover{background:var(--accent-hover); border-color:var(--accent-hover);}
+.btn.danger:hover{border-color:var(--note-label); color:var(--note);}
+.row-end{display:flex; gap:8px; align-items:center;}
+.row-end .spacer{flex:1;}
+.saved-note{color:var(--text-3); font-size:11px;}
+
+/* ---------- ④ 특정내역 — 목록·본문 두 칸 배치는 메모장 것을 그대로 쓴다 ---------- */
+.memo-list.wide{width:262px; flex:0 0 262px;}
+.memo-list.wide .card-pad{max-height:calc(100vh - 232px); overflow-y:auto;}
+.memo-item .code-badge{
+  display:inline-block; font-weight:700; color:var(--accent); font-size:12px;
+  font-variant-numeric:tabular-nums; margin-right:6px;
+}
+.memo-item.on .code-badge{color:var(--accent);}
+
+.dt-head{border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:12px;}
+.dt-head .code{font-size:16px; font-weight:700; color:var(--accent); letter-spacing:-.01em;}
+.dt-head .name{font-size:13px; font-weight:600; margin-left:8px; letter-spacing:-.02em;}
+.dt-meta{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+.dt-meta .m{
+  display:inline-flex; align-items:baseline; gap:6px; background:var(--group-tint);
+  border:1px solid var(--line); border-radius:4px; padding:2px 7px; font-size:11px;
+}
+.dt-meta .m b{color:var(--text-3); font-weight:600;}
+.dt-meta .m span{color:var(--text);}
+.dt-meta .m.fmt span{font-family:'D2Coding','Consolas','Malgun Gothic',monospace; font-weight:600; color:var(--accent);}
+
+pre.dt-body{
+  margin:0; padding:14px 16px; background:var(--group-tint); border:1px solid var(--line-2); border-radius:10px;
+  font-family:'D2Coding','Consolas','Malgun Gothic',monospace;
+  font-size:11.5px; line-height:1.65; white-space:pre; overflow-x:auto;
+  max-height:calc(100vh - 330px);
+}
+pre.dt-body mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+.dt-src{margin-top:10px; color:var(--text-3); font-size:11.5px;}
+
+/* ---------- ② 계산기 ---------- */
+.calc-wrap{display:flex; gap:14px; align-items:flex-start;}
+.calc-left{flex:1; min-width:0;}
+.calc-right{width:400px; flex:0 0 400px; position:sticky; top:20px;}
+
+.form-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.form-grid label{display:flex; flex-direction:column; gap:5px; min-width:0;}
+.form-grid label.wide{grid-column:1 / -1;}
+.form-grid label span{font-size:11px; color:var(--text-2); font-weight:600; letter-spacing:-.01em;}
+.form-grid .field-input{width:100%;}
+select.field-input{appearance:none; background:#fff url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235b6675' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+  padding-right:30px; cursor:pointer;}
+.field-input.money{text-align:right; font-variant-numeric:tabular-nums; font-weight:600;}
+#c-total{font-size:15px; padding:7px 10px;}
+.field-input.mini{padding:4px 8px; font-size:12px; width:100%;}
+.pctin{text-align:right; padding-right:22px !important;}
+.pctsign{margin-left:-18px; color:var(--text-3); font-size:12px;}
+.btn.xs{padding:4px 8px; font-size:12px; line-height:1;}
+
+.rule-hint{margin-top:12px; padding:10px 12px; background:var(--accent-tint); border-radius:9px;
+  font-size:11.5px; color:var(--accent); letter-spacing:-.01em;}
+.rule-hint b{margin-right:6px; color:var(--text-2); font-weight:600;}
+.hint-rate{font-weight:700;}
+
+table.fields.items td{padding:4px 6px; vertical-align:middle;}
+table.fields.items th{font-size:11.5px;}
+
+.res-head{padding:4px 2px 14px; border-bottom:1px solid var(--line);}
+.res-big{display:flex; align-items:baseline; gap:8px;}
+.res-big span{font-size:13px; color:var(--text-2); font-weight:600;}
+.res-big b{font-size:24px; font-weight:700; letter-spacing:-.03em; color:var(--accent);
+  font-variant-numeric:tabular-nums; margin-left:auto;}
+.res-big i{font-style:normal; font-size:14px; color:var(--text-2);}
+.res-sub{margin-top:6px; text-align:right; font-size:12.5px; color:var(--text-2);}
+.res-sub b{color:var(--text); font-variant-numeric:tabular-nums;}
+.res-warn{margin:12px 0 0; padding:10px 12px; background:var(--group-tint); border:1px solid var(--line);
+  border-radius:5px; font-size:12px; color:var(--note); line-height:1.6;}
+table.fields.res{margin-top:12px;}
+table.fields.res td{font-size:11.5px; padding:4px 7px;}
+table.fields.res th{font-size:10.5px; padding:4px 7px;}
+table.fields.res .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+table.fields.res .strong{font-weight:700; color:var(--accent);}
+table.fields.res tfoot td{border-top:1px solid var(--line); background:var(--group-tint); font-size:12.5px; color:var(--text-2);}
+
+@media (max-width:1180px){
+  .calc-wrap{flex-direction:column;}
+  .calc-right{width:100%; flex:none; position:static;}
+}
+
+/* ---------- ④ 특정내역 — 분야 배지 · 작성요령 두 종류 ---------- */
+.ftag{font-size:9.5px;
+  display:inline-block; background:var(--accent-tint); color:var(--accent); border-radius:3px;
+  padding:0 4px; margin-right:3px; font-weight:600; letter-spacing:0;
+}
+.ftag.none{background:var(--group-tint); color:var(--note);}
+.ftag.old{background:#fff; color:var(--note-label); box-shadow:inset 0 0 0 1px var(--line);}
+.memo-item span{line-height:1.7;}
+
+.dt-guide{
+  margin-top:12px; padding:12px 14px; background:var(--accent-tint); border-radius:10px;
+  font-size:12px; color:var(--text); line-height:1.6;
+}
+.dt-guide b{display:block; font-size:10.5px; color:var(--accent); margin-bottom:4px; letter-spacing:0;}
+.dt-guide mark, .dt-body mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+.dt-sec{margin:14px 0 6px; font-size:11.5px; font-weight:600; color:var(--text-3); letter-spacing:0;}
+
+/* ---------- ④ 항 · 목 ---------- */
+.hm-rec{
+  margin:0; padding:7px 14px 6px; font-size:11.5px; font-weight:600; color:var(--accent);
+  background:var(--group-tint); border-bottom:1px solid var(--line-2); letter-spacing:-.01em;
+}
+table.fields.hm{margin-bottom:2px;}
+.hm-code{white-space:nowrap; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;}
+.hm-name{font-weight:600; letter-spacing:-.01em;}
+.hm-mok .code{margin:2px 3px 2px 0;}
+
+/* ---------- ⑥ 산정특례 ---------- */
+/* 글씨 크기는 공통 표 규칙(13px)을 따른다 — 예전 11.5px 축소를 걷어냈다 */
+.sp-g{white-space:nowrap; color:var(--text-2); font-size:11.5px;}
+.sp-sym{white-space:nowrap; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;}
+.sp-code{white-space:nowrap; font-weight:600; font-variant-numeric:tabular-nums;}
+.sp-seq{white-space:nowrap; color:var(--text-2); font-variant-numeric:tabular-nums;}
+.sp-name{letter-spacing:-.01em;}
+table.fields.sp mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+.pager{display:flex; gap:10px; align-items:center; justify-content:center; padding:14px; color:var(--text-2); font-size:12.5px;}
+.pager .btn[disabled]{opacity:.4; cursor:default;}
+
+
+/* ---------- ② 본인부담금 규칙2 (심평원 안내표) ----------
+   핸드오프: 가독성 개선 요청/design_handoff_copay_rules2
+   · 고정(sticky)은 사이드바뿐이다 — 툴바도 표 헤더도 페이지와 같이 스크롤한다.
+   · 열은 균등분배하지 않는다. 내용 폭에 맞춰 좌측정렬하고 열 사이는 여백(44px, 첫 표 64px)으로 벌린다.
+   · 열 구분선 없음. 행 구분선만 1px 헤어라인. */
+/* 툴바가 화면 폭을 꽉 쓰도록 #main 의 패딩을 되돌린다 — 전에는 선택자가 #page-burden2 라 안 걸렸다 */
+#page-burden{margin:-24px -32px -56px;}
+
+/* 상단 필터 바 — 핸드오프 .cp-topbar 값. 컨테이너 max-width 1560px · 좌우 24px */
+.b2-top{position:sticky; top:0; z-index:30; background:var(--card); border-bottom:1px solid var(--line);}
+.b2-top-in{max-width:1560px; margin:0 auto; padding:14px 24px 0;}
+.b2-row1{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+.b2-row1 h1{margin:0; font-size:20px; font-weight:700; color:var(--text);}
+.b2-desc{margin:0; font-size:12px; color:var(--text-3); line-height:1.45; max-width:70ch;}
+.b2-src{margin-left:auto; font-size:12px; color:var(--text-3); white-space:nowrap;}
+.b2-src b{color:var(--accent); font-weight:600;}
+
+.b2-row2{display:flex; align-items:center; gap:16px; padding:12px 0; flex-wrap:wrap;}
+
+/* 대분류 — 세그먼트. 묶음 배경 없이 버튼마다 배경을 준다(핸드오프) */
+.b2-seg{display:flex; gap:6px;}
+.b2-seg button{
+  padding:6px 14px; border:0; border-radius:6px;
+  background:var(--bg); color:var(--text-25); font-size:13px; font-weight:500;
+}
+.b2-seg button:hover{background:var(--line);}
+.b2-seg button.on{background:var(--accent); color:#fff; font-weight:600;}
+
+.b2-div{width:1px; height:22px; background:var(--line);}
+
+/* 소분류 — pill 칩 */
+.b2-chips{display:flex; gap:8px; flex-wrap:wrap;}
+.b2-chips button{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 13px; border-radius:999px; border:1px solid var(--line-strong);
+  background:#fff; color:var(--text-25); font-size:13px; font-weight:400; white-space:nowrap;
+}
+.b2-chips button:hover{border-color:var(--accent); color:var(--accent);}
+.b2-chips button.on{border-color:var(--accent); background:var(--accent-tint); color:var(--accent); font-weight:600;}
+
+/* 검색 — 일치 건수는 입력칸 왼쪽에 둔다 */
+.b2-searchwrap{display:flex; align-items:center; gap:10px; margin-left:auto;}
+.b2-count{font-size:12px; font-weight:600; color:var(--accent); white-space:nowrap;}
+.b2-search{
+  width:340px; padding:7px 12px;
+  border:1px solid var(--line-strong); border-radius:8px; background:#fff;
+  display:flex; align-items:center; gap:8px;
+}
+.b2-search svg{flex:0 0 auto; color:var(--text-4);}
+.b2-search input{flex:1; min-width:0; border:0; outline:none; font-size:13px; color:var(--text-2); background:transparent;}
+.b2-search:focus-within{border-color:var(--accent);}
+
+/* 본문 */
+.b2-content{max-width:1560px; margin:0 auto; padding:20px 24px 64px; display:flex; flex-direction:column; gap:16px;}
+
+/* ---------- ① 카드·표: 「표 가시성 개선 및 구조 재설계」 핸드오프 값 ----------
+   핸드오프의 --cp-* 토큰은 우리 :root 토큰과 값이 같아 그대로 대응된다.
+   cp-blue=--accent · cp-ink=--text · cp-body=--text-2 · cp-body-2=--text-25 ·
+   cp-muted=--text-3 · cp-mark=--text-4 · cp-line=--line · cp-line-strong=--line-strong ·
+   cp-head-bg=--bg · cp-row-alt=--group-tint · cp-note-bg=--note-bg(이번에 추가). */
+.b2-card{
+  flex:0 0 auto; width:fit-content; min-width:100%;
+  background:var(--card); border:1px solid var(--line);
+  /* 핸드오프 불변규칙 4 — 카드·표 감싸개에 overflow 를 주지 않는다.
+     overflow 가 걸린 조상이 sticky containing block 이 되어 표 머리줄 고정이 깨진다.
+     (특정기호 툴팁이 잘리는 문제도 같은 이유로 overflow 를 못 쓴다.) */
+  border-radius:10px;
+}
+.b2-head{display:flex; align-items:center; gap:9px; padding:12px 16px; border-bottom:1px solid var(--line);}
+.b2-head h2{margin:0; font-size:14px; font-weight:700; color:var(--text);}
+.b2-head h2 .pre{color:var(--text-4); margin-right:6px;}
+/* 카드 제목 앞 표식 — 14×14 파란 네모(radius 3px) */
+.b2-head h2 .sq{
+  display:inline-block; width:14px; height:14px; border-radius:3px;
+  background:var(--accent); margin-right:9px; vertical-align:-2px;
+}
+/* 첫 표의 소제목을 제목 옆으로 올린 것(1종 카드의 입원·외래) */
+.b2-head h2 .subtag{margin-left:8px; font-size:12px; font-weight:400; color:var(--text-3);}
+.b2-head .aux{margin-left:auto; font-size:12px; color:var(--text-3); white-space:nowrap;}
+.b2-tabtag{
+  display:inline-block; margin-right:6px; padding:1px 6px; border-radius:3px;
+  background:var(--accent-tint); color:var(--accent); font-size:12px; font-weight:700;
+}
+
+/* 표에 자체 스크롤을 두지 않는다 — 카드가 표만큼 넓어지고, 창보다 넓으면 페이지가 가로로 스크롤한다 */
+.b2-scroll{display:contents;}
+table.b2{
+  border-collapse:collapse; width:100%;
+  /* 한국어 줄바꿈 — 없으면 어절이 한 글자씩 쪼개진다(핸드오프 불변규칙 5) */
+  word-break:keep-all;
+}
+/* 열 너비가 정해진 표만 table-layout:fixed. 너비는 <th> 인라인 style 로 준다
+   (핸드오프 불변규칙 3 — colgroup/col 은 쓰지 않는다).
+   너비를 안 정한 표에 fixed 를 걸면 열이 균등분배되므로 auto 로 남긴다. */
+table.b2.fixed{table-layout:fixed;}
+/* 너비를 안 정한 표 — 열은 내용에 맞춰 잡히지만(auto) 표 전체는 카드를 넘지 않는다(100%).
+   max-content 로 두면 표가 창보다 넓어져 페이지에 좌우 스크롤이 생긴다(SamGuide 전체 금지). */
+table.b2:not(.fixed){table-layout:auto; width:100%;}
+table.b2 th{
+  /* 상단 바가 고정돼 있으므로 머리줄은 그 아래에 붙는다 (--stick = common.js 가 잰 높이) */
+  position:sticky; top:var(--stick, 0px); z-index:2;
+  padding:9px 16px; text-align:left;
+  /* 머리글자도 줄바꿈을 허용한다 — nowrap 이면 열이 많은 표(건보 기타)가 창을 넘긴다 */
+  white-space:normal;
+  background:var(--bg);
+  border-bottom:1px solid var(--line-strong);
+  border-right:1px solid var(--line);
+  font-size:12px; font-weight:500; color:var(--text-3);
+}
+/* 열 너비 손잡이 — 머리줄 칸 사이 경계. th 가 position:sticky 라 그 자체가 기준이 된다.
+   경계에 걸치도록 살짝 오른쪽으로 내밀고, 커서를 대면 가운데에 파란 선을 보여 준다. */
+table.b2 th .rz, table.fields th .rz{
+  position:absolute; top:0; right:-4px; width:9px; height:100%;
+  cursor:col-resize; z-index:3;
+}
+table.b2 th .rz::after, table.fields th .rz::after{
+  content:""; position:absolute; top:5px; bottom:5px; left:4px; width:2px;
+  border-radius:1px; background:var(--accent); opacity:0;
+}
+table.b2 th .rz:hover::after, table.fields th .rz:hover::after{opacity:.75;}
+/* 끌고 있는 동안 — 글자가 선택되지 않고 커서 모양을 유지한다 */
+body.rz-on{user-select:none; cursor:col-resize;}
+body.rz-on table.b2 th .rz::after, body.rz-on table.fields th .rz::after{opacity:.75;}
+table.b2 td{
+  padding:8px 16px; vertical-align:top;
+  /* keep-all 은 어절을 안 쪼개지만, V191,V192,V268… 처럼 공백 없는 긴 코드는 칸을 넘친다.
+     overflow-wrap:anywhere 는 "달리 넣을 수 없을 때만" 끊으므로 keep-all 을 해치지 않는다. */
+  overflow-wrap:anywhere;
+  border-bottom:1px solid var(--line);
+  border-right:1px solid var(--line);
+  font-size:13px; line-height:1.5; color:var(--text-2);
+}
+table.b2 th.lastcol, table.b2 th:last-child,
+table.b2 td.lastcol{border-right:0;}
+table.b2 tbody tr:hover td{background:var(--group-tint);}
+
+/* 칸 역할 — 핸드오프의 .grp/.item/.sub/.label/.note 에 대응한다 */
+table.b2 td.grp{                                  /* 요양종별 그룹 칸 */
+  background:var(--group-tint); border-right:1px solid var(--line-strong);
+  font-weight:700; color:var(--text);
+}
+table.b2 tbody tr:hover td.grp{background:var(--group-tint);}
+table.b2 td.c0{font-weight:700; color:var(--text);}       /* 첫 열(그룹 아님) */
+table.b2 td.c-item{font-weight:700; color:var(--text);}   /* 항목 */
+table.b2 td.c-gubun{font-weight:600; color:var(--text);}  /* 구분 */
+table.b2 td.c-gubun.span2,
+table.b2 td.c-detail{font-weight:400; color:var(--text);} /* 행 라벨 · 세부 */
+table.b2 td.note{                                 /* 장애인 비고 열 */
+  background:var(--note-bg); border-right:0;
+  font-size:12px; line-height:1.6; color:var(--text-3);
+}
+table.b2 tbody tr:hover td.note{background:var(--note-bg);}
+table.b2 td.c-mid{color:var(--text-25);}
+table.b2 td.c-lite{color:var(--text-3);}
+
+/* 구분선 — gsep = 요양종별 그룹 경계 2px · msep = 구분 단위 경계 1px · nb = 마지막 줄 */
+table.b2 td.gsep{border-bottom:2px solid var(--line-strong);}
+table.b2 td.msep{border-bottom:1px solid var(--line-strong);}
+table.b2 td.nb{border-bottom:0;}
+/* 부담률·금액 칸은 줄바꿈하지 않는다. 열 너비가 정해진 표(fixed)에서는 줄바꿈을 허용해야
+   글자가 잘리지 않으므로 nowrap 을 풀고, 숫자 강조(.cp-val = td b)만 남긴다. */
+/* 부담률 칸도 줄바꿈을 허용한다 — nowrap 이면 표가 카드를 넘겨 좌우 스크롤을 만든다 */
+table.b2 td.rate{color:var(--text-2); font-variant-numeric:tabular-nums;}
+
+table.b2 td .sub{font-weight:400; font-size:12px; color:var(--text-3);}   /* 괄호 보조 설명 */
+/* 표 중간·표 위 소제목 띠 — 핸드오프 .cp-subhead 값 */
+table.b2 td.subh{
+  font-size:12px; font-weight:600; color:var(--text-25);
+  background:var(--group-tint); white-space:nowrap;
+  padding:8px 16px;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+}
+table.b2 tbody tr:hover td.subh{background:var(--group-tint);}
+/* 한 카드 안에 표가 여럿일 때 표마다 얹는 띠 — td.subh 와 같은 모양 */
+.b2-subh{
+  font-size:12px; font-weight:600; color:var(--text-25);
+  background:var(--group-tint); padding:8px 16px;
+  border-bottom:1px solid var(--line);
+}
+/* 표 바로 다음에 오는 띠는 위쪽에도 선을 둔다. 표는 .b2-scroll(display:contents) 안에 있어
+   실제 형제는 그 div 다 — table 을 기준으로 쓰면 선택자가 걸리지 않는다. */
+.b2-card .b2-scroll + .b2-subh{border-top:1px solid var(--line);}
+table.b2 mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* 비고 — 라벨 칩 + 본문 두 줄 */
+.b2-note{font-size:11px; color:var(--note); line-height:1.6;}
+.b2-note .ln{display:flex; gap:6px;}
+.b2-note .ln + .ln{margin-top:4px;}
+.noteTag{
+  display:inline-block; min-width:64px; font-size:9.5px; font-weight:700;
+  color:var(--accent); background:var(--accent-tint); border-radius:3px;
+  padding:1px 6px; margin-right:6px;
+}
+
+/* 각주 — 카드 밖, 배경 위에 글자만 */
+.b2-foot{
+  padding:0 2px;
+  font-size:11px; line-height:1.6; color:var(--text-3);
+  display:flex; gap:8px;
+}
+.b2-foot b{color:var(--text-2); flex:0 0 auto;}
+a.b2-ref{color:var(--accent); text-decoration:none; font-size:11px;}
+a.b2-ref:hover{text-decoration:underline;}
+
+/* 구분 칸에 붙는 특정기호 배지 — 커서를 올리면 한글명칭을 띄운다 */
+.symb{
+  display:inline-block; margin-left:5px; padding:0 5px; border-radius:3px;
+  background:var(--accent-tint); color:var(--accent);
+  font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.02em;
+  vertical-align:1px; white-space:nowrap; cursor:help; position:relative;
+}
+.symb::after{
+  content:attr(data-tip);
+  position:absolute; left:0; top:calc(100% + 6px); z-index:40;
+  width:max-content; max-width:360px; padding:7px 10px;
+  background:var(--text); color:#fff; border-radius:5px;
+  font-family:'Pretendard','Pretendard Variable','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  font-size:11px; font-weight:400; letter-spacing:0; line-height:1.5;
+  white-space:normal; word-break:keep-all; text-align:left;
+  box-shadow:0 4px 12px rgba(14,26,44,.18);
+  opacity:0; visibility:hidden; transition:opacity .1s;
+  pointer-events:none;
+}
+.symb:hover::after{opacity:1; visibility:visible;}
+
+
+/* 부담률·금액 칸의 숫자 강조 */
+table.b2 td b{font-weight:700; color:var(--accent);}
+
+/* 읍·면처럼 곁들이는 값 — 강조하지 않고 작은 회색으로 */
+table.b2 td .alt, .b2-plain .alt{font-size:11px; font-weight:400; color:var(--text-3);}
+
+
+/* plain 섹션 — 카드(흰 상자) 없이 배경 위에 글줄로만 */
+.b2-plain{padding:2px 2px 4px;}
+.b2-plain h2{
+  margin:0 0 8px; font-size:13px; font-weight:700;
+  letter-spacing:-.01em; color:var(--text);
+}
+.b2-plain .ln{display:flex; gap:10px; align-items:baseline; font-size:12px; line-height:1.6; color:var(--text-2);}
+.b2-plain .ln + .ln{margin-top:3px;}
+.b2-plain .ln b{flex:0 0 auto; min-width:160px; font-weight:600; color:var(--text);}
+.b2-plain .ln > span{flex:1; min-width:0;}
+.b2-plain .ln span b{min-width:0; font-weight:700; color:var(--accent);}
+
+/* 카드 · 각주 · 배경 글줄이 섞여 있어 형제 간격을 한 규칙으로 준다
+   (.b2-content 의 gap 은 #b2-body 바깥에만 걸리므로 여기서 따로 준다) */
+#b2-body > * + *{margin-top:16px;}
+#b2-body > .b2-card + .b2-foot{margin-top:9px;}   /* 각주는 자기 카드 바로 아래에 붙여 둔다 */
+
+/* ---------- 상해외인 ---------- */
+table.fields.ij{width:100%;}
+.ij-code{white-space:nowrap; font-weight:700; color:var(--accent); font-size:14px; width:1%;}
+/* min-width 를 쓰지 않는다 — 합이 창을 넘어 좌우 스크롤이 생겼다(전체 전제 위반).
+   표가 width:100% 라 열은 내용에 맞춰 나뉘고 넘치는 글자는 칸 안에서 줄바꿈된다. */
+.ij-what{letter-spacing:-.01em; color:var(--text);}
+.ij-day{white-space:nowrap; font-weight:600; font-variant-numeric:tabular-nums; width:1%;}
+.ij-days, .ij-start{color:var(--text-2); font-size:11.5px; line-height:1.6;}
+.ij-days, .ij-start{word-break:keep-all;}
+/* 엑셀 F열(사내 메모) — 원문 표에 없는 내용이라 눈에 띄게 구분해 둔다 */
+.ij-note{
+  margin-top:7px; padding:7px 9px; background:var(--group-tint); border-radius:5px;
+  font-size:11px; color:var(--note); line-height:1.6;
+}
+.ij-note b{display:block; font-size:9.5px; color:var(--note-label); letter-spacing:.04em; margin-bottom:2px;}
+table.fields.ij mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* ---------- 시범사업 ---------- */
+table.fields.pl{width:100%;}
+.pl-sym{white-space:nowrap; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; width:1%;}
+.pl-name{letter-spacing:-.01em; color:var(--text);}      /* min-width 없음 — 위와 같은 이유 */
+.pl-rate{color:var(--text-2); line-height:1.6; word-break:keep-all;}
+tr.pl-empty .pl-sym{color:var(--text-4); font-weight:600;}
+table.fields.pl mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}

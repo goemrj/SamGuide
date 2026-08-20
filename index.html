@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SamGuide — 심사청구 점검 참고자료</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <nav id="sidebar">
+    <div class="brand">
+      <span class="mark">S</span>
+      <span>
+        <b>SamGuide</b>
+        <span>심사청구 점검 참고자료</span>
+      </span>
+    </div>
+    <nav>
+      
+      <button class="navbtn on" data-page="burden"><span class="ico">▤</span>본인부담금 규칙</button>
+      <button class="navbtn" data-page="calc"><span class="ico">▦</span>본인부담금 계산기</button>
+      <button class="navbtn" data-page="layout"><span class="ico">▥</span>SAM 파일 레이아웃</button>
+      <button class="navbtn" data-page="hangmok"><span class="ico">#</span>항 · 목 코드</button>
+      <button class="navbtn" data-page="detail"><span class="ico">▧</span>특정내역</button>
+      <button class="navbtn" data-page="special"><span class="ico">◎</span>산정특례 특정기호</button>
+      <button class="navbtn" data-page="pharm"><span class="ico">◈</span>약국 산정특례</button>
+      <button class="navbtn" data-page="injury"><span class="ico">△</span>상해외인</button>
+      <button class="navbtn" data-page="pilot"><span class="ico">✳</span>시범사업</button>
+      <!-- 메모장은 카테고리가 늘어도 항상 맨 아래 — 새 메뉴는 이 줄 위에 넣는다 -->
+      <button class="navbtn" data-page="memo"><span class="ico">✎</span>메모장</button>
+    </nav>
+    <div class="foot">
+      브라우저 안에서만 동작하고 외부로 아무것도 보내지 않습니다.<br>
+      메모는 이 PC 브라우저에 저장됩니다.
+    </div>
+  </nav>
+
+  <main id="main">
+
+    <!-- 본인부담금 규칙 (심평원 안내표) -->
+    <section class="page on" id="page-burden">
+      <!-- 툴바는 스크롤과 함께 올라간다(sticky 아님). 표의 머리줄만 고정된다
+           — 「표 가시성 개선 및 구조 재설계」 핸드오프 규칙. -->
+      <div class="b2-top">
+       <div class="b2-top-in">
+        <div class="b2-row1">
+          <h1>본인부담금 규칙</h1>
+          <p class="b2-desc">심평원 「본인부담기준 안내 — 본인부담률 및 부담액」을 그대로 옮긴 표입니다.</p>
+          <span class="b2-src" id="b2-src"></span>
+        </div>
+        <div class="b2-row2">
+          <div class="b2-seg" id="b2-sys"></div>
+          <span class="b2-div"></span>
+          <div class="b2-chips" id="b2-tabs"></div>
+          <div class="b2-searchwrap">
+            <span class="b2-count" id="b2-count"></span>
+            <label class="b2-search">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input id="b2-search" type="search"
+                     placeholder="대상 · 코드 · 부담률 검색 (예: M003, 자연분만, 무료, CT)">
+            </label>
+          </div>
+        </div>
+       </div>
+      </div>
+
+      <div class="b2-content">
+        <div id="b2-body"></div>
+      </div>
+    </section>
+
+    <!-- 본인부담금 계산기 -->
+    <section class="page" id="page-calc">
+      <div class="page-head">
+        <h1>본인부담금 계산기</h1>
+        <p>총진료비에서 별도 본인부담 항목을 빼고 나머지에 기본 부담률을 적용합니다. 소수점을 그대로 두고 계산한 뒤 마지막에 절사합니다.</p>
+      </div>
+
+      <div class="calc-wrap">
+        <div class="calc-left">
+          <div class="card">
+            <div class="card-pad">
+              <div class="form-grid">
+                <label><span>자격</span><select class="field-input" id="c-qual"></select></label>
+                <label><span>진료형태</span><select class="field-input" id="c-mode"></select></label>
+                <label><span>요양기관 종별</span><select class="field-input" id="c-inst"></select></label>
+                <label><span>환자유형</span><select class="field-input" id="c-type"></select></label>
+                <label><span>산정특례</span><select class="field-input" id="c-spec"></select></label>
+                <label id="c-dispense-wrap"><span>원내 직접조제</span>
+                  <select class="field-input" id="c-dispense">
+                    <option value="0">아니오 (직접조제 이외)</option>
+                    <option value="1">예 (원내 직접조제)</option>
+                  </select>
+                </label>
+                <label class="wide"><span>총진료비 (요양급여비용총액 1)</span>
+                  <input class="field-input money" id="c-total" type="text" inputmode="numeric" placeholder="0" value=""></label>
+              </div>
+              <div class="rule-hint" id="c-hint"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-pad">
+              <div class="row-end" style="margin-bottom:10px;">
+                <b style="font-size:14px;letter-spacing:-.02em;">별도 본인부담 항목</b>
+                <span class="spacer"></span>
+                <select class="field-input" id="c-add" style="max-width:260px;"></select>
+              </div>
+              <div id="c-items"></div>
+              <div class="saved-note" style="margin-top:8px;">
+                금액은 총진료비 <b>안에</b> 포함된 금액입니다. 부담률은 자격·종별에 맞게 자동으로 채워지며 직접 고칠 수 있습니다.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="calc-right">
+          <div class="card">
+            <div class="card-pad">
+              <div id="c-result"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SAM 파일 레이아웃 -->
+    <section class="page" id="page-layout">
+      <div class="page-head">
+        <h1>SAM 파일 레이아웃</h1>
+        <p>청구분야 → 레코드를 고르면 필드 위치 · 길이 · 코드값을 볼 수 있습니다. 위치와 길이는 모두 <b>바이트</b> 기준(EUC-KR, 한글 2byte)입니다.</p>
+      </div>
+
+      <div class="toolbar"><div class="chips" id="lo-claims"></div></div>
+      <div class="toolbar"><div class="chips" id="lo-recs"></div></div>
+
+      <div class="toolbar">
+        <input class="field-input" id="lo-search" type="search" placeholder="항목명 · 설명 · 코드값 검색  (예: 특정내역, 산정특례, MT)">
+        <input class="field-input" id="lo-pos" type="number" min="1" placeholder="바이트 위치">
+        <label class="saved-note"><input type="checkbox" id="lo-all"> 모든 청구분야에서 검색</label>
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="lo-meta"></div>
+        <div id="lo-table"></div>
+      </div>
+    </section>
+
+    <!-- 항 · 목 코드 -->
+    <section class="page" id="page-hangmok">
+      <div class="page-head">
+        <h1>항 · 목 코드</h1>
+        <p>진료내역(C) 레코드의 <b>항</b>과 <b>목</b> 코드. SAM 레이아웃 데이터에서 그대로 뽑았습니다.</p>
+      </div>
+
+      <div class="toolbar"><div class="chips" id="hm-claims"></div></div>
+      <div class="toolbar">
+        <input class="field-input" id="hm-search" type="search" style="flex:1;min-width:260px;"
+               placeholder="항번호 · 목번호 · 이름 검색  (예: 투약, 특수장비, 100/50, 식대)">
+        <label class="saved-note"><input type="checkbox" id="hm-all"> 모든 청구분야 비교</label>
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="hm-meta"></div>
+        <div id="hm-body"></div>
+      </div>
+    </section>
+
+    <!-- 특정내역 -->
+    <section class="page" id="page-detail">
+      <div class="page-head">
+        <h1>특정내역</h1>
+        <p>「특정내역코드_통합본」이 마스터, 「세부작성요령」(2025.8.1.) Ⅸ장 211~253쪽의 자세한 작성요령을 붙였습니다.</p>
+      </div>
+
+      <div class="toolbar"><div class="chips" id="dt-fields"></div></div>
+      <div class="toolbar"><div class="chips" id="dt-recs"></div></div>
+      <div class="toolbar">
+        <input class="field-input" id="dt-search" type="search" style="flex:1;min-width:260px;"
+               placeholder="구분코드 · 특정내역명 · 작성요령 본문 검색  (예: MT002, 특정기호, 산정특례)">
+        <label class="saved-note"><input type="checkbox" id="dt-old"> 지난 판(종료된 항목)도 보기</label>
+      </div>
+
+      <div class="memo-wrap">
+        <div class="card memo-list wide">
+          <div class="card-pad"><div id="dt-items"></div></div>
+        </div>
+        <div class="card memo-edit">
+          <div class="card-pad" id="dt-detail"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 산정특례 특정기호 -->
+    <section class="page" id="page-special">
+      <div class="page-head">
+        <h1>산정특례 특정기호</h1>
+        <p>특정기호 · 상병코드 · 상병일련번호 · 질환명 — 「산정특례 질환별 등록기준」(2026.1.1. 기준)</p>
+      </div>
+
+      <div class="toolbar"><div class="chips" id="sp-groups"></div></div>
+      <div class="toolbar">
+        <input class="field-input" id="sp-search" type="search" style="flex:1;min-width:280px;"
+               placeholder="특정기호 · 상병코드 · 질환명 검색  (예: V193, C34, 크론, F00.0)">
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="sp-meta"></div>
+        <div id="sp-table"></div>
+      </div>
+    </section>
+
+    <!-- 약국 산정특례 — 자료 받으면 채운다 -->
+    <section class="page" id="page-pharm">
+      <div class="page-head">
+        <h1>약국 산정특례</h1>
+        <p>약국 요양급여비용총액의 본인부담률 산정특례 — 대상 질환 · 특정기호.</p>
+      </div>
+      <div class="card"><div class="card-pad"><div class="empty">자료를 받으면 채웁니다.</div></div></div>
+    </section>
+
+    <!-- 상해외인 -->
+    <section class="page" id="page-injury">
+      <div class="page-head">
+        <h1>상해외인</h1>
+        <p>상해외인 구분과 입(내)원일수 · 요양급여일수 · 진료개시일 기재 기준.</p>
+      </div>
+
+      <div class="toolbar">
+        <input class="field-input" id="ij-search" type="search" style="flex:1;min-width:280px;"
+               placeholder="구분 · 내용 검색  (예: F, 분만, 산정특례, 촉탁의)">
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="ij-meta"></div>
+        <div id="ij-table"></div>
+      </div>
+      <div id="ij-notes"></div>
+    </section>
+
+    <!-- 시범사업 -->
+    <section class="page" id="page-pilot">
+      <div class="page-head">
+        <h1>시범사업</h1>
+        <p>시범사업 특정기호(S___)와 자격별 본인부담금.</p>
+      </div>
+
+      <div class="toolbar">
+        <input class="field-input" id="pl-search" type="search" style="flex:1;min-width:280px;"
+               placeholder="특정기호 · 사업명 · 본인부담금 검색  (예: S029, 재택, 회송, 10%)">
+        <label class="saved-note"><input type="checkbox" id="pl-blank"> 내용 없는 기호도 보기</label>
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="pl-meta"></div>
+        <div id="pl-table"></div>
+      </div>
+    </section>
+
+    <!-- 메모장 (항상 맨 아래) -->
+    <section class="page" id="page-memo">
+      <div class="page-head">
+        <h1>메모장</h1>
+        <p>점검하다 알게 된 것들을 적어두는 곳. 이 브라우저에만 저장됩니다.</p>
+      </div>
+      <div class="memo-wrap">
+        <div class="card memo-list">
+          <div class="card-pad">
+            <button class="btn primary" id="memo-new" style="width:100%;margin-bottom:6px;">+ 새 메모</button>
+            <input class="field-input mini" id="memo-search" type="search"
+                   style="margin-bottom:6px;" placeholder="제목 · 내용 검색">
+            <div class="saved-note" id="memo-count" style="padding:0 2px 6px;"></div>
+            <div id="memo-items"></div>
+          </div>
+        </div>
+        <div class="card memo-edit">
+          <div class="card-pad">
+            <input id="memo-title" placeholder="제목">
+            <textarea id="memo-body" placeholder="내용을 적어주세요."></textarea>
+            <div class="row-end">
+              <span class="saved-note" id="memo-status"></span>
+              <span class="spacer"></span>
+              <button class="btn" id="memo-export">텍스트로 내보내기</button>
+              <button class="btn danger" id="memo-del">삭제</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- 레이아웃 데이터: SamEditor/js 에서 복사해 온 원본 그대로. 순서는 SamEditor/index.html 과 동일하게 유지 -->
+<script src="js/layout-shim.js"></script>
+<script src="js/layout-gen.js"></script>
+<script src="js/layout-drg.js"></script>
+<script src="js/layout-ndrg.js"></script>
+<script src="js/layout-sanjae.js"></script>
+<script src="js/layout-jabo.js"></script>
+<script src="js/layout-jabo-han.js"></script>
+<script src="js/layout-mg.js"></script>
+<script src="js/layout-wanhwa.js"></script>
+<script src="js/layout-chub.js"></script>
+<script src="js/layout-hanbang.js"></script>
+<script src="js/layout-sanjae-han.js"></script>
+
+<!-- 고시·규칙 자료: tools/ 의 변환 스크립트로 원문 PDF·엑셀에서 자동 생성된 파일 -->
+<script src="data/detail-codes.js"></script>
+
+<script src="data/special-codes.js"></script>
+<script src="data/burden-hira.js"></script>
+<script src="data/symbol-codes.js"></script>
+<script src="data/injury-codes.js"></script>
+<script src="data/pilot-codes.js"></script>
+<script src="data/memo-seed.js"></script>
+
+<!-- 공통(화면 전환·도우미) → 카테고리별 화면 한 개당 한 파일 -->
+<script src="js/common.js"></script>
+
+<script src="js/page-burden.js"></script>
+<script src="js/page-calc.js"></script>
+<script src="js/page-layout.js"></script>
+<script src="js/page-hangmok.js"></script>
+<script src="js/page-detail.js"></script>
+<script src="js/page-special.js"></script>
+<script src="js/page-pharm.js"></script>
+<script src="js/page-injury.js"></script>
+<script src="js/page-pilot.js"></script>
+<script src="js/page-memo.js"></script>
+
+<!-- 화면들이 다 준비된 뒤에 마지막으로 보던 카테고리를 연다 -->
+<script>restoreLastPage(); watchTables();</script>
+</body>
+</html>
