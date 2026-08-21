@@ -31,7 +31,8 @@ const SP_V_GROUPS = [
   ['가정간호',    ['V008', 'V194', 'V231', 'V251', 'V274', 'V293', 'V801', 'V811']],
   ['중증화상',    ['V247', 'V248', 'V250', 'V305', 'V306']]
 ];
-/* 구분 칩 순서 — F코드 → 중증질환 → 이식·공여자 → 가정간호 → 중증화상 → 기타 V코드 */
+/* 특정기호 목록에서 온 구분들 — 출처 표기(meta-note)와 표의 행 순서에 쓴다.
+   화면에 나오는 칩 순서는 아래 spGroups() 가 따로 정한다. */
 const SP_SYM_ORDER = [SP_F_GROUP].concat(SP_V_GROUPS.map(g => g[0]), SP_V_ETC);
 
 const SP_IN_SPEC = SPECIAL_CODES.reduce((o, d) => (o[d.sym] = 1, o), {});
@@ -51,10 +52,22 @@ const SP_SYM_ROWS = Object.keys(SYMBOLS).filter(k => !SP_IN_SPEC[k]).sort().map(
   SP_SYM_ORDER.indexOf(a.g) - SP_SYM_ORDER.indexOf(b.g) || a.sym.localeCompare(b.sym));
 const SP_ROWS = SPECIAL_CODES.concat(SP_SYM_ROWS);
 
+/* 칩 순서 — 자주 보는 다섯 개를 앞에 못 박고(전체 다음), 나머지는 건수 많은 순이다.
+   건수가 같으면 원래 순서(등록기준 엑셀 → 특정기호 목록)를 지킨다. */
+const SP_HEAD_ORDER = ['F코드', '이식·공여자', '가정간호', '희귀질환', '중증난치질환'];
+function spCounts(){
+  const n = {};
+  for (const d of SP_ROWS) n[d.g] = (n[d.g] || 0) + 1;
+  return n;
+}
 function spGroups(){
   const seen = [];
   for (const d of SP_ROWS) if (!seen.includes(d.g)) seen.push(d.g);
-  return seen;
+  const n = spCounts();
+  const head = SP_HEAD_ORDER.filter(g => seen.includes(g));
+  const rest = seen.filter(g => !head.includes(g))
+    .sort((a, b) => n[b] - n[a] || seen.indexOf(a) - seen.indexOf(b));
+  return head.concat(rest);
 }
 function spFiltered(){
   const needle = $('sp-search').value.trim().toLowerCase();
@@ -73,9 +86,10 @@ function renderSpGroups(){
   const mk = (v, label, n) =>
     '<button class="chip' + (sp.group === v ? ' on' : '') + '" data-v="' + esc(v) + '">' +
     esc(label) + '<small>' + n + '</small></button>';
+  const n = spCounts();
   $('sp-groups').innerHTML =
     mk('', '전체', SP_ROWS.length) +
-    spGroups().map(g => mk(g, g, SP_ROWS.filter(d => d.g === g).length)).join('');
+    spGroups().map(g => mk(g, g, n[g])).join('');
   $('sp-groups').querySelectorAll('.chip').forEach(c => {
     c.addEventListener('click', () => { sp.group = c.dataset.v; sp.page = 0; renderSpGroups(); renderSpTable(); });
   });
