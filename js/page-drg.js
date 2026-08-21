@@ -325,29 +325,25 @@ function dgRenderPack(o){
         : '질병군번호를 적으면 포괄수가를 계산합니다.') + '</div>';
     return;
   }
-  const u = o.unit;
+  // 점수·점수당 단가는 보여 주지 않는다(2026-08-21 요청) — 총액 · 본인부담금 · 청구액만.
+  const add = [];
+  if (o.night) add.push(dgNightMult() > 1 ? '가산 ×' + dgNightMult() : '야간·공휴');
+  if (dg.gyn && S.gyn) add.push('부인과 가산');
   $('dg-pack').innerHTML =
     '<table class="fields items dgt fixed" data-k="drg-pack"><thead><tr>' +
-      '<th>구분</th><th style="width:15.5%;">점수</th><th style="width:19.5%;">금액</th>' +
+      '<th>구분</th><th style="width:25%;">금액</th>' +
     '</tr></thead><tbody>' +
-      '<tr><td><span class="c-name">' + esc(S.c) + '</span>' +
-        '<div class="saved-note">' + esc(S.n) + '</div></td>' +
-        '<td class="num">기준 ' + won2(o.base) + '<div class="saved-note">일당 ' + won2(o.day) +
-          (o.night ? ' · 가산점수 ' + won2(o.night) +
-            (dgNightMult() > 1 ? ' (야간공휴점수 × ' + dgNightMult() + ')' : '') : '') +
-          (dg.gyn && S.gyn ? ' · 부인과 가산점수 적용' : '') + '</div></td>' +
-        '<td class="num">점수당 단가 ' + won2(u) + '원</td></tr>' +
-      '<tr><td>입원일수 <b>' + o.los + '일</b> · ' + esc(o.band) +
-        '<div class="saved-note">평균 ' + won2(S.avg) + '일 · 하한 ' + S.lo + '일 · 상한 ' + S.hi + '일</div></td>' +
-        '<td class="num">20% 항 ' + won2(o.partA) + '<div class="saved-note">80% 항 ' + won2(o.partB) + '</div></td>' +
-        '<td class="num"></td></tr>' +
-    '</tbody><tfoot>' +
-      '<tr><td>포괄수가 (점수 총합 × 점수당 단가 · 10원 미만 4사5입)</td>' +
-        '<td class="num b">' + won2(o.score) + '</td>' +
+      '<tr><td><span class="c-name">총액</span>' +
+        '<div class="saved-note">입원일수 ' + o.los + '일 · ' + esc(o.band) +
+          ' (평균 ' + won2(S.avg) + '일 · 하한 ' + S.lo + '일 · 상한 ' + S.hi + '일)' +
+          (add.length ? ' · ' + esc(add.join(' · ')) : '') + '</div></td>' +
         '<td class="num b">' + won(o.pack) + '</td></tr>' +
-      '<tr><td>포괄수가 본인부담금 (본인부담 기준점수 × 단가 × ' + pct(dg.rate) + ' · 10원 미만 4사5입)</td>' +
-        '<td class="num b">' + won2(o.hitScore) + '</td>' +
+      '<tr><td><span class="c-name">본인부담금</span>' +
+        '<div class="saved-note">본인부담률 ' + pct(dg.rate) + '</div></td>' +
         '<td class="num strong">' + won(o.packOwn) + '</td></tr>' +
+    '</tbody><tfoot>' +
+      '<tr><td>청구액 <span class="saved-note">총액 − 본인부담금</span></td>' +
+        '<td class="num b">' + won(o.pack - o.packOwn) + '</td></tr>' +
     '</tfoot></table>';
 }
 
