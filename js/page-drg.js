@@ -90,6 +90,7 @@ function dgNewState(){
            items:[], excl:0,                    // 제외금액 (1인실 · 인공수정체)
            fee:0,                               // 행위별 진료비총액 (열외군 판정)
            base6:0,                             // 6인실이상 기본점수입원료
+           width:980, tableW:980,               // 칸(카드) 폭 · 표 폭 — 화면에서 조절한다
            rooms:{ r2:{ d:0, p:0, rate:null }, r3:{ d:0, p:0, rate:null },
                    r4:{ d:0, p:0, rate:null }, r5:{ d:0, p:0, rate:null } } };
 }
@@ -114,6 +115,10 @@ function dgLoad(){
   o.excl = Number(s.excl) || 0;
   o.fee = Number(s.fee) || 0;
   o.base6 = Number(s.base6) || 0;
+  const w = Number(s.width);
+  if (isFinite(w) && w >= 560 && w <= 1600) o.width = Math.round(w / 20) * 20;
+  const tw = Number(s.tableW);
+  if (isFinite(tw) && tw >= 440 && tw <= 1600) o.tableW = Math.round(tw / 20) * 20;
   if (Array.isArray(s.items))
     o.items = s.items.filter(i => i && typeof i === 'object').map(i => ({
       name:String(i.name || ''),
@@ -322,8 +327,8 @@ function dgRenderPack(o){
   }
   const u = o.unit;
   $('dg-pack').innerHTML =
-    '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:150px;">점수</th><th style="width:190px;">금액</th>' +
+    '<table class="fields items dgt fixed" data-k="drg-pack"><thead><tr>' +
+      '<th>구분</th><th style="width:15.5%;">점수</th><th style="width:19.5%;">금액</th>' +
     '</tr></thead><tbody>' +
       '<tr><td><span class="c-name">' + esc(S.c) + '</span>' +
         '<div class="saved-note">' + esc(S.n) + '</div></td>' +
@@ -373,9 +378,9 @@ function dgEnsureBlank(){
 function dgRenderItems(){
   dgEnsureBlank();
   $('dg-extra').innerHTML =
-    '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:150px;">금액</th><th style="width:118px;">부담률</th>' +
-      '<th style="width:150px;">본인부담</th><th style="width:40px;"></th>' +
+    '<table class="fields items dgt fixed" data-k="drg-extra"><thead><tr>' +
+      '<th>구분</th><th style="width:15.5%;">금액</th><th style="width:12%;">부담률</th>' +
+      '<th style="width:15.5%;">본인부담</th><th style="width:4.5%;"></th>' +
     '</tr></thead><tbody>' +
       dg.items.map((it, i) => dgItemRow(it, i)).join('') +
     '</tbody><tfoot>' +
@@ -393,10 +398,10 @@ function dgRenderItems(){
 /* ③ 2인실~5인실 */
 function dgRenderRooms(){
   $('dg-room').innerHTML =
-    '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>인실</th><th style="width:150px;">기본점수입원료</th><th style="width:90px;">이용일수</th>' +
-      '<th style="width:90px;">부담률</th><th style="width:150px;">추가비용</th>' +
-      '<th style="width:150px;">본인부담</th>' +
+    '<table class="fields items dgt fixed" data-k="drg-room"><thead><tr>' +
+      '<th>인실</th><th style="width:15.5%;">기본점수입원료</th><th style="width:9.5%;">이용일수</th>' +
+      '<th style="width:9.5%;">부담률</th><th style="width:15.5%;">추가비용</th>' +
+      '<th style="width:15.5%;">본인부담</th>' +
     '</tr></thead><tbody>' +
       DG_ROOMS.map(({ k, label }) => {
         const r = dg.rooms[k], def = dgFee(k);
@@ -431,8 +436,8 @@ function dgRenderRooms(){
 /* ④ 열외군 */
 function dgRenderOut(){
   $('dg-out').innerHTML =
-    '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:190px;">금액</th><th style="width:190px;">본인부담</th>' +
+    '<table class="fields items dgt fixed" data-k="drg-out"><thead><tr>' +
+      '<th>구분</th><th style="width:19.5%;">금액</th><th style="width:19.5%;">본인부담</th>' +
     '</tr></thead><tbody>' +
       '<tr><td><span class="c-name">행위별 진료비총액</span>' +
         '<div class="saved-note">행위별 산정 방식으로 계산한 총액 (219쪽) — 적지 않으면 열외군으로 보지 않는다</div></td>' +
@@ -456,8 +461,8 @@ function dgRenderSum(o){
     '<div class="dg-sum-line">요양급여비용총액 1 <b>' + won(o.total) + '</b>원</div>' +
     '<div class="dg-sum-line">청구액 <b>' + won(o.claim) + '</b>원</div>';
   $('dg-sum-tbl').innerHTML =
-    '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:92px;">금액</th><th style="width:92px;">본인부담</th>' +
+    '<table class="fields items dgt fixed" data-k="drg-sum"><thead><tr>' +
+      '<th>구분</th><th style="width:31%;">금액</th><th style="width:31%;">본인부담</th>' +
     '</tr></thead><tbody>' +
       line('① 포괄수가' + (o.S ? '<div class="saved-note">' + esc(o.band) + '</div>' : ''), o.pack, o.packOwn) +
       line('② 별도산정<div class="saved-note">(행위별)</div>', o.extra, o.extraOwn) +
@@ -496,7 +501,23 @@ function dgPaint(){
   dgRenderSum(o);
   dgSave();
 }
+/* 칸(카드) 폭과 표 폭을 손으로 맞춘다 (2026-08-21 요청 — 계산식이 좌우로 길어 읽기 힘들다).
+   표 폭은 CSS 변수 --dgtw 로 넘겨 `#dg-main table.dgt{max-width:var(--dgtw)}` 가 쓴다.
+   칸 폭보다 크게 놓으면 칸 폭까지만 찬다. 둘 다 이 브라우저에 저장된다. */
+function dgApplyWidth(){
+  const m = $('dg-main');
+  if (m){
+    m.style.maxWidth = dg.width + 'px';
+    m.style.setProperty('--dgtw', dg.tableW + 'px');
+  }
+  if ($('dg-w')) $('dg-w').value = dg.width;
+  if ($('dg-w-val')) $('dg-w-val').textContent = dg.width + 'px';
+  if ($('dg-tw')) $('dg-tw').value = dg.tableW;
+  if ($('dg-tw-val')) $('dg-tw-val').textContent = dg.tableW + 'px';
+}
+
 function dgRefresh(){
+  dgApplyWidth();
   dgRenderPickers();
   dgRenderItems();
   dgRenderRooms();
@@ -525,8 +546,15 @@ $('dg-night').addEventListener('change', () => { dg.night = $('dg-night').checke
 $('dg-mid').addEventListener('change', () => { dg.mid = $('dg-mid').checked; dgPaint(); });
 $('dg-rural').addEventListener('change', () => { dg.rural = $('dg-rural').checked; dgPaint(); });
 $('dg-gyn').addEventListener('change', () => { dg.gyn = $('dg-gyn').checked; dgPaint(); });
+['dg-w', 'dg-tw'].forEach(id => $(id).addEventListener('input', () => {
+  dg.width  = Number($('dg-w').value)  || 980;
+  dg.tableW = Number($('dg-tw').value) || 980;
+  dgApplyWidth();
+  setStickTop();          // 폭이 바뀌면 상단 띠 높이(글 줄바꿈)도 달라진다
+  dgSave();
+}));
 $('dg-clear').addEventListener('click', () => {
-  const keep = { inst:dg.inst, rate:dg.rate, q:dg.q };
+  const keep = { inst:dg.inst, rate:dg.rate, q:dg.q, width:dg.width, tableW:dg.tableW };
   dg = Object.assign(dgNewState(), keep);
   dgRefresh();
 });

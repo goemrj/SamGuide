@@ -323,6 +323,8 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
    sticky 는 상단 흰 띠(.page-top) 아래에 붙어야 해서 그 높이(--stick)를 더한다. */
 .dg-wrap{display:flex; gap:18px; align-items:flex-start;}
 .dg-main{flex:1; min-width:0;}
+/* 표 폭은 칸 폭과 따로 맞춘다 — --dgtw 는 page-drg.js 의 슬라이더가 넣는다 */
+#dg-main table.dgt{max-width:var(--dgtw, none);}
 .dg-side{
   width:330px; flex:0 0 330px;
   position:sticky; top:calc(var(--stick, 0px) + 14px);

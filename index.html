@@ -200,9 +200,13 @@
         <label class="saved-note" id="dg-rural-wrap"><input type="checkbox" id="dg-rural"> 분만취약지</label>
         <label class="saved-note" id="dg-gyn-wrap"><input type="checkbox" id="dg-gyn"> 부인과 가산</label>
         <span class="spacer" style="flex:1;"></span>
-        <label class="saved-note" title="계산 칸의 가로 폭을 줄이거나 늘립니다. 표는 머리줄 맨 오른쪽 끝을 끌어서 따로 줄일 수 있습니다(두 번 누르면 원래대로).">
-          칸 폭 <input type="range" id="dg-w" min="560" max="1600" step="20" style="width:130px;vertical-align:middle;">
+        <label class="saved-note" title="카드(박스)의 가로 폭">
+          칸 폭 <input type="range" id="dg-w" min="560" max="1600" step="20" style="width:110px;vertical-align:middle;">
           <b id="dg-w-val" style="font-variant-numeric:tabular-nums;"></b>
+        </label>
+        <label class="saved-note" title="카드 안 표의 가로 폭 — 칸 폭보다 크게 하면 칸 폭까지만 찹니다">
+          표 폭 <input type="range" id="dg-tw" min="440" max="1600" step="20" style="width:110px;vertical-align:middle;">
+          <b id="dg-tw-val" style="font-variant-numeric:tabular-nums;"></b>
         </label>
         <button class="btn xs" id="dg-clear">비우기</button>
       </div>
