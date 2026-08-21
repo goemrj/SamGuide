@@ -323,7 +323,7 @@ function dgRenderPack(o){
   const u = o.unit;
   $('dg-pack').innerHTML =
     '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:120px;">점수</th><th style="width:160px;">금액</th>' +
+      '<th>구분</th><th style="width:150px;">점수</th><th style="width:190px;">금액</th>' +
     '</tr></thead><tbody>' +
       '<tr><td><span class="c-name">' + esc(S.c) + '</span>' +
         '<div class="saved-note">' + esc(S.n) + '</div></td>' +
@@ -374,8 +374,8 @@ function dgRenderItems(){
   dgEnsureBlank();
   $('dg-extra').innerHTML =
     '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:130px;">금액</th><th style="width:96px;">부담률</th>' +
-      '<th style="width:130px;">본인부담</th><th style="width:40px;"></th>' +
+      '<th>구분</th><th style="width:150px;">금액</th><th style="width:118px;">부담률</th>' +
+      '<th style="width:150px;">본인부담</th><th style="width:40px;"></th>' +
     '</tr></thead><tbody>' +
       dg.items.map((it, i) => dgItemRow(it, i)).join('') +
     '</tbody><tfoot>' +
@@ -394,9 +394,9 @@ function dgRenderItems(){
 function dgRenderRooms(){
   $('dg-room').innerHTML =
     '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>인실</th><th style="width:126px;">기본점수입원료</th><th style="width:76px;">이용일수</th>' +
-      '<th style="width:72px;">부담률</th><th style="width:126px;">추가비용</th>' +
-      '<th style="width:126px;">본인부담</th>' +
+      '<th>인실</th><th style="width:150px;">기본점수입원료</th><th style="width:90px;">이용일수</th>' +
+      '<th style="width:90px;">부담률</th><th style="width:150px;">추가비용</th>' +
+      '<th style="width:150px;">본인부담</th>' +
     '</tr></thead><tbody>' +
       DG_ROOMS.map(({ k, label }) => {
         const r = dg.rooms[k], def = dgFee(k);
@@ -432,7 +432,7 @@ function dgRenderRooms(){
 function dgRenderOut(){
   $('dg-out').innerHTML =
     '<table class="fields items dgt fixed"><thead><tr>' +
-      '<th>구분</th><th style="width:160px;">금액</th><th style="width:160px;">본인부담</th>' +
+      '<th>구분</th><th style="width:190px;">금액</th><th style="width:190px;">본인부담</th>' +
     '</tr></thead><tbody>' +
       '<tr><td><span class="c-name">행위별 진료비총액</span>' +
         '<div class="saved-note">행위별 산정 방식으로 계산한 총액 (219쪽) — 적지 않으면 열외군으로 보지 않는다</div></td>' +
@@ -448,20 +448,23 @@ function dgRenderOut(){
 function dgRenderSum(o){
   const line = (name, a, b) =>
     '<tr><td>' + name + '</td><td class="num">' + won2(a) + '</td><td class="num">' + won2(b) + '</td></tr>';
+  // 오른쪽 칸 — 큰 숫자 카드와 내역 표 카드를 따로 둔다(스크롤을 내려도 따라온다)
   $('dg-sum').innerHTML =
-    '<div class="res-head">' +
+    '<div class="res-head" style="border-bottom:0; padding-bottom:4px;">' +
       '<div class="res-big"><span>본인일부부담금</span><b>' + won(o.own) + '</b><i>원</i></div>' +
-      '<div class="res-sub">요양급여비용총액 1 <b>' + won(o.total) + '</b>원 · 청구액 <b>' + won(o.claim) + '</b>원</div>' +
     '</div>' +
-    '<table class="fields items dgt fixed" style="margin-top:12px;"><thead><tr>' +
-      '<th>구분</th><th style="width:160px;">금액</th><th style="width:160px;">본인부담</th>' +
+    '<div class="dg-sum-line">요양급여비용총액 1 <b>' + won(o.total) + '</b>원</div>' +
+    '<div class="dg-sum-line">청구액 <b>' + won(o.claim) + '</b>원</div>';
+  $('dg-sum-tbl').innerHTML =
+    '<table class="fields items dgt fixed"><thead><tr>' +
+      '<th>구분</th><th style="width:92px;">금액</th><th style="width:92px;">본인부담</th>' +
     '</tr></thead><tbody>' +
-      line('① 포괄수가' + (o.S ? ' <span class="saved-note">' + esc(o.band) + '</span>' : ''), o.pack, o.packOwn) +
-      line('② 별도산정 (행위별)', o.extra, o.extraOwn) +
-      line('③ 2인실~5인실 입원료', o.roomAdd, o.roomOwn) +
-      line('④ 열외군 차액', o.outAdd, o.outOwn) +
+      line('① 포괄수가' + (o.S ? '<div class="saved-note">' + esc(o.band) + '</div>' : ''), o.pack, o.packOwn) +
+      line('② 별도산정<div class="saved-note">(행위별)</div>', o.extra, o.extraOwn) +
+      line('③ 2인실<br>~5인실 입원료', o.roomAdd, o.roomOwn) +
+      line('④ 열외군<br>차액', o.outAdd, o.outOwn) +
       line('− 제외금액', -o.excl, -o.exclOwn) +
-    '</tbody><tfoot><tr><td>합계 <span class="saved-note">10원 미만 절사</span></td>' +
+    '</tbody><tfoot><tr><td><b>합계</b> <span class="saved-note">10원<br>미만 절사</span></td>' +
       '<td class="num b">' + won(o.total) + '</td>' +
       '<td class="num strong">' + won(o.own) + '</td></tr>' +
       '<tr><td>청구액</td><td class="num"></td><td class="num">' + won(o.claim) + '</td></tr>' +

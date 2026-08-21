@@ -26,6 +26,7 @@
       <button class="navbtn" data-page="calc"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h4"/></svg>본인부담금 계산기</button>
       <button class="navbtn" data-page="drg"><svg class="ico" viewBox="0 0 24 24"><path d="M4 19V9M9 19V5M14 19v-7M19 19v-4"/><path d="M3 21h18"/></svg>질병군(DRG) 계산기</button>
       <button class="navbtn" data-page="layout"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>SAM 파일 레이아웃</button>
+      <button class="navbtn" data-page="samcheck"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 15 2 2 4-4"/></svg>SAM 파일 점검</button>
       <button class="navbtn" data-page="hangmok"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>항 · 목 코드</button>
       <button class="navbtn" data-page="detail"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>특정내역</button>
       <button class="navbtn" data-page="special"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>특정기호</button>
@@ -203,8 +204,9 @@
       </div>
 
       <!-- 표가 가로로 길어 카드를 두 칸씩 나란히 놓는다 (창이 좁으면 한 줄로 접힌다) -->
-      <div class="dg-grid">
-      <div class="card"><div class="card-pad" id="dg-sum"></div></div>
+      <!-- 왼쪽에 계산 카드들, 오른쪽에 합계 — 오른쪽은 스크롤을 내려도 따라온다 -->
+      <div class="dg-wrap">
+      <div class="dg-main">
 
       <div class="card"><div class="card-pad">
         <b class="dg-h">① 포괄수가</b>
@@ -241,7 +243,14 @@
           그 초과액을 총액과 본인부담(× 자격 부담률)에 더합니다.
         </div>
       </div></div>
+
+      </div><!-- /dg-main -->
+
+      <div class="dg-side">
+        <div class="card"><div class="card-pad" id="dg-sum"></div></div>
+        <div class="card"><div class="card-pad" id="dg-sum-tbl"></div></div>
       </div>
+      </div><!-- /dg-wrap -->
     </section>
 
     <!-- SAM 파일 레이아웃 -->
@@ -264,6 +273,33 @@
         <div class="meta-bar" id="lo-meta"></div>
         <div id="lo-table"></div>
       </div>
+    </section>
+
+    <!-- SAM 파일 점검 — 서식번호를 읽어 레코드 길이를 확인한다 -->
+    <section class="page" id="page-samcheck">
+      <div class="page-head">
+        <h1>SAM 파일 점검</h1>
+        <p>청구 파일을 끌어다 놓으면 <b>서식번호</b>를 읽어 레이아웃을 찾고, 줄마다 <b>바이트 길이</b>가 그 서식과 맞는지 확인합니다.
+           어긋난 줄은 몇 byte 가 모자란지 · 어느 필드에서 끊겼는지 짚어 줍니다.
+           파일은 이 브라우저 안에서만 읽고 어디로도 보내지 않습니다.</p>
+      </div>
+
+      <div class="toolbar">
+        <div class="sc-drop" id="sc-drop">
+          <b>여기로 SAM 파일을 끌어다 놓으세요</b>
+          <span>H010 · H020.1 처럼 한 청구의 파일 여러 개를 한꺼번에 놓아도 됩니다</span>
+          <span>
+            <button class="btn" id="sc-pick">파일 고르기</button>
+            <button class="btn" id="sc-clear" style="display:none;">비우기</button>
+          </span>
+          <input type="file" id="sc-file" multiple hidden>
+        </div>
+      </div>
+
+      <div class="toolbar" id="sc-claim-row" style="display:none;"><div class="chips chips-seg" id="sc-claims"></div></div>
+      <div class="toolbar" id="sc-filter-row" style="display:none;"><div class="chips chips-rec" id="sc-only"></div></div>
+
+      <div id="sc-out"></div>
     </section>
 
     <!-- 항 · 목 코드 -->
@@ -498,6 +534,7 @@
 <script src="js/page-calc.js"></script>
 <script src="js/page-drg.js"></script>
 <script src="js/page-layout.js"></script>
+<script src="js/page-samcheck.js"></script>
 <script src="js/page-hangmok.js"></script>
 <script src="js/page-detail.js"></script>
 <script src="js/page-special.js"></script>

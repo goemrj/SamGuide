@@ -319,12 +319,25 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 .fixable{cursor:cell;}
 
 /* ---------- 질병군(DRG) 계산기 — 계산기와 같은 작은 입력 표 ---------- */
-/* 카드를 두 칸씩 나란히 (2026-08-21 요청 — 표가 가로로 길어 한 줄에 하나면 읽기 어렵다).
-   순서대로 [합계][①] / [②][③] / [④] 로 채워진다. 창이 좁으면 한 칸으로 접는다. */
-.dg-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start;}
-.dg-grid > .card{margin-top:0; min-width:0;}
-@media (max-width:1600px){ .dg-grid{grid-template-columns:1fr;} }
+/* 왼쪽에 계산 카드(①~④), 오른쪽에 합계 — 오른쪽은 스크롤을 내려도 따라온다 (2026-08-21 요청).
+   sticky 는 상단 흰 띠(.page-top) 아래에 붙어야 해서 그 높이(--stick)를 더한다. */
+.dg-wrap{display:flex; gap:18px; align-items:flex-start;}
+.dg-main{flex:1; min-width:0;}
+.dg-side{
+  width:330px; flex:0 0 330px;
+  position:sticky; top:calc(var(--stick, 0px) + 14px);
+}
+@media (max-width:1180px){
+  .dg-wrap{flex-direction:column;}
+  .dg-side{width:100%; flex:none; position:static;}
+}
 .dg-h{font-size:14px; letter-spacing:-.02em;}
+/* 오른쪽 합계 카드의 두 줄 (요양급여비용총액 · 청구액) */
+.dg-sum-line{
+  display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+  padding:5px 2px; font-size:12.5px; color:var(--text-2);
+}
+.dg-sum-line b{color:var(--text); font-variant-numeric:tabular-nums; font-weight:700;}
 /* 질병군번호를 잘못 적었을 때 — 빨강은 계산기 비교표와 같은 --minus 를 쓴다 */
 .dg-err{color:var(--minus); font-size:12px; font-weight:600;}
 .field-input.dg-bad{border-color:var(--minus); color:var(--minus);}
@@ -841,3 +854,28 @@ table.fields.emg{width:100%;}
 table.fields.emg td.emg-ch:empty::after,
 table.fields.emg td.emg-code:empty::after{content:"–"; color:var(--text-4);}
 table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* ---------- SAM 파일 점검 ---------- */
+.sc-drop{
+  width:100%; border:1px dashed var(--line-strong); border-radius:8px;
+  background:var(--group-tint); padding:18px 16px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:7px;
+}
+.sc-drop.over{border-color:var(--accent); background:var(--accent-tint);}
+.sc-drop b{font-size:13px; color:var(--text);}
+.sc-drop span{font-size:11.5px; color:var(--text-3);}
+.sc-drop .btn{margin:0 3px;}
+
+.sc-dim{color:var(--text-3); font-size:11.5px; margin-top:2px;}
+.sc-ok{color:var(--accent); font-weight:600;}
+.sc-bad{color:var(--minus); font-weight:600;}
+.sc-warn{color:var(--minus); font-size:11.5px; margin-top:4px; word-break:keep-all;}
+.sc-num{white-space:nowrap; width:1%; text-align:right; font-variant-numeric:tabular-nums;}
+/* 값은 원본 바이트 그대로 — 공백을 살리고(pre-wrap) 어디서든 접어서 가로 스크롤을 막는다 */
+.sc-val{font-family:var(--mono); font-size:11.5px; color:var(--text-2); white-space:pre-wrap; word-break:break-all;}
+table.fields tr.sc-row{cursor:pointer;}
+table.fields tr.sc-hit td{background:var(--accent-tint);}
+table.fields tr.sc-detail td{background:var(--note-bg); padding:12px 14px;}
+/* 펼친 필드 분해표 — 표 안의 표라 머리줄을 고정하지 않는다 */
+table.fields.sc-fields{width:100%; margin:0;}
+table.fields.sc-fields th{position:static; top:auto;}
