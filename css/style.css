@@ -191,31 +191,29 @@ table.fields tr.hit:hover td{background:var(--accent-tint);}
 }
 .empty{padding:30px 14px; text-align:center; color:var(--text-3); font-size:12px;}
 
-/* ---------- 메모장 ---------- */
-.memo-wrap{display:flex; gap:14px; align-items:flex-start;}
-.memo-list{width:214px; flex:0 0 214px;}
-.memo-list .card-pad{padding:10px;}
-.memo-item{
-  display:block; width:100%; text-align:left; background:transparent; border:0;
-  padding:6px 9px; border-radius:5px; margin-bottom:2px;
+/* ---------- 메모장 — 다른 카테고리와 같은 표 한 장 (2026-08-21) ----------
+   열 너비 기본값은 js/page-memo.js 의 MM_COLW(%)가 <th> 인라인 width 로 넣는다.
+   (목록 + 편집 두 칸 배치 시절의 .memo-wrap · .memo-list · .memo-item 규칙은 함께 지웠다.) */
+table.fields.mm{width:100%;}
+.mm-title{font-weight:600; letter-spacing:-.01em; color:var(--text);}
+/* 본문은 원문 줄바꿈을 그대로 살린다 — 표 안에서 접지 않고 다 읽히게 */
+.mm-body{white-space:pre-wrap; color:var(--text-2); line-height:1.65; font-size:12.5px;}
+.mm-when{white-space:nowrap; color:var(--text-3); font-size:11.5px; font-variant-numeric:tabular-nums;}
+.mm-row{cursor:text;}
+table.fields.mm mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+/* 고치는 줄 — 같은 칸 자리에 들어가는 입력칸 */
+.mm-in, .mm-ta{
+  width:100%; border:1px solid var(--line-strong); border-radius:5px; background:var(--card);
+  padding:5px 8px; outline:none;
 }
-.memo-item:hover{background:var(--group-tint);}
-.memo-item.on{background:var(--accent-tint);}
-.memo-item b{display:block; font-size:12px; font-weight:600; letter-spacing:-.01em;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.memo-item span{display:block; font-size:10.5px; color:var(--text-3); margin-top:1px;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-/* 검색으로 걸린 본문 조각 — 제목 아래 한 줄만 */
-.memo-item .snip{font-size:10.5px; color:var(--text-3); line-height:1.5;}
-.memo-item mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
-.memo-edit{flex:1; min-width:0;}
-#memo-title{width:100%; border:0; border-bottom:1px solid var(--line); border-radius:0;
-  font-size:14px; font-weight:600; padding:5px 2px 8px; outline:none; letter-spacing:-.02em;}
-#memo-title:focus{border-bottom-color:var(--accent);}
-#memo-body{
-  width:100%; min-height:430px; border:0; outline:none; resize:vertical;
-  padding:10px 2px; line-height:1.65; font-size:12.5px;
+.mm-in{font-size:13px; font-weight:600; letter-spacing:-.01em; color:var(--text);}
+.mm-ta{
+  font-size:12.5px; line-height:1.65; color:var(--text-2);
+  min-height:96px; resize:vertical; overflow:hidden;   /* 높이는 내용에 맞춰 늘린다(mmGrow) */
 }
+.mm-in:focus, .mm-ta:focus{border-color:var(--accent); box-shadow:var(--focus);}
+.mm-acts{display:flex; gap:5px; margin-top:6px;}
+.btn.mini{padding:3px 8px; font-size:11.5px;}
 .btn{border:1px solid var(--line); background:#fff; color:var(--text-2); padding:5px 11px; font-size:12px; border-radius:5px;}
 .btn:hover{border-color:var(--accent); color:var(--text);}
 .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
@@ -224,15 +222,6 @@ table.fields tr.hit:hover td{background:var(--accent-tint);}
 .row-end{display:flex; gap:8px; align-items:center;}
 .row-end .spacer{flex:1;}
 .saved-note{color:var(--text-3); font-size:11px;}
-
-/* ---------- ④ 특정내역 — 목록·본문 두 칸 배치는 메모장 것을 그대로 쓴다 ---------- */
-.memo-list.wide{width:262px; flex:0 0 262px;}
-.memo-list.wide .card-pad{max-height:calc(100vh - 232px); overflow-y:auto;}
-.memo-item .code-badge{
-  display:inline-block; font-weight:700; color:var(--accent); font-size:12px;
-  font-variant-numeric:tabular-nums; margin-right:6px;
-}
-.memo-item.on .code-badge{color:var(--accent);}
 
 /* (2026-08-21 — 특정내역의 목록 + 상세 두 칸 화면을 걷어내면서
    .dt-head · .dt-meta · pre.dt-body 규칙도 함께 지웠다. 지금은 표 한 장이다.) */
@@ -294,7 +283,6 @@ table.fields.res tfoot td{border-top:1px solid var(--line); background:var(--gro
 }
 .ftag.none{background:var(--group-tint); color:var(--note);}
 .ftag.old{background:#fff; color:var(--note-label); box-shadow:inset 0 0 0 1px var(--line);}
-.memo-item span{line-height:1.7;}
 
 /* 특정내역 표 — 세부작성요령 PDF 와 같은 3단(구분코드 / 특정내역 / 작성요령).
    열 너비는 page-detail.js 의 DT_COLW(%)가 <th> 인라인으로 넣는다.
@@ -651,6 +639,32 @@ table.fields.ij{width:100%;}
 }
 .ij-note b{display:block; font-size:9.5px; color:var(--note-label); letter-spacing:.04em; margin-bottom:2px;}
 table.fields.ij mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* ---------- 약국 산정특례 ---------- */
+/* 3열뿐이라 너비를 안 정한다(table-layout:auto) — 구분·특정기호는 값이 짧아 내용에 맞고
+   대상 칸이 남는 폭을 다 먹는다. 가로 스크롤 금지 전제라 대상 칸은 줄바꿈시킨다. */
+table.fields.ph{width:100%;}
+.ph-no{white-space:nowrap; color:var(--text-2); font-size:11.5px; font-variant-numeric:tabular-nums; width:1%;}
+.ph-name{letter-spacing:-.01em; word-break:keep-all;}
+.ph-sym{white-space:nowrap; width:1%;}
+.ph-sym .symb{margin-left:0;}
+/* 특정기호 칸이 표 맨 오른쪽이다. .symb 의 말풍선(max-width 360px)은 기본이 left:0 이라
+   여기서는 화면 밖으로 나가 페이지에 가로 스크롤이 생긴다 — 왼쪽으로 펴서 막는다.
+   (카드에 overflow 를 걸어 잘라내는 방법은 쓰지 않는다 — 머리줄 고정이 깨진다) */
+.ph-sym .symb::after{left:auto; right:0;}
+table.fields.ph mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* 표 아래 원문 규정 — 1. / 가. / 1) 머리표에 맞춰 들여쓴다 */
+.ph-notes{margin-top:14px;}
+.ph-notes-h{
+  font-size:9.5px; font-weight:700; letter-spacing:.06em;
+  color:var(--text-3); margin-bottom:9px;
+}
+.ph-note{font-size:12px; line-height:1.7; color:var(--text-2); word-break:keep-all; margin:0 0 7px;}
+.ph-note:last-child{margin-bottom:0;}
+.ph-note.d1{padding-left:16px;}
+.ph-note.d2{padding-left:32px;}
+.ph-notes mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
 /* ---------- 시범사업 ---------- */
 table.fields.pl{width:100%;}
