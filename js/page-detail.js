@@ -48,6 +48,20 @@ function fieldTags(d){
 }
 const dtId = d => d.code + '|' + d.from;
 
+/* 나열 순서 — 구분코드의 앞 두 글자를 아래 순서로 먼저 세우고(SAM 파일에 적는 순서),
+   목록에 없는 것(JB · JJ · MB · MJ …)은 그 뒤에 오름차순으로 붙인다.
+   같은 묶음 안에서는 코드 오름차순, 같은 코드면 적용일자 순(지난 판이 뒤로 간다). */
+const DT_PREFIX = ['MS', 'MT', 'MX', 'JS', 'JT', 'JX', 'CT'];
+function dtRank(code){
+  const i = DT_PREFIX.indexOf(String(code).slice(0, 2));
+  return i >= 0 ? i : DT_PREFIX.length;
+}
+function dtOrder(a, b){
+  const ra = dtRank(a.code), rb = dtRank(b.code);
+  if (ra !== rb) return ra - rb;
+  return a.code.localeCompare(b.code) || String(a.from).localeCompare(String(b.from));
+}
+
 /* ================= 세부작성요령 본문 그리기 =================
    본문은 세부작성요령 PDF 를 `pdftotext -table` 로 뽑은 것이라,
    ♦ 항목 · ※ 주석과 함께 **칸을 공백으로 맞춘 표가 글자 그림으로** 섞여 있다.
@@ -79,6 +93,15 @@ function dtRunAt(line, c){
   while (e < line.length - 1 && line.charAt(e + 1) === ' ') e++;
   if (e === line.length - 1) return [s, Infinity];
   return (e - s + 1) >= 2 ? [s, e] : null;
+}
+/* 한 줄을 **공백 두 칸 이상**으로 끊어 조각으로 나눈다. 낱말 사이 한 칸은 조각 안에 둔다
+   ("혼합 암종" 은 한 조각, "1        이태원" 은 두 조각). at 은 그 조각이 시작하는 칸. */
+function dtPieces(line){
+  const out = [];
+  const re = /\S+(?: \S+)*/g;
+  let m;
+  while ((m = re.exec(line))) out.push({at: m.index, s: m[0]});
+  return out;
 }
 const dtText = (line, from, to) =>
   line.slice(from, to === Infinity ? undefined : to).trim() !== '';
@@ -154,11 +177,7 @@ function dtSplitLoose(line, bs){
     let j = 0; while (j < bs.length && mid > bs[j]) j++;
     return j;
   };
-  let parts = [];
-  const re = /\S(?:.*?\S)?(?=\s{2,}|$)/g;                 // 공백 두 칸 이상으로 끊긴 조각
-  let m;
-  while ((m = re.exec(line))) parts.push({at: m.index, s: m[0]});
-  parts = parts.filter(p => p.s.trim() !== '');
+  let parts = dtPieces(line);
   if (!parts.length) return null;
 
   if (parts.length === 1){
@@ -351,12 +370,70 @@ const DT_FIX = {
   'MT065|0': {
     n: 14, probe: [[0, '특정기호'], [6, '의료급여 수급권자가'], [10, '「국민건강보험'], [12, '상대가치점수표']],
     rows: [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9], [10, 11], [12, 13]]
+  },
+
+  /* 아래 둘은 **원문에서 칸 속에 칸이 있는 표**다(머리줄 수보다 값 자리가 많다).
+     칸 경계로는 못 세우므로 칸 하나하나를 손으로 짚어 둔다 — `grid` 형식.
+       head/grid  칸마다 {p:[[줄, 조각], …], rs:세로병합, cs:가로병합}. p 가 여럿이면 이어 붙인다.
+                  줄 번호는 **머리줄을 0 으로** 세고, 조각은 그 줄을 공백 두 칸으로 끊은 순서다.
+       pieces     줄마다 조각 개수. 고시가 개정돼 조각이 달라지면 이 값이 안 맞아 무시된다.
+     글자는 여기 적지 않는다 — 원문 조각을 가리키기만 하므로 옮겨 적다 틀릴 일이 없다. */
+  'MT043|0': {
+    grid: true, pieces: [4, 5, 3, 4, 4, 2],
+    probe: [[1, 0, '특별재난'], [3, 0, '전상자'], [4, 0, '기타'], [5, 0, '코로나바이러스']],
+    head: [{p: [[0, 0]]}, {p: [[0, 1]]}, {p: [[0, 2]], cs: 2}, {p: [[0, 3]]}],
+    rows: [
+      [{p: [[1, 0]], rs: 2}, {p: [[1, 1]], rs: 2}, {p: [[1, 2], [2, 0]], rs: 2}, {p: [[1, 3]]}, {p: [[1, 4]]}],
+      [{p: [[2, 1]]}, {p: [[2, 2]]}],
+      [{p: [[3, 0]]}, {p: [[3, 1]]}, {p: [[3, 2]], cs: 2}, {p: [[3, 3]]}],
+      [{p: [[4, 0]], rs: 2}, {p: [[4, 1]], rs: 2}, {p: [[4, 2]], cs: 2}, {p: [[4, 3]]}],
+      [{p: [[5, 0]], cs: 2}, {p: [[5, 1]]}]
+    ]
+  },
+  'JT039|0': {
+    grid: true, pieces: [2, 2, 3, 3, 3, 1, 2, 2],
+    probe: [[1, 0, '비소세포성 선암종'], [3, 1, '폐암'], [6, 0, '폐암 외 고형암'], [7, 0, '조기암']],
+    head: [{p: [[0, 0]], cs: 2}, {p: [[0, 1]]}],
+    rows: [
+      [{p: [[2, 0], [3, 0], [4, 0], [3, 1]], rs: 3}, {p: [[1, 0]]}, {p: [[1, 1]]}],
+      [{p: [[2, 1], [3, 2]]}, {p: [[2, 2]]}],
+      [{p: [[4, 1], [5, 0]]}, {p: [[4, 2]]}],
+      [{p: [[6, 0]], cs: 2}, {p: [[6, 1]]}],
+      [{p: [[7, 0]], cs: 2}, {p: [[7, 1]]}]
+    ]
   }
 };
-/* 손으로 적은 행 경계로 표를 세운다. 맞는 것이 없으면 null (자동 방식으로 그린다). */
-function dtFixTable(key, rows, srcLines, mark, n){
+/* 손으로 짚은 칸(grid)으로 표를 세운다. 줄·조각 수가 안 맞으면 null (자동 방식으로 그린다). */
+function dtFixGrid(fx, allLines, mark){
+  if (allLines.length !== fx.pieces.length) return null;
+  const P = allLines.map(dtPieces);
+  for (let i = 0; i < P.length; i++) if (P[i].length !== fx.pieces[i]) return null;
+  for (const [i, j, s] of fx.probe){
+    if (!P[i] || !P[i][j] || P[i][j].s.indexOf(s) !== 0) return null;
+  }
+  const text = c => c.p.reduce((acc, [i, j]) => {
+    const v = dtNorm(P[i][j].s);
+    if (!acc) return v;
+    return acc + (dtNoGap(acc, v) ? '' : ' ') + v;
+  }, '');
+  const cellHtml = (c, j, tag) =>
+    '<' + tag + (j === 0 && tag === 'td' && c.rs > 1 ? ' class="grp"' : '') +
+    (c.rs > 1 ? ' rowspan="' + c.rs + '"' : '') + (c.cs > 1 ? ' colspan="' + c.cs + '"' : '') +
+    '>' + mark(text(c)) + '</' + tag + '>';
+  return {
+    head: fx.head ? '<tr>' + fx.head.map((c, j) => cellHtml(c, j, 'th')).join('') + '</tr>' : null,
+    body: fx.rows.map((r, ri) =>
+      '<tr' + (ri > 0 ? ' class="gstart"' : '') + '>' +
+      r.map((c, j) => cellHtml(c, j, 'td')).join('') + '</tr>').join('')
+  };
+}
+/* 손으로 적은 값으로 표를 세운다. 맞는 것이 없으면 null (자동 방식으로 그린다).
+   돌려주는 값: {head: 머리줄 HTML 또는 null, body: 본문 HTML} */
+function dtFixTable(key, rows, srcLines, allLines, mark, n){
   const fx = DT_FIX[key];
-  if (!fx || rows.length !== fx.n) return null;
+  if (!fx) return null;
+  if (fx.grid) return dtFixGrid(fx, allLines, mark);
+  if (rows.length !== fx.n) return null;
   /* 칸이 안 나뉜 줄(원문에서 칸을 넘어 이어진 줄)은 첫 칸의 글자로 본다 —
      MT065 처럼 첫 칸이 길어 코드 칸 자리까지 넘어온 줄이 있다. */
   const cellAt = (i, j) => rows[i] ? (rows[i][j] || '')
@@ -388,7 +465,7 @@ function dtFixTable(key, rows, srcLines, mark, n){
       html += '<tr' + (gi > 0 && si === 0 ? ' class="gstart"' : '') + '>' + tds + '</tr>';
     });
   });
-  return html;
+  return {head: null, body: html};
 }
 
 /* 줄 묶음(쪽마다 하나) → 표 하나. 첫 줄이 짧은 칸들로만 되어 있으면 머리줄로 본다.
@@ -424,11 +501,13 @@ function dtTableHtml(chunks, mark){
 
   /* 손으로 적어 둔 행 경계가 있으면 그것으로 그린다 (DT_FIX — MT064 · MT065).
      이름은 "구분코드|그 코드 안에서 몇 번째 표" — 적용일자는 넣지 않는다(판이 바뀌어도 같다). */
-  const fixed = dtFixTable(String(dtDocKey).split('|')[0] + '|' + dtTblN, raw, rawLines, mark, n);
+  const fixed = dtFixTable(String(dtDocKey).split('|')[0] + '|' + dtTblN,
+                           raw, rawLines, lines, mark, n);
   if (fixed){
     let out = '<table class="dt-tb" data-k="' + esc('dtb|' + dtDocKey + '|' + (dtTblN++)) + '">';
-    if (head) out += '<thead><tr>' + head.map(c => '<th>' + mark(c) + '</th>').join('') + '</tr></thead>';
-    return out + '<tbody>' + fixed + '</tbody></table>';
+    if (fixed.head) out += '<thead>' + fixed.head + '</thead>';
+    else if (head) out += '<thead><tr>' + head.map(c => '<th>' + mark(c) + '</th>').join('') + '</tr></thead>';
+    return out + '<tbody>' + fixed.body + '</tbody></table>';
   }
 
   // 머리줄을 뺀 본문 줄에서 조각 줄을 합치고, 그 다음에 구분 칸의 병합을 본다
@@ -633,14 +712,14 @@ function dtDocHtml(body, mark, key){
 function renderDtTable(){
   const needle = $('dt-search').value.trim().toLowerCase();
   let rows = dtBase().filter(dtMatch);
-  if (needle){
-    rows = rows.filter(d => dtHaystack(d).includes(needle));
-    // 코드를 그대로 친 경우(MT002 등) 그 코드가 먼저 나오게 한다 —
-    // 다른 코드의 작성요령이 그 코드를 언급만 해도 검색에는 걸리기 때문
-    // 코드 > 특정내역명 > 본문 순으로 앞세운다
-    const hit = d => d.code.toLowerCase().includes(needle) ? 0
-                   : d.name.toLowerCase().includes(needle) ? 1 : 2;
-    rows = rows.slice().sort((a, b) => hit(a) - hit(b));
+  if (needle) rows = rows.filter(d => dtHaystack(d).includes(needle));
+  rows = rows.slice().sort(dtOrder);
+  /* 코드를 그대로 친 경우(MT002 등)에만 그 코드를 맨 위로 올린다 —
+     다른 코드의 작성요령이 그 코드를 언급만 해도 검색에는 걸리기 때문이다.
+     그 밖의 검색어는 순서를 흔들지 않는다(위 구분코드 순서 그대로 본다). */
+  if (needle && /^[a-z]{1,2}[0-9]{0,3}$/.test(needle)){
+    const hit = d => d.code.toLowerCase().indexOf(needle) === 0 ? 0 : 1;
+    rows = rows.slice().sort((a, b) => hit(a) - hit(b) || dtOrder(a, b));
   }
 
   $('dt-meta').innerHTML =
