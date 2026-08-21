@@ -7,7 +7,7 @@
      2. 줄마다 레코드(H · A~F)를 판별한다 — 서식번호 → 내역구분 → 파일명 → 길이 순
      3. 줄의 바이트 길이를 그 레코드의 허용 길이와 견준다
      4. 어긋난 줄은 "몇 byte 모자란지/남는지 · 어느 필드에서 끊겼는지"를 적고,
-        줄을 누르면 필드별로 잘라서 보여 준다
+        줄을 누르면 팝업이 떠서 **파일을 그대로** 그 줄로 옮겨 보여 준다(필드별 분해도 같은 팝업 안)
      5. 어긋난 줄이 어느 명세서인지 — 명일련번호와 수진자 이름을 함께 적는다
         (이름은 일반내역(A)에만 있어 같은 청구번호+명일련번호의 A 줄에서 가져온다)
      6. 파일 구조 — 청구서(H)는 파일에 1줄만, 청구서의 건수는 일반내역 줄 수와 같아야 한다
@@ -21,7 +21,8 @@
    길이는 모두 바이트(EUC-KR, 한글 2byte)다. 파일을 바이트로 읽어 세므로 글자수와 섞이지 않는다.
    ------------------------------------------------------------------------ */
 
-const SC = { list: [], claim: '', why: '', forced: false, onlyBad: true, open: new Set(), cands: [] };
+const SC = { list: [], claim: '', why: '', forced: false, onlyBad: true, cands: [],
+             res: [], view: null, vtab: 'raw', vwrap: true };
 
 const SC_DEC = new TextDecoder('euc-kr');
 function scText(bytes){ return SC_DEC.decode(bytes); }
@@ -392,6 +393,7 @@ function scCheckFile(file, claim){
   return {
     name: file.name, size: file.bytes.length, nl: file.nl, bom: file.bom, enc: file.enc,
     mode, fileRole, rows, counts, forms, dist, bad, unknown, blankLines, lineCount: lines.length,
+    lines,   // 팝업이 파일을 그대로 보여 줄 때 같은 줄 나눔을 쓴다
   };
 }
 
@@ -416,7 +418,7 @@ function scRender(){
     '<button class="chip' + (k === claim ? ' on' : '') + '" data-claim="' + esc(k) + '">' + esc(claimLabel(k)) +
     (SC.cands[0] === k ? '<small>짐작</small>' : '') + '</button>').join('');
   $('sc-claims').querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
-    SC.claim = c.dataset.claim; SC.forced = true; SC.open.clear(); scRender();
+    SC.claim = c.dataset.claim; SC.forced = true; scRender();
   }));
 
   if (!claim){
@@ -460,14 +462,16 @@ function scRender(){
     '<div class="card"><div class="meta-bar"><span><b>파일별 요약</b> — 읽어낸 서식번호 · 레코드 구성 · 길이 분포</span></div>' +
       '<div id="sc-sum"></div></div>';
 
+  SC.res = res;                     // 팝업이 같은 결과를 그대로 쓴다
   scRenderSummary(res, claim);
   scRenderRows(res);
 
+  // 줄을 누르면 파일을 그대로 보여 주는 팝업이 뜨고 그 줄로 옮겨 간다
   $('sc-rows').querySelectorAll('.sc-row').forEach(tr => tr.addEventListener('click', () => {
     const k = tr.dataset.key;
     if (!k) return;
-    if (SC.open.has(k)) SC.open.delete(k); else SC.open.add(k);
-    scRender();
+    const [fi, no] = k.split(':').map(Number);
+    scOpenView(fi, no);
   }));
 }
 
@@ -561,8 +565,6 @@ function scRenderRows(res){
         '<td class="sc-num">' + row.len.toLocaleString() + '</td>' +
         '<td class="sc-num">' + (rec ? rec.allowed.join(' / ') : '—') + '</td>' +
         '<td>' + struct + why + '</td></tr>';
-      if (SC.open.has(key) && rec)
-        t += '<tr class="sc-detail"><td colspan="7">' + scBreak(rec, row) + '</td></tr>';
     });
   });
   if (hidden) t += '<tr><td colspan="7" class="sc-dim">줄이 너무 많아 500줄까지만 보여 줍니다 (' + hidden.toLocaleString() + '줄 생략).</td></tr>';
@@ -625,6 +627,170 @@ function scBreak(rec, row){
   return h + '</tbody></table>';
 }
 
+/* ---------- 파일 그대로 보기 팝업 ----------
+   어긋난 줄을 누르면 뜬다. 파일 전체를 한 번에 그리면(줄 수천 · 줄마다 2,096byte) 화면이 멎으므로
+   그 줄 앞뒤로 창을 열어 보여 주고, 「더 보기」로 넓힌다. 줄번호로 바로 갈 수도 있다.
+   기본은 칸 안에서 접어 보여 준다 — 「한 줄로」를 고르면 이 상자 안에서만 좌우로 움직인다
+   (페이지에 가로 스크롤은 만들지 않는다는 전제는 그대로다). */
+const SC_WIN = 60;         // 처음 보여 주는 앞뒤 줄 수
+const SC_MORE = 200;       // 「더 보기」 한 번에 넓히는 줄 수
+
+function scIsBad(row){ return !!(row.blank || !row.rec || row.diag || row.struct); }
+
+// 표에 뜬 것과 같은 순서로 모은 어긋난 줄 — 팝업의 이전/다음이 이 목록을 따라간다
+function scBadList(){
+  const out = [];
+  (SC.res || []).forEach((r, fi) => r.rows.forEach(row => { if (scIsBad(row)) out.push({fi, no: row.no}); }));
+  return out;
+}
+
+function scOpenView(fi, no){
+  const r = (SC.res || [])[fi];
+  if (!r) return;
+  SC.view = {fi, no, from: Math.max(1, no - SC_WIN), to: Math.min(r.lines.length, no + SC_WIN)};
+  $('sc-modal').classList.add('on');
+  scDrawView(true);
+}
+function scCloseView(){ $('sc-modal').classList.remove('on'); }
+function scViewOpen(){ return $('sc-modal').classList.contains('on'); }
+
+// 줄번호를 바꿔 다시 그린다 — 창 밖으로 나가면 그 줄을 가운데 두고 창을 다시 잡는다
+function scGoLine(no){
+  const v = SC.view, r = SC.res[v.fi];
+  no = Math.max(1, Math.min(r.lines.length, no));
+  v.no = no;
+  if (no < v.from || no > v.to){
+    v.from = Math.max(1, no - SC_WIN);
+    v.to = Math.min(r.lines.length, no + SC_WIN);
+  }
+  scDrawView(true);
+}
+
+function scLineHtml(b, row){
+  const d = row && row.diag;
+  if (d && !d.short)          // 서식에 없는 꼬리를 테두리로 둘러 보여 준다
+    return esc(scText(b.subarray(0, d.near))) + '<mark>' + esc(scText(b.subarray(d.near))) + '</mark>';
+  const s = esc(scText(b));
+  if (d && d.short) return s + '<i class="cut">여기서 끊김 · ' + d.diff.toLocaleString() + 'byte 모자람</i>';
+  return s;
+}
+
+function scRawHtml(r){
+  const v = SC.view;
+  const byNo = {};
+  r.rows.forEach(row => { byNo[row.no] = row; });
+  let h = '';
+  if (v.from > 1)
+    h += '<div class="sc-more"><button class="btn" data-more="up">↑ 앞 ' +
+      Math.min(SC_MORE, v.from - 1).toLocaleString() + '줄 더 보기</button>' +
+      '<button class="btn" data-more="top">맨 앞으로</button></div>';
+  h += '<div class="sc-raw' + (SC.vwrap ? '' : ' nowrap') + '">';
+  for (let n = v.from; n <= v.to; n++){
+    const b = r.lines[n - 1], row = byNo[n];
+    h += '<div class="ln' + (row && scIsBad(row) ? ' bad' : '') + (n === v.no ? ' cur' : '') +
+        '" id="scln-' + n + '">' +
+      '<span class="no">' + n.toLocaleString() + '<i>' + b.length.toLocaleString() + 'b</i></span>' +
+      '<span class="tx">' + scLineHtml(b, row) + '</span></div>';
+  }
+  h += '</div>';
+  if (v.to < r.lines.length)
+    h += '<div class="sc-more"><button class="btn" data-more="down">↓ 뒤 ' +
+      Math.min(SC_MORE, r.lines.length - v.to).toLocaleString() + '줄 더 보기</button>' +
+      '<button class="btn" data-more="end">맨 뒤로</button></div>';
+  return h;
+}
+
+function scDrawView(scroll){
+  const v = SC.view, r = SC.res[v.fi];
+  const row = r.rows.find(x => x.no === v.no);
+
+  $('sc-modal-title').textContent = r.name;
+  const bits = ['<b>' + v.no.toLocaleString() + '줄</b> / 전체 ' + r.lines.length.toLocaleString() + '줄'];
+  if (row && !row.blank){
+    bits.push(row.len.toLocaleString() + 'byte');
+    if (row.rec) bits.push(esc(row.rec.key) + ' ' + esc(row.rec.name) + ' (허용 ' + row.rec.allowed.join(' / ') + ')');
+    const seq = row.seq == null ? '' : row.seq.trim();
+    if (row.rec && row.rec.key !== 'H' && (seq || row.pname))
+      bits.push('명일련 ' + esc(seq || '?') + (row.pname ? ' · ' + esc(row.pname) : ''));
+  }
+  if (row && row.struct) bits.push('<b class="sc-bad">' + esc(row.struct) + '</b>');
+  else if (row && row.diag) bits.push('<b class="sc-bad">' + esc(row.diag.head) + ' — ' + esc(row.diag.where) + '</b>');
+  else if (row && row.blank) bits.push('<b class="sc-bad">빈 줄</b>');
+  else if (row && !row.rec) bits.push('<b class="sc-bad">레코드를 판별하지 못했습니다</b>');
+  $('sc-modal-sub').innerHTML = bits.join(' · ');
+
+  $('sc-modal-view').innerHTML =
+    '<button class="chip' + (SC.vtab === 'raw' ? ' on' : '') + '" data-tab="raw">파일 그대로</button>' +
+    '<button class="chip' + (SC.vtab === 'fields' ? ' on' : '') + '" data-tab="fields">필드별로</button>';
+  $('sc-wrap').textContent = SC.vwrap ? '한 줄로' : '접어 보기';
+  $('sc-wrap').style.display = SC.vtab === 'raw' ? '' : 'none';
+  $('sc-goto').value = v.no;
+
+  if (SC.vtab === 'fields'){
+    $('sc-modal-body').innerHTML = row && row.rec
+      ? '<div class="card"><div class="card-pad">' + scBreak(row.rec, row) + '</div></div>'
+      : '<div class="empty">레코드를 판별하지 못한 줄은 필드로 나눌 수 없습니다. 「파일 그대로」로 보세요.</div>';
+  } else {
+    $('sc-modal-body').innerHTML = scRawHtml(r);
+  }
+
+  const bad = scBadList();
+  const at = bad.findIndex(x => x.fi === v.fi && x.no === v.no);
+  $('sc-mv-prev').disabled = at <= 0;
+  $('sc-mv-next').disabled = at < 0 || at >= bad.length - 1;
+  $('sc-modal-foot').innerHTML = (at >= 0
+      ? '어긋난 줄 <b>' + (at + 1) + '</b> / ' + bad.length + '번째'
+      : '이 줄은 어긋난 줄 목록에 없습니다') +
+    ' · ← → 로 앞뒤 어긋난 줄, Esc 로 닫기 · 줄 번호를 적고 Enter 로 그 줄로 갑니다' +
+    ' · 파일은 이 브라우저 안에서만 읽습니다';
+
+  if (scroll && SC.vtab === 'raw'){
+    const el = $('scln-' + v.no);
+    if (el) el.scrollIntoView({block: 'center'});
+  }
+}
+
+// 팝업 안 단추들
+$('sc-modal-close').addEventListener('click', scCloseView);
+$('sc-modal-scrim').addEventListener('click', scCloseView);
+$('sc-wrap').addEventListener('click', () => { SC.vwrap = !SC.vwrap; scDrawView(true); });
+$('sc-modal-view').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  SC.vtab = b.dataset.tab;
+  scDrawView(true);
+});
+function scStepBad(d){
+  const bad = scBadList(), v = SC.view;
+  const at = bad.findIndex(x => x.fi === v.fi && x.no === v.no);
+  const next = bad[(at < 0 ? 0 : at) + d];
+  if (next) scOpenView(next.fi, next.no);
+}
+$('sc-mv-prev').addEventListener('click', () => scStepBad(-1));
+$('sc-mv-next').addEventListener('click', () => scStepBad(1));
+$('sc-goto').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const n = parseInt($('sc-goto').value, 10);
+  if (!isNaN(n)) scGoLine(n);
+});
+$('sc-modal-body').addEventListener('click', e => {
+  const b = e.target.closest('[data-more]');
+  if (!b) return;
+  const v = SC.view, r = SC.res[v.fi];
+  if (b.dataset.more === 'up')   v.from = Math.max(1, v.from - SC_MORE);
+  if (b.dataset.more === 'top')  v.from = 1;
+  if (b.dataset.more === 'down') v.to = Math.min(r.lines.length, v.to + SC_MORE);
+  if (b.dataset.more === 'end')  v.to = r.lines.length;
+  scDrawView(false);
+});
+document.addEventListener('keydown', e => {
+  if (!scViewOpen()) return;
+  if (e.key === 'Escape'){ scCloseView(); return; }
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowLeft'){ e.preventDefault(); scStepBad(-1); }
+  if (e.key === 'ArrowRight'){ e.preventDefault(); scStepBad(1); }
+});
+
 /* ---------- 파일 받기 ---------- */
 async function scTakeFiles(fileList){
   const list = [];
@@ -635,7 +801,7 @@ async function scTakeFiles(fileList){
     list.push({name: file.name, bytes, bom, enc: scEncNote(bytes), lines: split.lines, nl: split.nl});
   }
   SC.list = list;
-  SC.open.clear();
+  scCloseView();
   SC.forced = false;
   const det = scDetectClaim(list);
   SC.cands = det.cands;
@@ -647,7 +813,7 @@ async function scTakeFiles(fileList){
 $('sc-pick').addEventListener('click', () => $('sc-file').click());
 $('sc-file').addEventListener('change', e => { if (e.target.files.length) scTakeFiles(e.target.files); });
 $('sc-clear').addEventListener('click', () => {
-  SC.list = []; SC.claim = ''; SC.why = ''; SC.cands = []; SC.open.clear();
+  SC.list = []; SC.claim = ''; SC.why = ''; SC.cands = []; scCloseView();
   $('sc-file').value = '';
   scRender();
 });

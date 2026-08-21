@@ -929,3 +929,61 @@ table.fields tr.sc-detail td{background:var(--note-bg); padding:12px 14px;}
    기준을 잃고 창 오른쪽 밖으로 나가 페이지에 가로 스크롤이 생긴다(가로 스크롤 금지 전제). */
 table.fields.sc-fields{width:100%; margin:0;}
 table.fields.sc-fields th{position:relative; top:auto; z-index:auto;}
+
+/* ---------- SAM 파일 점검 — 파일 그대로 보기 팝업 ----------
+   어긋난 줄을 누르면 뜬다. 창 안에서만 스크롤하고(.sc-modal-body) 페이지에는 스크롤을 만들지 않는다. */
+.sc-modal{position:fixed; inset:0; z-index:80; display:none;}
+.sc-modal.on{display:block;}
+.sc-modal-scrim{position:absolute; inset:0; background:rgba(17,24,39,.45);}
+.sc-modal-box{
+  position:absolute; inset:3vh 3vw; max-width:1180px; margin:0 auto;
+  background:var(--card); border:1px solid var(--line-strong); border-radius:12px;
+  box-shadow:0 18px 50px rgba(14,26,44,.28);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.sc-modal-head{
+  display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap;
+  padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card);
+}
+.sc-modal-title{min-width:180px; flex:1;}
+.sc-modal-title b{font-size:14px; letter-spacing:-.01em;}
+.sc-modal-tools{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.sc-modal-body{flex:1; min-height:0; overflow:auto; padding:12px 16px; background:var(--group-tint);}
+.sc-modal-foot{
+  padding:9px 16px; border-top:1px solid var(--line);
+  font-size:11.5px; color:var(--text-3); background:var(--card);
+}
+
+/* 파일 그대로 — 줄번호 칸 + 원본 줄. 기본은 칸 안에서 접어 가로 스크롤을 만들지 않고,
+   「한 줄로」를 고르면 이 상자 안에서만 좌우로 움직인다(페이지에는 스크롤이 생기지 않는다). */
+.sc-raw{background:var(--card); border:1px solid var(--line); border-radius:8px;}
+.sc-raw .ln{display:flex; gap:0; border-bottom:1px solid var(--line-2);}
+.sc-raw .ln:last-child{border-bottom:0;}
+.sc-raw .no{
+  flex:0 0 96px; padding:4px 8px; text-align:right; border-right:1px solid var(--line);
+  background:var(--group-tint); color:var(--text-4);
+  font-family:var(--mono); font-size:11px; font-variant-numeric:tabular-nums; line-height:1.55;
+}
+.sc-raw .no i{display:block; font-style:normal; font-size:10px; color:var(--text-4); opacity:.8;}
+.sc-raw .tx{
+  flex:1; min-width:0; padding:4px 10px;
+  font-family:var(--mono); font-size:11.5px; line-height:1.55; color:var(--text-2);
+  white-space:pre-wrap; word-break:break-all;
+}
+.sc-raw.nowrap{overflow-x:auto;}
+.sc-raw.nowrap .ln{width:max-content; min-width:100%;}
+.sc-raw.nowrap .no{position:sticky; left:0; z-index:1;}
+.sc-raw.nowrap .tx{white-space:pre; word-break:normal;}
+.sc-raw .ln.bad .no{color:var(--minus); font-weight:700;}
+.sc-raw .ln.cur{background:var(--accent-tint);}
+.sc-raw .ln.cur .no{background:var(--accent); color:#fff; font-weight:700;}
+.sc-raw .ln.cur .no i{color:#fff; opacity:.85;}
+/* 서식에 없는 바이트 — 새 색을 만들지 않는다(:root 토큰이 전부다). 빨강은 --minus 하나뿐이라
+   칠하지 않고 테두리로 두르고, 꼬리표만 --minus 를 채운다. */
+.sc-raw .tx mark{background:transparent; color:var(--minus); border-radius:2px;
+  box-shadow:inset 0 0 0 1px var(--minus);}
+.sc-raw .tx .cut{
+  font-style:normal; margin-left:2px; padding:0 5px; border-radius:3px;
+  background:var(--minus); color:var(--card); font-size:10.5px; font-weight:700;
+}
+.sc-more{display:flex; justify-content:center; gap:8px; padding:8px 0;}
