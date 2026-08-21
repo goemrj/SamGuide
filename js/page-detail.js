@@ -167,6 +167,99 @@ function dtSpans(rows){
   return out.every(g => g.start <= g.end) ? out : null;
 }
 
+/* --- 마지막 칸이 여러 줄로 넘어간 것을 한 칸으로 합치기 ---
+   원문 표는 칸 폭에 맞춰 글자를 끊어 넣는다. 화면의 칸은 그보다 넓어서 그 끊김이
+   뜻 없는 줄바꿈으로 보인다(MT018 M013 의 "노숙인 1종"). 마지막 칸만 채워진 줄은
+   앞이나 뒤 행의 마지막 칸에 이어 붙인다.
+
+   어느 행에 붙는지 — PDF 는 구분코드를 칸 **가운데** 줄에 놓으므로 조각이 코드 줄
+   위에 오는 경우(B007)도 아래에 오는 경우(M013)도 있다. 아래 순서로 가른다.
+     ① "- " · "·" · "1." 로 시작하면 같은 칸의 **새 줄머리**다 → 앞 행에 줄바꿈으로 붙인다
+     ② 여는·닫는 괄호나 조사(에서·을·의 …)로 시작하면 앞 글자에 딱 붙는다 → 앞 행, 공백 없이
+     ③ 앞 행의 마지막 칸이 ')' 로 끝나고(문장이 닫혔다) 뒤 행이 새 코드로 시작하면 → 뒤 행
+     ④ 그 밖에는 앞 행
+
+   띄어쓰기 — 원문은 칸 끝에서 글자를 끊을 때 공백을 남기지 않아 PDF 글자만으로는
+   그 자리에 공백이 있었는지 알 수 없다. 그래서 **붙여 쓸 근거가 있을 때만** 붙이고
+   그 밖에는 공백을 넣는다(근거: 열린 괄호가 안 닫힌 채 끊겼거나, 붙여 쓴 꼴이
+   세부작성요령 다른 줄에 실제로 나오거나). 판단 근거는 README 에 적어 두었다. */
+const DT_PARTICLE = /^(에서|에게|에|을|를|이|가|은|는|의|와|과|으로|로|부터|까지|만|도|라|나)(?![가-힣])/;
+const DT_BULLET   = /^([-·*]\s|[0-9]+[.)]\s|[①-⑳])/;
+let DT_CORPUS = null;
+function dtCorpus(){
+  if (DT_CORPUS !== null) return DT_CORPUS;
+  // 줄을 넘어 붙이지 않는다 — 지금 합치려는 그 자리가 근거로 잡히면 안 된다
+  const parts = [];
+  DETAIL_CODES.forEach(d => {
+    if (d.guide) parts.push(dtNorm(d.guide));
+    String(d.body || '').replace(/\\n/g, '\n').split('\n').forEach(l => parts.push(dtNorm(l)));
+  });
+  DT_CORPUS = '' + parts.join('') + '';
+  return DT_CORPUS;
+}
+// 붙여 써야 하는가 (공백 없이 이어야 하는가)
+function dtNoGap(prev, frag){
+  if (!prev || !frag) return true;
+  if (/^[)\]」｣.,·]/.test(frag)) return true;      // 닫는 괄호·마침표는 앞말에 붙는다
+  if (/^\(/.test(frag)) return true;               // "외래진료(2종)" 처럼 여는 소괄호도 붙는다
+  if (/^[「｢\[]/.test(frag)) return false;          // 법령 이름 앞은 띄운다
+  if (DT_PARTICLE.test(frag)) return true;         // 조사는 앞말에 붙는다
+  // 괄호를 연 **직후**에 끊긴 경우 — 낱말 가운데가 잘렸다("만성질환자(의료" + "급여 …")
+  if (/[(\[「｢][^)\]」｣]{0,3}$/.test(prev)) return true;
+  /* 붙여 쓴 꼴이 세부작성요령 다른 줄에 실제로 있는지 본다.
+     앞말 끝·뒷말 머리를 네 글자씩 보고, 그 창으로 판가름이 안 나면 두 글자씩 다시 본다
+     ("…선택의료급"+"여기관이" 는 두 글자 창(료급+여기)에서 "선택의료급여기관" 이 걸린다). */
+  const tailW = (prev.match(/\S+$/) || [''])[0];
+  const headW = (frag.match(/^\S+/) || [''])[0];
+  if (!tailW || !headW) return false;
+  const c = dtCorpus();
+  const count = s => { let n = 0, i = 0; while ((i = c.indexOf(s, i)) >= 0){ n++; i++; } return n; };
+  for (const w of [4, 2]){
+    const a = tailW.slice(-w), b = headW.slice(0, w);
+    if (a.length < w || b.length < w) continue;
+    const fused = count(a + b), spaced = count(a + ' ' + b);
+    if (fused && !spaced) return true;
+    if (spaced && !fused) return false;
+    // 두 꼴이 다 있으면 더 자주 쓰인 쪽을 따른다 ("외래진료" 가 "외래 진료" 보다 흔하다)
+    if (fused && spaced && fused !== spaced) return fused > spaced;
+  }
+  return false;                                    // 판가름이 안 나면 띄어 쓴다(흔한 쪽)
+}
+/* 조각 줄을 앞뒤 행의 마지막 칸에 이어 붙인다. rows·lines 를 줄인 새 배열을 돌려준다. */
+function dtJoinFrags(rows, lines){
+  const n = rows.reduce((m, r) => Math.max(m, r ? r.length : 0), 0);
+  if (n < 2) return {rows: rows, lines: lines};
+  const R = rows.slice(), L = lines.slice();
+  const isFrag = i => {
+    const r = R[i];
+    return !!r && r.length === n && !!r[n - 1] && r.slice(0, n - 1).every(c => !c);
+  };
+  const lastOf = i => (R[i] ? R[i][n - 1] : '');
+
+  for (let i = R.length - 1; i > 0; i--){          // 뒤에서부터 — 여러 줄이 이어져도 한 번에 접힌다
+    if (!isFrag(i)) continue;
+    const frag = R[i][n - 1];
+    const prev = R[i - 1], next = R[i + 1];
+    const bullet = DT_BULLET.test(frag);
+    let to = -1;
+    if (!bullet && !/^[)\]」｣.,]/.test(frag) && !DT_PARTICLE.test(frag) &&
+        prev && lastOf(i - 1) && /\)$/.test(lastOf(i - 1)) && next && next[0])
+      to = i + 1;                                   // 뒤 행으로
+    else if (prev && lastOf(i - 1)) to = i - 1;      // 앞 행으로
+    if (to < 0) continue;
+
+    if (to === i - 1){
+      const sep = bullet ? '\n' : (dtNoGap(lastOf(to), frag) ? '' : ' ');
+      R[to] = R[to].slice(); R[to][n - 1] = lastOf(to) + sep + frag;
+    } else {
+      const sep = DT_BULLET.test(lastOf(to)) ? '\n' : (dtNoGap(frag, lastOf(to)) ? '' : ' ');
+      R[to] = R[to].slice(); R[to][n - 1] = frag + sep + lastOf(to);
+    }
+    R.splice(i, 1); L.splice(i, 1);
+  }
+  return {rows: R, lines: L};
+}
+
 /* 줄 묶음(쪽마다 하나) → 표 하나. 첫 줄이 짧은 칸들로만 되어 있으면 머리줄로 본다.
    chunks = [{lines, bs}, …] — 쪽이 넘어가며 갈라진 것을 한 표로 그린다. */
 function dtTableHtml(chunks, mark){
@@ -193,9 +286,9 @@ function dtTableHtml(chunks, mark){
              ? rows[0] : null;
   const headKey = head ? head.map(dtNorm).join('|') : null;
 
-  // 머리줄을 뺀 본문 줄에서만 구분 칸의 병합을 본다
-  const body = head ? rows.slice(1) : rows;
-  const bodyLines = head ? lines.slice(1) : lines;
+  // 머리줄을 뺀 본문 줄에서 조각 줄을 합치고, 그 다음에 구분 칸의 병합을 본다
+  const joined = dtJoinFrags(head ? rows.slice(1) : rows, head ? lines.slice(1) : lines);
+  const body = joined.rows, bodyLines = joined.lines;
   const spans = dtSpans(body);
   const spanAt = i => spans && spans.find(g => g.start === i);
   const inSpan = i => spans && spans.some(g => i > g.start && i <= g.end);
@@ -223,7 +316,8 @@ function dtTableHtml(chunks, mark){
           return '<td class="grp"' + (rs > 1 ? ' rowspan="' + rs + '"' : '') + '>' +
                  mark(g ? g.text : c) + '</td>';
         }
-        return '<td>' + (c ? mark(c) : '') + '</td>';
+        // 합친 칸 안의 줄머리("- " 로 시작하는 항목)는 줄을 나눠 그린다
+        return '<td>' + (c ? mark(c).replace(/\n/g, '<br>') : '') + '</td>';
       }).join('') + '</tr>';
   });
   return html + '</tbody></table>';
