@@ -39,7 +39,7 @@ function fmtLabel(f){
   return '';
 }
 function codeMatches(k, v, needle){
-  return !!needle && (k.toLowerCase().includes(needle) || String(v).toLowerCase().includes(needle));
+  return !!needle && (sgHit(k, needle) || sgHit(String(v), needle));
 }
 function codeChip(k, v, needle){
   return '<span class="code' + (codeMatches(k, v, needle) ? ' mark' : '') + '"><b>' +
@@ -82,7 +82,7 @@ function renderTable(){
     const L = layoutsOf(lo.claim);
     for (const f of L[lo.rec].fields) rows.push({claim: lo.claim, rec: lo.rec, f});
   }
-  if (needle) rows = rows.filter(r => haystack(r.f).includes(needle));
+  if (needle) rows = rows.filter(r => sgHit(haystack(r.f), needle));
   lo.rows = rows;
 
   const cur = layoutsOf(lo.claim)[lo.rec];

@@ -33,7 +33,7 @@ function memoStamp(ts){
 function memoFiltered(){
   const needle = $('memo-search').value.trim().toLowerCase();
   if (!needle) return memos.slice();
-  return memos.filter(m => ((m.title || '') + '\n' + (m.body || '')).toLowerCase().includes(needle));
+  return memos.filter(m => sgHit((m.title || '') + ' ' + (m.body || ''), needle));
 }
 
 /* 읽는 줄 — 본문은 줄바꿈을 그대로 살려 통째로 보여 준다(칸이 pre-wrap).

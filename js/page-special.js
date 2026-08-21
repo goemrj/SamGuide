@@ -118,7 +118,7 @@ function spFiltered(){
   const needle = $('sp-search').value.trim().toLowerCase();
   const rows = SP_ROWS.filter(d =>
     (!sp.group || d.g === sp.group) &&
-    (!needle || (d.sym + ' ' + d.code + ' ' + d.seq + ' ' + d.name).toLowerCase().includes(needle)));
+    (!needle || sgHit(d.sym + ' ' + d.code + ' ' + d.seq + ' ' + d.name, needle)));
   /* 전체(구분을 고르지 않은 상태)는 특정기호 오름차순으로 본다.
      구분을 고르면 원본 엑셀 순서(질환 등록기준 순서)를 그대로 둔다. */
   if (!sp.group){

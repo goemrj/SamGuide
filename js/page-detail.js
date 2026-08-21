@@ -712,7 +712,7 @@ function dtDocHtml(body, mark, key){
 function renderDtTable(){
   const needle = $('dt-search').value.trim().toLowerCase();
   let rows = dtBase().filter(dtMatch);
-  if (needle) rows = rows.filter(d => dtHaystack(d).includes(needle));
+  if (needle) rows = rows.filter(d => sgHit(dtHaystack(d), needle));
   rows = rows.slice().sort(dtOrder);
   /* 코드를 그대로 친 경우(MT002 등)에만 그 코드를 맨 위로 올린다 —
      다른 코드의 작성요령이 그 코드를 언급만 해도 검색에는 걸리기 때문이다.

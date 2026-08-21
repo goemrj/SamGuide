@@ -30,7 +30,7 @@ function phFiltered(){
   const needle = $('ph-search').value.trim().toLowerCase();
   return PHARM_CODES.filter(d =>
     (!ph.sym || d.sym === ph.sym) &&
-    (!needle || (d.no + ' ' + d.name + ' ' + d.sym).toLowerCase().includes(needle)));
+    (!needle || sgHit(d.no + ' ' + d.name + ' ' + d.sym, needle)));
 }
 
 /* 특정기호 한 줄뿐이라 대분류(.chips-seg)로 그린다 — 디자인 규칙의 필터 두 줄 규칙 */

@@ -9,10 +9,10 @@ const pl = { blank: false };
 function plFiltered(){
   const needle = $('pl-search').value.trim().toLowerCase();
   const filled = PILOT_CODES.filter(d =>
-    !needle || [d.sym, d.name, d.hi, d.mg].join(' ').toLowerCase().includes(needle));
+    !needle || sgHit([d.sym, d.name, d.hi, d.mg].join(' '), needle));
   if (!pl.blank) return { filled, blank: [] };
   const blank = (typeof PILOT_BLANK === 'undefined' ? [] : PILOT_BLANK)
-    .filter(s => !needle || s.toLowerCase().includes(needle));
+    .filter(s => !needle || sgHit(s, needle));
   return { filled, blank };
 }
 

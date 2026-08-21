@@ -203,6 +203,35 @@ function b2Terms(html, tkey){
          : codes.split(',').map(s => s.trim()).filter(Boolean).map(b2Symb).join(' '));
 }
 
+/* ── 원문에 글자로 적힌 특정기호를 배지로 바꾼다 (의료급여 표) ────────────────
+   의료급여 표는 기호가 따로 정리된 열에만 있는 게 아니라 "자연분만(F001)" 처럼
+   대상 칸 글자 속에 섞여 있다. 그 글자를 찾아 배지(.symb)로 세운다 —
+   커서를 올리면 다른 화면과 똑같이 한글명칭이 뜬다. 데이터(data/burden-hira.js)는
+   손대지 않는다. 화면에서만 바꾼다.
+     · 괄호가 기호만 감싸고 있으면 괄호는 지운다 — 6세미만 (F019) → 6세미만 [F019]
+     · F·V 로 시작하고 숫자가 **세 자리**인 것만 기호로 본다.
+       상병코드(F20~29 · B20~24)와 "1,000원" 같은 숫자는 걸리지 않는다.
+     · M003 · B010 같은 **본인부담구분코드는 배지로 만들지 않는다** — 특정기호가 아니고
+       SYMBOLS(특정기호 엑셀)에 없어 띄울 명칭도 없다. 글자 그대로 둔다.
+       그래서 "B010·F015*" 는 B010 은 글자, F015 만 배지가 된다. */
+const B2_CODE   = '[FV][0-9]{3}';
+const B2_CODES  = B2_CODE + '(?:\\s*[,·]\\s*' + B2_CODE + ')*';
+const B2_CODERE = new RegExp('\\(\\s*(' + B2_CODES + ')\\s*\\)|(' + B2_CODES + ')', 'g');
+
+/* 아직 이스케이프하지 않은 **원문 글자**를 받는다 (hilite 앞에서 부른다는 뜻).
+   기호가 아닌 부분만 hilite 에 태우므로 검색 강조는 그대로 남는다. */
+function b2Coded(text, needle){
+  const s = String(text);
+  let out = '', last = 0, m;
+  B2_CODERE.lastIndex = 0;
+  while ((m = B2_CODERE.exec(s)) !== null){
+    out += hilite(s.slice(last, m.index), needle) +
+           (m[1] || m[2]).split(/[,·]/).map(c => b2Symb(c.trim())).join(' ');
+    last = m.index + m[0].length;
+  }
+  return out + hilite(s.slice(last), needle);
+}
+
 /* 부담률 칸 그리기.
    · 줄바꿈(\n)은 그대로 줄을 나눈다 — (일반)/(임신부)/(1세미만) 이 한 줄에 뭉치지 않게.
    · 줄머리가 (임신부)·(1세미만) 이면 바로 뒤에 특정기호 배지를 붙인다.
@@ -385,6 +414,12 @@ function b2TableHtml(part, sec, rows, needle, cardId, pi, hoisted, tabKey){
 
   /* 손으로 바꾼 너비가 있으면 그것을 쓴다(핸드오프 지정값보다 사용자 조절이 우선) */
   const tkey = b2TKey(tabKey, sec, pi);
+  /* 칸 글자를 그리는 함수. 의료급여 표는 글자 속 특정기호를 배지로 바꿔 그리고
+     (b2Coded), 건강보험 표는 지금까지대로 글자만 그린다 — 건보 쪽 기호는
+     sec.codes · B2_TERM_SYMB 로 이미 손봐 둔 자리가 있어 두 번 붙으면 안 된다. */
+  const txt = /^mg-/.test(tabKey || '')
+    ? cell => b2Coded(cell, needle)
+    : cell => hilite(cell, needle);
   const saved = colwOf(tkey, head.length);      // common.js — 열 개수가 같을 때만 돌려준다
   const colw = saved ? saved.map(n => n + 'px') : b2ColW(tabKey, sec, pi);
   let html = (part.sub && !hoisted) ? '<div class="b2-subh">' + esc(part.sub) + '</div>' : '';
@@ -406,7 +441,7 @@ function b2TableHtml(part, sec, rows, needle, cardId, pi, hoisted, tabKey){
         return;
       }
       const cells = vis[ri];
-      const dim = needle && !cells.join(' ').toLowerCase().includes(needle);
+      const dim = needle && !sgHit(cells.join(' '), needle);
       html += '<tr' + (dim ? ' class="is-dim"' : '') + '>' + cells.map((cell, i) => {
         if (eaten(ri, i)) return '';                 // 왼쪽 칸에 흡수된 자리
         const sp = vspan[i];
@@ -423,20 +458,20 @@ function b2TableHtml(part, sec, rows, needle, cardId, pi, hoisted, tabKey){
         let cls, body;
         if (i === 0){
           cls  = n > 1 ? 'grp' : 'c0';
-          body = n > 1 ? hilite(cell, needle)
-                       : sub(hilite(cell, needle)) + b2Symbols(sec, cell);
+          body = n > 1 ? txt(cell)
+                       : sub(txt(cell)) + b2Symbols(sec, cell);
         } else if (name === '장애인'){
-          cls = 'note'; body = hilite(cell, needle);
+          cls = 'note'; body = txt(cell);
         } else if (name === '비고'){
           cls = ''; body = cell ? b2Note(cell, needle) : '';
         } else if (name === '구분' || name === '세부'){
           // 구분·세부 칸은 낱말마다 특정기호 배지를 붙인다(B2_TERM_SYMB 에 등록된 표만).
           // 세부에도 임신부·조산아·1세미만 같은 낱말이 들어 있어 두 열을 같이 본다.
           cls = (name === '구분') ? 'c-gubun' : 'c-detail';
-          body = b2Terms(sub(hilite(cell, needle)), tkey);
+          body = b2Terms(sub(txt(cell)), tkey);
         } else {
           cls  = b2ColClass(name, i);
-          body = b2Ref(/rate|c-mid/.test(cls) ? b2Rate(cell, needle) : sub(hilite(cell, needle)), cardId);
+          body = b2Ref(/rate|c-mid/.test(cls) ? b2Rate(cell, needle) : sub(txt(cell)), cardId);
         }
 
         const attrs = (n > 1 ? ' rowspan="' + n + '"' : '') +
@@ -468,10 +503,10 @@ function renderB2(){
     const hitCount = !needle ? 0 : parts.reduce((n, p) => {
       const hidden = b2Hidden(p);
       return n + p.rows.filter(r => !b2IsSub(r) &&
-        b2Keep(r, hidden).join(' ').toLowerCase().includes(needle)).length;
+        sgHit(b2Keep(r, hidden).join(' '), needle)).length;
     }, 0);
     // 특정 항목 부담률은 주석에 적힌 것이 많아, 주석에만 걸려도 그 표를 보여 준다
-    const noteHit = needle && (sec.notes || []).some(n => n.toLowerCase().includes(needle));
+    const noteHit = needle && (sec.notes || []).some(n => sgHit(n, needle));
     if (needle && !hitCount && !noteHit) continue;
     shown += hitCount;
     if (needle && !hitCount) noteSecs++;

@@ -53,8 +53,8 @@ function emgFiltered(){
   return EMG_CODES.filter(d =>
     (!emg.t  || String(d.t) === emg.t) &&
     (!emg.ch || d.ch === emg.ch) &&
-    (!needle || (d.no + ' ' + d.code + ' ' + d.name + ' ' + d.ch + ' ' +
-                 (EMG_CHAPTERS[d.ch] || '')).toLowerCase().includes(needle)));
+    (!needle || sgHit(d.no + ' ' + d.code + ' ' + d.name + ' ' + d.ch + ' ' +
+                      (EMG_CHAPTERS[d.ch] || ''), needle)));
 }
 
 /* 첫 줄 = 별표 (대분류 .chips-seg) */

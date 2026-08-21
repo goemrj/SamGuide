@@ -8,7 +8,7 @@ function ijFiltered(){
   const needle = $('ij-search').value.trim().toLowerCase();
   if (!needle) return INJURY_CODES;
   return INJURY_CODES.filter(d =>
-    [d.code, d.what, d.inday, d.days, d.start, d.note].join(' ').toLowerCase().includes(needle));
+    sgHit([d.code, d.what, d.inday, d.days, d.start, d.note].join(' '), needle));
 }
 
 function renderIjTable(){

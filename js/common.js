@@ -71,11 +71,137 @@ function chipRow(el, list, curVal, allLabel, counter, onPick){
 }
 
 // 검색어에 걸린 부분을 노란색으로. 반드시 esc 를 먼저 해서 태그가 끼어들 여지를 없앤다.
+/* ---------- 한글 ↔ 영문 자판 되변환 ----------
+   한/영 상태를 안 맞추고 쳐도 찾아지게 한다. 브라우저는 IME 상태를 건드릴 수 없다
+   (CSS ime-mode 는 Chrome 미지원, inputmode="latin" 도 반영 안 됨). 그래서
+   "잘못된 상태로 친 글자"를 자판 기준으로 되돌려 **원래 검색어와 함께** 찾아 본다.
+   입력칸의 글자는 고치지 않는다 — 고치면 특정내역에서 한글 명칭을 찾는 것 같은
+   멀쩡한 검색을 망친다.
+     한글 상태로 MT001 → ㅡㅅ001  →  MT001 로 되돌려 검색
+     영문 상태로 특정내역 → xmrwjdsodur →  특정내역 로 되돌려 검색                   */
+const SG_CHO  = ['r','R','s','e','E','f','a','q','Q','t','T','d','w','W','c','z','x','v','g'];
+const SG_JUNG = ['k','o','i','O','j','p','u','P','h','hk','ho','hl','y','n','nj','np','nl','b','m','ml','l'];
+const SG_JONG = ['','r','R','rt','s','sw','sg','e','f','fr','fa','fq','ft','fx','fv','fg','a','q','qt','t','T','d','w','c','z','x','v','g'];
+/* 호환 자모(단독으로 남은 ㄱ~ㅣ) — 유니코드 3131~3163 순서대로 자판 키를 적는다 */
+const SG_COMPAT = (() => {
+  const cons = ['r','R','rt','s','sw','sg','e','E','f','fr','fa','fq','ft','fx','fv','fg','a','q','Q','qt','t','T','d','w','W','c','z','x','v','g'];
+  const m = {};
+  cons.forEach((k, i) => { m[String.fromCharCode(0x3131 + i)] = k; });
+  SG_JUNG.forEach((k, i) => { m[String.fromCharCode(0x314F + i)] = k; });
+  return m;
+})();
+
+/* 한글 → 영문 자판. 완성형 음절은 초·중·종성으로 풀고, 단독 자모는 표에서 찾는다. */
+function sgKoToEn(s){
+  let out = '';
+  for (const ch of s){
+    const c = ch.charCodeAt(0);
+    if (c >= 0xAC00 && c <= 0xD7A3){
+      const n = c - 0xAC00;
+      out += SG_CHO[Math.floor(n / 588)] + SG_JUNG[Math.floor((n % 588) / 28)] + SG_JONG[n % 28];
+    } else out += (SG_COMPAT[ch] || ch);
+  }
+  return out;
+}
+
+/* 영문 자판 → 한글. 키를 초성·중성·종성 순서로 모아 음절을 만든다.
+   두 글자 모음(hk = ㅘ)과 두 글자 종성(rt = ㄳ)을 먼저 맞춰 본다. */
+function sgEnToKo(s){
+  const cho = {}, jung = {}, jong = {};
+  SG_CHO.forEach((k, i) => cho[k] = i);
+  SG_JUNG.forEach((k, i) => jung[k] = i);
+  SG_JONG.forEach((k, i) => { if (k) jong[k] = i; });
+  let out = '', i = 0;
+  const at = (n) => s.substr(i, n);
+  while (i < s.length){
+    // 초성
+    let ci = cho[at(1)];
+    if (ci === undefined){ out += s[i++]; continue; }
+    const start = i; i++;
+    // 중성 (두 글자 먼저)
+    let ji = jung[at(2)];
+    if (ji !== undefined) i += 2;
+    else { ji = jung[at(1)]; if (ji !== undefined) i += 1; }
+    if (ji === undefined){ out += s[start]; i = start + 1; continue; }
+    // 종성 (두 글자 먼저, 단 그 다음이 모음이면 그 자음은 다음 음절의 초성이다)
+    let ki = 0;
+    const tryJong = (n) => {
+      const t = at(n); const v = jong[t];
+      if (v === undefined) return false;
+      const nx = s.substr(i + n, 2);
+      if (jung[nx.substr(0, 2)] !== undefined || jung[nx.substr(0, 1)] !== undefined){
+        if (n === 1) return false;                       // 다음이 모음 → 초성으로 넘긴다
+        const v1 = jong[at(1)];                          // 두 글자 중 앞 하나만 종성으로
+        if (v1 === undefined) return false;
+        ki = v1; i += 1; return true;
+      }
+      ki = v; i += n; return true;
+    };
+    if (!tryJong(2)) tryJong(1);
+    out += String.fromCharCode(0xAC00 + ci * 588 + ji * 28 + ki);
+  }
+  return out;
+}
+
+/* 검색어 후보 — 원래 것 + 자판을 되돌린 것. 같으면 하나만 돌려준다. */
+function sgQueries(q){
+  if (!q) return [];
+  const list = [q];
+  const add = v => { if (v && v !== q && !list.includes(v)) list.push(v); };
+  if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(q)) add(sgKoToEn(q).toLowerCase());
+  if (/[a-zA-Z]/.test(q))          add(sgEnToKo(q.toLowerCase()));
+  return list;
+}
+/* 어느 후보라도 걸리면 찾은 것으로 본다. 화면들의 `.includes(needle)` 자리에 쓴다. */
+
+/* 화면별 검색 기본 입력 (사용자 지정).
+   브라우저가 IME 를 못 바꾸므로 강제하지는 못한다 — 위 자판 되변환이 한/영 어느 상태로 쳐도
+   찾아 주고, 이 표는 입력칸에 무엇을 치는 칸인지 짧게 적어 주는 데만 쓴다. */
+const SG_IME = {
+  'page-layout':   'ko',   // SAM 파일 레이아웃 — 항목명으로 찾는다
+  'page-hangmok':  'ko',   // 항 · 목 코드
+  'page-memo':     'ko',   // 메모장
+  'page-detail':   'en',   // 특정내역 — MT001 같은 코드
+  'page-special':  'en',   // 산정특례 특정기호 — V193
+  'page-pharm':    'en',   // 약국 산정특례
+  'page-b12':      'en',   // [별표12] 소아가산
+  'page-emergency':'en',   // 응급의료행위
+};
+function showImeHint(){
+  const tag = { ko: '한글', en: '영문·숫자' };
+  document.querySelectorAll('.page').forEach(p => {
+    const m = SG_IME[p.id];
+    const el = p.querySelector('input[type="search"]');
+    if (!m || !el || / \((한글|영문·숫자)\)$/.test(el.placeholder)) return;
+    el.placeholder = el.placeholder.replace(/\s+$/, '') + ' (' + tag[m] + ')';
+    el.title = '한/영 상태를 맞추지 않아도 찾습니다 — 자판을 되돌려 함께 검색합니다.';
+  });
+}
+function sgHit(hay, q){
+  const h = String(hay).toLowerCase();
+  return sgQueries(q).some(v => h.includes(v));
+}
+/* 검색어를 굵게 표시한다. 자판을 되돌린 후보도 같이 칠한다 —
+   되변환으로 찾아진 행에 표시가 하나도 없으면 왜 걸렸는지 알 수 없다.
+   정규식을 쓰지 않고 indexOf 로 훑는다. 검색어에 정규식 특수문자가 섞여도 안전하다. */
 function hilite(text, needle){
   const s = esc(text);
   if (!needle) return s;
-  const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-  return s.replace(re, m => '<mark>' + m + '</mark>');
+  const qs = sgQueries(needle).filter(Boolean).map(v => v.toLowerCase());
+  if (!qs.length) return s;
+  const low = s.toLowerCase();
+  let out = '', i = 0;
+  while (i < s.length){
+    let at = -1, len = 0;
+    for (const q of qs){                       // 가장 앞에서 걸리는 후보를 고른다
+      const p = low.indexOf(q, i);
+      if (p !== -1 && (at === -1 || p < at)){ at = p; len = q.length; }
+    }
+    if (at === -1){ out += s.slice(i); break; }
+    out += s.slice(i, at) + '<mark>' + s.slice(at, at + len) + '</mark>';
+    i = at + len;
+  }
+  return out;
 }
 
 // CCYYMMDD → 2025.01.01 (99991231 은 "현재")
@@ -397,6 +523,7 @@ function watchTables(){
   if (!main) return;
   wrapPageTops();
   showUpdated();
+  showImeHint();
   addGrips(main);
   setStickTop();
   initFreezeColW();
@@ -469,8 +596,10 @@ function showUpdated(){
     const h1 = p.querySelector('.page-head h1');
     const info = SG_UPDATED[p.id];
     if (!h1 || !info || h1.querySelector('.upd')) return;
-    const past = SG_ARCHIVE[p.id];
-    const has = !!past && Object.keys(past).length > 0 && !!SG_RERENDER[p.id];
+    /* 현재 판과 **날짜가 같은** 아카이브는 목록에 넣지 않는다 — 같은 판(같은 파일)이라
+       두 줄로 보이면 무엇이 다른지 알 수 없다. 날짜가 다른 것만 "지난 판" 이다. */
+    const past = sgPastOf(p.id, info.d);
+    const has = Object.keys(past).length > 0 && !!SG_RERENDER[p.id];
     const s = document.createElement(has ? 'button' : 'span');
     s.className = 'upd' + (info.d ? '' : ' none') + (has ? ' has-past' : '');
     s.textContent = (info.d ? '자료 갱신 ' + info.d : '갱신일 미확인') + (has ? ' ▾' : '');
@@ -481,10 +610,18 @@ function showUpdated(){
   });
 }
 
+/* 그 화면의 지난 판만 골라 돌려준다. 현재 판과 날짜가 같은 것은 같은 판이므로 뺀다. */
+function sgPastOf(page, curDate){
+  const all = SG_ARCHIVE[page] || {};
+  const out = {};
+  for (const d in all) if (d !== curDate) out[d] = all[d];
+  return out;
+}
+
 /* 판 고르는 목록. 현재 판 + 지난 판을 날짜 내림차순으로 놓는다. */
 function sgVerMenu(page, anchor, info){
   document.querySelectorAll('.upd-menu').forEach(m => m.remove());
-  const past = SG_ARCHIVE[page] || {};
+  const past = sgPastOf(page, info.d);          // 날짜가 같은 판은 목록에 없다
   const cur = sgCurVer[page] || '';
   const box = document.createElement('div');
   box.className = 'upd-menu';

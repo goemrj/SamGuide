@@ -31,7 +31,7 @@ function btFiltered(){
   return B12_ACTS.filter(d =>
     (!bt.gb  || d.gb === bt.gb) &&
     (!bt.age || d[bt.age] === '해당') &&
-    (!needle || [d.cls, d.code, d.name, d.gb, d.note].join(' ').toLowerCase().includes(needle)));
+    (!needle || sgHit([d.cls, d.code, d.name, d.gb, d.note].join(' '), needle)));
 }
 
 function renderBtTable(){

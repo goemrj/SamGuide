@@ -47,9 +47,9 @@ function renderHm(){
       total += rows.length;
       if (needle){
         rows = rows.filter(h => {
-          if ((h.code + ' ' + h.name).toLowerCase().includes(needle)) return true;
+          if (sgHit(h.code + ' ' + h.name, needle)) return true;
           if (!h.mok) return false;
-          return Object.keys(h.mok).some(m => (m + ' ' + h.mok[m]).toLowerCase().includes(needle));
+          return Object.keys(h.mok).some(m => sgHit(m + ' ' + h.mok[m], needle));
         });
       }
       if (!rows.length) continue;
@@ -64,7 +64,7 @@ function renderHm(){
           '<td class="hm-name">' + esc(h.name || '—') + '</td>' +
           '<td class="hm-mok">' + (mokKeys.length
             ? mokKeys.map(m => '<span class="code' +
-                (needle && (m + ' ' + h.mok[m]).toLowerCase().includes(needle) ? ' mark' : '') +
+                (needle && sgHit(m + ' ' + h.mok[m], needle) ? ' mark' : '') +
                 '"><b>' + esc(m) + '</b><span>' + esc(h.mok[m]) + '</span></span>').join('')
             : '<span class="saved-note">목 구분 없음</span>') + '</td>' +
         '</tr>';
