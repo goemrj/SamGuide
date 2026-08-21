@@ -319,6 +319,11 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 .fixable{cursor:cell;}
 
 /* ---------- 질병군(DRG) 계산기 — 계산기와 같은 작은 입력 표 ---------- */
+/* 카드를 두 칸씩 나란히 (2026-08-21 요청 — 표가 가로로 길어 한 줄에 하나면 읽기 어렵다).
+   순서대로 [합계][①] / [②][③] / [④] 로 채워진다. 창이 좁으면 한 칸으로 접는다. */
+.dg-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start;}
+.dg-grid > .card{margin-top:0; min-width:0;}
+@media (max-width:1600px){ .dg-grid{grid-template-columns:1fr;} }
 .dg-h{font-size:14px; letter-spacing:-.02em;}
 /* 질병군번호를 잘못 적었을 때 — 빨강은 계산기 비교표와 같은 --minus 를 쓴다 */
 .dg-err{color:var(--minus); font-size:12px; font-weight:600;}
