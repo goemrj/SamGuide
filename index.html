@@ -222,7 +222,7 @@
       </div></div>
 
       <div class="card"><div class="card-pad">
-        <b class="dg-h">② 별도산정 (행위별)</b>
+        <b class="dg-h">② 별도산정</b>
         <div id="dg-extra" style="margin-top:10px;"></div>
         <div class="saved-note" style="margin-top:8px;">
           식대 · 외과전문의 가산 · PCA 등 포괄수가 밖에서 따로 산정하는 항목입니다. 금액은 직접 적습니다
@@ -509,6 +509,30 @@
     </section>
 
   </main>
+</div>
+
+<!-- SAM 파일 점검 — 어긋난 줄을 누르면 뜨는 팝업. 파일을 그대로 보여 주고 그 줄로 옮겨 준다.
+     .page 안에 두면 화면 전환에 같이 숨으므로 #app 밖에 둔다. -->
+<div class="sc-modal" id="sc-modal">
+  <div class="sc-modal-scrim" id="sc-modal-scrim"></div>
+  <div class="sc-modal-box" role="dialog" aria-modal="true" aria-labelledby="sc-modal-title">
+    <div class="sc-modal-head">
+      <div class="sc-modal-title">
+        <b id="sc-modal-title">파일</b>
+        <div class="sc-dim" id="sc-modal-sub"></div>
+      </div>
+      <div class="sc-modal-tools">
+        <div class="chips chips-rec" id="sc-modal-view"></div>
+        <button class="btn" id="sc-mv-prev" title="이전 어긋난 줄 (←)">← 이전</button>
+        <button class="btn" id="sc-mv-next" title="다음 어긋난 줄 (→)">다음 →</button>
+        <label class="saved-note">줄 <input class="field-input" id="sc-goto" inputmode="numeric"
+                style="width:80px;text-align:right;" placeholder="번호"></label>
+        <button class="btn" id="sc-modal-close" title="닫기 (Esc)">닫기</button>
+      </div>
+    </div>
+    <div class="sc-modal-body" id="sc-modal-body"></div>
+    <div class="sc-modal-foot" id="sc-modal-foot"></div>
+  </div>
 </div>
 
 <!-- 레이아웃 데이터: SamEditor/js 에서 복사해 온 원본 그대로. 순서는 SamEditor/index.html 과 동일하게 유지 -->

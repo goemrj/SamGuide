@@ -506,17 +506,27 @@ function dgRenderSum(o){
     '<div class="dg-sum-big"><span>본인일부부담금</span><b>' + won(o.own) + '</b><i>원</i></div>' +
     '<div class="dg-sum-line"><span>요양급여비용총액 1</span><b>' + won(o.total) + '</b><i>원</i></div>' +
     '<div class="dg-sum-line"><span>청구액</span><b>' + won(o.claim) + '</b><i>원</i></div>';
+  /* ② 본인부담금 계산기의 원장과 같은 순서로 읽는다 (2026-08-21 요청) —
+     맨 위에 요양급여비용총액 1, 그 아래에 **부담률이 다른 항목**을 빼 나가면
+     남는 것이 포괄수가(산정대상)이고 거기에 자격 부담률을 곱한다.
+       요양급여비용총액 1 − 별도산정 − 2~5인실 − 열외군 차액 + 제외금액 = 포괄수가
+     숫자는 위 카드들과 같은 값이다 — 보는 순서만 계산기와 맞췄다. */
   $('dg-sum-tbl').innerHTML =
     '<table class="fields items dgt fixed" data-k="drg-sum"><thead><tr>' +
       '<th>구분</th><th style="width:31%;">금액</th><th style="width:31%;">본인부담</th>' +
     '</tr></thead><tbody>' +
-      line('① 포괄수가' + (o.S ? '<div class="saved-note">' + esc(o.band) + '</div>' : ''), o.pack, o.packOwn) +
-      line('② 별도산정<div class="saved-note">(행위별)</div>', o.extra, o.extraOwn) +
-      line('③ 2인실<br>~5인실 입원료', o.roomAdd, o.roomOwn) +
-      line('④ 열외군<br>차액', o.outAdd, o.outOwn) +
-      line('− 제외금액', -o.excl, -o.exclOwn) +
-    '</tbody><tfoot><tr><td><b>합계</b> <span class="saved-note">10원<br>미만 절사</span></td>' +
-      '<td class="num b">' + won(o.total) + '</td>' +
+      line('<span class="c-name">요양급여비용총액 1</span>' +
+        (o.S ? '<div class="saved-note">산정대상 ' + won(o.pack) + ' × ' + pct(dg.rate) +
+               ' · ' + esc(o.band) + '</div>' : ''),
+        o.total, o.packOwn) +
+      line('② 별도산정<div class="saved-note">' + pct(dg.rate) + ' 또는 줄마다 적은 부담률</div>', o.extra, o.extraOwn) +
+      line('③ 2인실~5인실<div class="saved-note">(별표 2의3)</div>', o.roomAdd, o.roomOwn) +
+      line('④ 열외군 차액<div class="saved-note">' + pct(dg.rate) + '</div>', o.outAdd, o.outOwn) +
+      line('제외금액<div class="saved-note">1인실 · 인공수정체 — 빼는 금액</div>', -o.excl, -o.exclOwn) +
+    '</tbody><tfoot>' +
+      '<tr><td><span class="c-name">산정대상 금액 · 본인부담금</span>' +
+        '<div class="saved-note">왼쪽 = 총액 − 위 항목 (=① 포괄수가) · 오른쪽 = 위 본인부담을 다 더한 값 (10원 미만 절사)</div></td>' +
+      '<td class="num b">' + won(o.pack) + '</td>' +
       '<td class="num strong">' + won(o.own) + '</td></tr>' +
       '<tr><td>청구액</td><td class="num"></td><td class="num">' + won(o.claim) + '</td></tr>' +
     '</tfoot></table>';
