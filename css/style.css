@@ -329,6 +329,8 @@ table.dt-tb{
   margin:6px 0 6px 14px; background:var(--card);
   border:1px solid var(--line); word-break:keep-all;
 }
+/* 손잡이로 너비를 바꾼 표 — 바깥 표와 같은 방식(fixed + 칸마다 인라인 width) */
+table.dt-tb.fixed{table-layout:fixed;}
 table.dt-tb th{
   position:static;                              /* 본문 표의 머리줄은 고정하지 않는다 */
   text-align:left; background:var(--bg); color:var(--text-3);
@@ -488,19 +490,24 @@ table.b2 th{
   font-size:12px; font-weight:500; color:var(--text-3);
 }
 /* 열 너비 손잡이 — 머리줄 칸 사이 경계. th 가 position:sticky 라 그 자체가 기준이 된다.
-   경계에 걸치도록 살짝 오른쪽으로 내밀고, 커서를 대면 가운데에 파란 선을 보여 준다. */
-table.b2 th .rz, table.fields th .rz{
+   세부작성요령 안의 표(table.dt-tb)는 머리줄이 없을 수도 있어 첫 줄의 td 에도 붙는다 —
+   그 칸은 sticky 가 아니므로 position:relative 를 따로 준다. */
+table.b2 th .rz, table.fields th .rz, table.dt-tb th .rz, table.dt-tb td .rz{
   position:absolute; top:0; right:-4px; width:9px; height:100%;
   cursor:col-resize; z-index:3;
 }
-table.b2 th .rz::after, table.fields th .rz::after{
+table.dt-tb th, table.dt-tb td{position:relative;}
+table.b2 th .rz::after, table.fields th .rz::after,
+table.dt-tb th .rz::after, table.dt-tb td .rz::after{
   content:""; position:absolute; top:5px; bottom:5px; left:4px; width:2px;
   border-radius:1px; background:var(--accent); opacity:0;
 }
-table.b2 th .rz:hover::after, table.fields th .rz:hover::after{opacity:.75;}
+table.b2 th .rz:hover::after, table.fields th .rz:hover::after,
+table.dt-tb th .rz:hover::after, table.dt-tb td .rz:hover::after{opacity:.75;}
 /* 끌고 있는 동안 — 글자가 선택되지 않고 커서 모양을 유지한다 */
 body.rz-on{user-select:none; cursor:col-resize;}
-body.rz-on table.b2 th .rz::after, body.rz-on table.fields th .rz::after{opacity:.75;}
+body.rz-on table.b2 th .rz::after, body.rz-on table.fields th .rz::after,
+body.rz-on table.dt-tb th .rz::after, body.rz-on table.dt-tb td .rz::after{opacity:.75;}
 table.b2 td{
   padding:8px 16px; vertical-align:top;
   /* keep-all 은 어절을 안 쪼개지만, V191,V192,V268… 처럼 공백 없는 긴 코드는 칸을 넘친다.

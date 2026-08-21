@@ -128,23 +128,32 @@ function colwOf(key, n){
   if (!Array.isArray(v) || v.length !== n) return null;
   return v.every(x => typeof x === 'number' && isFinite(x) && x >= 24) ? v : null;
 }
-/* 표를 가리키는 이름. 스스로 data-k 를 달아 둔 표(① 카드들)는 그것을 쓰고,
+/* 너비를 재고 손잡이를 꽂을 줄. 보통은 머리줄이고, 세부작성요령 안의 표(table.dt-tb)처럼
+   <thead> 가 없는 표는 첫 줄을 쓴다. 칸이 하나뿐이면(colspan 한 줄) 조절할 짝이 없어 null. */
+function headCells(table){
+  const r = (table.tHead && table.tHead.rows[0]) ||
+            (table.tBodies[0] && table.tBodies[0].rows[0]);
+  if (!r || r.cells.length < 2) return null;
+  return [...r.cells];
+}
+/* 표를 가리키는 이름. 스스로 data-k 를 달아 둔 표(① 카드들 · 특정내역)는 그것을 쓰고,
    나머지는 "화면id#표순서#열수" 로 만든다. */
 function colwKey(table){
   if (table.dataset.k) return table.dataset.k;
   const page = table.closest('.page');
   const all = [...(page || document).querySelectorAll('table')];
   return (page ? page.id : 'x') + '#' + all.indexOf(table) +
-         '#' + table.tHead.rows[0].cells.length;
+         '#' + (headCells(table) || []).length;
 }
 const COLW_MIN = 48;
 
 /* 머리줄 칸마다 오른쪽 경계에 손잡이를 하나씩 넣는다(마지막 열은 뺀다 — 잡을 짝이 없다).
    화면을 다시 그릴 때마다 없어지므로 아래 MutationObserver 가 다시 넣는다. */
 function addGrips(root){
-  (root || document).querySelectorAll('table.b2, table.fields').forEach(t => {
-    if (!t.tHead || !t.tHead.rows[0]) return;
-    const ths = [...t.tHead.rows[0].cells];
+  const sel = 'table.b2, table.fields, table.dt-tb:not(.dt-ex)';
+  (root || document).querySelectorAll(sel).forEach(t => {
+    const ths = headCells(t);
+    if (!ths) return;
     ths.forEach((th, i) => {
       if (i === ths.length - 1 || th.querySelector('.rz')) return;
       const g = document.createElement('span');
@@ -165,7 +174,8 @@ function addGrips(root){
 /* 끌기 시작할 때 지금 보이는 너비를 그대로 못박고 표를 fixed 로 바꾼다.
    그러지 않으면 한 열만 건드려도 브라우저가 나머지 열을 제멋대로 다시 계산한다. */
 function pinWidths(table){
-  const ths = [...table.tHead.rows[0].cells];
+  const ths = headCells(table);
+  if (!ths) return null;
   const w = ths.map(th => th.getBoundingClientRect().width);
   table.classList.add('fixed');
   table.style.width = '100%';
@@ -177,8 +187,9 @@ document.addEventListener('mousedown', e => {
   const grip = e.target.closest('.rz');
   if (!grip) return;
   const th = grip.parentElement, table = th.closest('table');
-  if (!table || !table.tHead) return;
+  if (!table) return;
   const ths = pinWidths(table);
+  if (!ths) return;
   const i = ths.indexOf(th), next = ths[i + 1];
   if (!next) return;
 
@@ -215,7 +226,7 @@ document.addEventListener('dblclick', e => {
   saveColW();
   table.classList.remove('fixed');
   table.style.width = '';
-  [...table.tHead.rows[0].cells].forEach(th => { th.style.width = ''; });
+  (headCells(table) || []).forEach(th => { th.style.width = ''; });
 });
 
 /* 어느 화면이든 표를 다시 그리면 손잡이가 사라진다 — 바뀔 때마다 다시 넣는다.

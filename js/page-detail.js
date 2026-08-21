@@ -130,6 +130,11 @@ function dtSplitAt(line, bs){
 }
 const dtNorm = s => s.replace(/\s+/g, ' ').trim();
 
+/* 본문 표에 붙이는 이름 — 열 너비를 손으로 바꾼 값을 다시 찾아오기 위한 것이다(common.js).
+   검색·필터로 표를 다시 그려도 같은 이름이 나오도록 "코드|적용일자|그 코드 안에서 몇 번째 표"
+   로 만든다(화면 순서로 세면 필터 때마다 어긋난다). dtDocHtml 이 코드마다 세워 준다. */
+let dtDocKey = '', dtTblN = 0;
+
 // 줄 묶음 → 표. 첫 줄이 짧은 칸들로만 되어 있으면 머리줄로 본다.
 function dtTableHtml(lines, bs, mark){
   const rows = lines.map(l => dtSplitAt(l, bs));
@@ -138,7 +143,7 @@ function dtTableHtml(lines, bs, mark){
              ? rows[0] : null;
   const headKey = head ? head.map(dtNorm).join('|') : null;
 
-  let html = '<table class="dt-tb">';
+  let html = '<table class="dt-tb" data-k="' + esc('dtb|' + dtDocKey + '|' + (dtTblN++)) + '">';
   if (head) html += '<thead><tr>' + head.map(c => '<th>' + mark(c) + '</th>').join('') + '</tr></thead>';
   html += '<tbody>';
   rows.forEach((r, i) => {
@@ -248,7 +253,9 @@ function dtRunHtml(lines, mark){
 }
 
 
-function dtDocHtml(body, mark){
+function dtDocHtml(body, mark, key){
+  dtDocKey = key || '';                     // 이 코드 안의 표들에 붙일 이름 (열 너비 저장용)
+  dtTblN = 0;
   // ♦ 로 시작하는 줄에서 항목을 자른다
   const items = [];
   body.split('\n').forEach(l => {
@@ -317,7 +324,7 @@ function renderDtTable(){
         ? '세부작성요령 (2025.8.1. ' + d.page + '쪽)'
         : '특정내역코드 통합본 — 세부작성요령에 없는 코드') + '</div>';
       if (body){
-        doc += dtDocHtml(body, mark);
+        doc += dtDocHtml(body, mark, dtId(d));
       } else {
         doc += (d.guide ? '<div class="dt-item"><div class="dt-ln">' + mark(d.guide) + '</div></div>' : '') +
                '<div class="dt-item"><div class="dt-dia">기재형식: ' + mark(d.format) + '</div></div>';
