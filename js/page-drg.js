@@ -465,8 +465,7 @@ function dgRenderItems(){
         '<td class="num" data-dout="excl-lens">0</td>' +
         '<td class="num">' + pct(dg.rate) + '</td>' +
         '<td class="num" data-dout="excl-lens-own">0</td><td></td></tr>' +
-      '<tr><td><span class="c-name">산정대상 금액 · 별도산정 본인부담</span>' +
-        '<div class="saved-note">왼쪽 = 별도보상총액 − 위 항목 금액 · 오른쪽 = 위 본인부담을 다 더한 값</div></td>' +
+      '<tr><td><span class="c-name">산정대상 금액 · 별도산정 본인부담</span></td>' +
         '<td class="num b" data-dout="ex-base">0</td><td></td>' +
         '<td class="num b" data-dout="extra-own">0</td><td></td></tr>' +
       '<tr><td>총액에 더하는 금액 <span class="saved-note">별도보상총액 그대로</span>' +
@@ -551,13 +550,12 @@ function dgRenderSum(o){
           (o.totalRaw !== o.total ? '10원 미만 절사 전 · 절사하면 ' + won(o.total) + '원' : '10원 미만 절사') +
           (o.S ? ' · 산정대상 ' + won(o.pack) + ' × ' + pct(dg.rate) : '') + '</div>',
         o.totalRaw, o.packOwn) +
-      line('별도산정<div class="saved-note">' + pct(dg.rate) + ' 또는 줄마다 적은 부담률</div>', o.extra, o.extraOwn) +
-      line('2인실~5인실<div class="saved-note">(별표 2의3) · 금액은 별도산정에 있음</div>', 0, o.roomOwn) +
+      line('별도산정', o.extra, o.extraOwn) +
+      line('2인실~5인실', 0, o.roomOwn) +
       line('열외군 차액<div class="saved-note">' + pct(dg.rate) + '</div>', o.outAdd, o.outOwn) +
-      line('제외금액<div class="saved-note">1인실 · 인공수정체 — 빼는 금액</div>', -o.excl, -o.exclOwn) +
+      line('제외금액<div class="saved-note">1인실 · 인공수정체</div>', -o.excl, -o.exclOwn) +
     '</tbody><tfoot>' +
-      '<tr><td><span class="c-name">산정대상 금액 · 본인부담금</span>' +
-        '<div class="saved-note">왼쪽 = 총액 − 위 항목 (= 포괄수가) · 오른쪽 = 위 본인부담을 다 더한 값 (10원 미만 절사)</div></td>' +
+      '<tr><td><span class="c-name">산정대상 금액 · 본인부담금</span></td>' +
       '<td class="num b">' + won(o.pack) + '</td>' +
       '<td class="num strong">' + won(o.own) + '</td></tr>' +
       '<tr><td>청구액</td><td class="num"></td><td class="num">' + won(o.claim) + '</td></tr>' +
