@@ -2,8 +2,8 @@
    손으로 쓰는 계산지를 그대로 옮긴 원장 한 장이다.
      ① 총진료비                      ② 산정대상 금액 × 법정본인부담률
      ③ 본인부담률이 다른 항목 금액      ④ 그 금액 × 그 항목의 부담률
-     ⑤ 산정대상 금액 = ① − Σ③         ⑥ 본인부담 합계 = ② + Σ④ → 절사 → 본인부담금
-   소수점은 그대로 두고 계산한 뒤 마지막에 한 번만 절사한다.
+     ⑤ 산정대상 금액 = ① − Σ③         ⑥ 본인부담금 = ② + Σ④
+   소수점은 그대로 둔다 — **절사는 하지 않는다**(사용자가 알아서 한다, 2026-08-21 요청).
 
    **부담률은 전부 사용자가 직접 적는다** (2026-08-21).
    자격 · 종별 · 환자유형 · 산정특례로 부담률을 자동으로 채워 주던 규칙표
@@ -13,25 +13,20 @@
    그 값들은 ① 「본인부담금 규칙」 화면(data/burden-hira.js)에서 보고,
    지운 코드는 깃 이력(2026-08-21 이전 판 js/page-calc.js)에 남아 있다.
 
-   절사 단위는 외래 100원 · 입원 10원이 달라서 **절사 줄에서 고른다**(진료형태 칸은 없앴다).
-
    검산 — 세부작성요령(2025.8.1.) 203~206쪽 예시:
      총진료비 28,800 · 진찰료 21,030(부담률 100%) · 법정본인부담률 60%
-     → 산정대상 7,770 × 60% = 4,662 + 21,030 = 25,692 → 100원 미만 절사 25,600원 / 청구 3,200원
+     → 산정대상 7,770 × 60% = 4,662 + 21,030 = **25,692**
+       (요령의 25,600원은 여기서 100원 미만을 버린 값 — 절사는 화면에서 하지 않는다)
    계산 방식은 두 가지 — 「수기 계산」과 「SAM 파일 불러오기」. SAM 쪽은 아직 비어 있다
    (어느 레코드의 어느 금액을 읽을지 정해지면 붙인다).
 ------------------------------------------------------------------ */
 
 const WAYS = ['수기 계산', 'SAM 파일 불러오기'];
-// 절사 단위 — 외래는 100원, 입원은 10원 미만을 버린다
-const CUTS = [{ v:100, label:'100원 미만 절사 (외래)' },
-              { v:10,  label:'10원 미만 절사 (입원)' },
-              { v:1,   label:'절사 안 함' }];
 
 /* 계산 한 벌 = 탭 하나. 명세서 여러 건을 동시에 두고 오갈 수 있게 배열로 들고 있고,
    `calc` 는 늘 **지금 보고 있는 한 벌**을 가리킨다 — 아래 코드는 전부 `calc` 만 본다. */
 function newSheet(){
-  return { total:0, items:[], cut:100,
+  return { total:0, items:[],
            baseUnit:'pct',      // 'pct' 부담률 · 'won' 정액
            baseVal:null,        // 법정본인부담률(또는 정액) — 안 적으면 null
            baseFix:null,        // 법정본인부담을 손으로 적었을 때
@@ -124,18 +119,12 @@ function moneyCell(attrs, val){
          ' title="+ − × ÷ 로 셈도 됩니다 (예: 190040+342080)" value="' +
          (val ? val.toLocaleString() : '') + '">';
 }
-function cutCell(){
-  return '절사 <select class="field-input mini cutsel" data-cut="1">' +
-    CUTS.map(c => '<option value="' + c.v + '"' + (calc.cut === c.v ? ' selected' : '') + '>' +
-      esc(c.label) + '</option>').join('') + '</select>';
-}
-
 /* 제외 항목 한 줄. 맨 아래 빈 줄에는 지우는 단추를 두지 않는다(늘 있는 줄이라). */
 function itemRowHTML(it, i){
   const tail = isBlankItem(it) && i === calc.items.length - 1;
   return '<tr>' +
     '<td><input class="field-input mini" data-i="' + i + '" data-f="name" ' +
-      'placeholder="항목명 (예: 식대 · 회송료 · 특수검사)" value="' + esc(it.name || '') + '"></td>' +
+      'placeholder="항목명 (선택)" value="' + esc(it.name || '') + '"></td>' +
     '<td>' + moneyCell('data-i="' + i + '" data-f="amount"', it.amount) + '</td>' +
     '<td><input class="field-input mini pctin" data-i="' + i + '" data-f="rate" ' +
       'inputmode="decimal" value="' + (hasVal(it.rate) ? rateStr(it.rate) : '') +
@@ -170,12 +159,10 @@ function renderLed(){
       '<th>구분</th><th style="width:150px;">금액</th><th style="width:118px;">부담률</th>' +
       '<th style="width:150px;">본인부담</th><th style="width:40px;"></th>' +
     '</tr></thead><tbody>' + rows.join('') + '</tbody><tfoot>' +
-      '<tr><td><span class="c-name">산정대상 금액 · 본인부담 합계</span></td>' +
+      '<tr><td><span class="c-name">합계</span></td>' +
         '<td class="num b" data-out="base-amt">0</td><td></td>' +
-        '<td class="num b" data-out="raw">0</td><td></td></tr>' +
-      '<tr><td>' + cutCell() + '</td><td></td><td></td>' +
         '<td class="num strong" data-out="burden">0</td><td></td></tr>' +
-      '<tr><td>청구액 (총진료비 − 본인부담금)</td><td></td><td></td>' +
+      '<tr><td>청구액</td><td></td><td></td>' +
         '<td class="num" data-out="claim">0</td><td></td></tr>' +
     '</tfoot></table>';
 }
@@ -191,10 +178,9 @@ function compute(){
   const itemB   = calc.items.map(i => hasVal(i.burdenFix) ? i.burdenFix
                                                           : i.amount * (i.rate || 0));
   const exBurden = itemB.reduce((a, b) => a + b, 0);
-  const raw  = baseBurdenAmt + exBurden;
-  const unit = calc.cut || 1;
-  const burden = Math.floor(raw / unit) * unit;
-  return { T, exSum, baseAmt, baseBurdenAmt, itemB, exBurden, raw, unit, burden, claim: T - burden };
+  // 절사는 하지 않는다 — 사용자가 알아서 한다(2026-08-21 요청). 합계가 그대로 본인부담금이다.
+  const burden = baseBurdenAmt + exBurden;
+  return { T, exSum, baseAmt, baseBurdenAmt, itemB, exBurden, burden, claim: T - burden };
 }
 
 function paint(){
@@ -211,9 +197,8 @@ function paint(){
     won2(b) + (hasVal(calc.items[i] && calc.items[i].burdenFix) ? '<div class="saved-note">수기</div>' : '')));
   set('exburden', won2(r.exBurden));
   set('base-amt', won(r.baseAmt));
-  set('raw', won2(r.raw));
-  set('burden', won(r.burden));
-  set('claim', won(r.claim));
+  set('burden', won2(r.burden));
+  set('claim', won2(r.claim));
   set('total', won(r.T));
   renderWarn(r);
   paintCmp();
@@ -330,7 +315,7 @@ function commitMoney(inp){
 const CALC_KEY = 'samguide_calc';
 function sheetToSave(s){
   return {
-    total:s.total, cut:s.cut, baseUnit:s.baseUnit, baseVal:s.baseVal, baseFix:s.baseFix,
+    total:s.total, baseUnit:s.baseUnit, baseVal:s.baseVal, baseFix:s.baseFix,
     cmp:{ mg:s.cmp.mg, hos:s.cmp.hos },
     items:s.items.map(i => ({ name:i.name || '', amount:i.amount, rate:i.rate,
                               burdenFix:(i.burdenFix === undefined ? null : i.burdenFix) }))
@@ -347,9 +332,6 @@ function sheetFromSave(s){
   const o = newSheet();
   if (!s || typeof s !== 'object') return o;
   o.total = Number(s.total) || 0;
-  // 절사 단위 — 예전 판은 진료형태(mode)로 갈랐다
-  const cut = Number(s.cut);
-  o.cut = CUTS.some(c => c.v === cut) ? cut : (s.mode === '입원' ? 10 : 100);
   if (s.baseUnit === 'won' || s.baseUnit === 'pct') o.baseUnit = s.baseUnit;
   o.baseVal = typeof s.baseVal === 'number' ? s.baseVal : null;
   o.baseFix = typeof s.baseFix === 'number' ? s.baseFix : null;
@@ -422,13 +404,6 @@ $('c-led').addEventListener('input', e => {
     if (tb) tb.insertAdjacentHTML('beforeend',
       itemRowHTML(calc.items[calc.items.length - 1], calc.items.length - 1));
   }
-  paint();
-});
-
-// 절사 단위
-$('c-led').addEventListener('change', e => {
-  if (!e.target.dataset || e.target.dataset.cut === undefined) return;
-  calc.cut = Number(e.target.value) || 1;
   paint();
 });
 
@@ -556,9 +531,7 @@ if ($('c-cmp')){
 }
 
 $('c-clear').addEventListener('click', () => {
-  const keep = calc.cut;
   sheets[cur] = newSheet();
-  sheets[cur].cut = keep;              // 절사 단위는 그대로 둔다
   calc = sheets[cur];
   renderTabs(); refreshCalc();
 });
