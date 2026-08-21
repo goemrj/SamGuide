@@ -323,18 +323,39 @@ function addGrips(root){
   });
 }
 
+/* 저장한 px 을 **비율(%)로 환산**해 돌려준다. 없으면 null.
+
+   px 을 그대로 넣으면 안 된다 — table-layout:fixed 는 열 너비의 합이 표 폭보다 크면
+   표를 그만큼 넓힌다(`width:100%` 는 최소값일 뿐이다). 넓은 모니터에서 굳힌 값을 좁은 창에서
+   열면 표가 창을 넘어 **페이지에 가로 스크롤이 생긴다**(2026-08-21에 606px 생기는 것을 확인).
+   비율로 주면 어느 창 너비에서도 사용자가 정한 비율 그대로 꽉 맞게 들어간다.
+   그래서 저장은 잰 값(px) 그대로 두고, 화면에 넣을 때만 비율로 바꾼다. */
+function colwCss(key, n){
+  const v = colwOf(key, n);
+  if (!v) return null;
+  const sum = v.reduce((a, b) => a + b, 0);
+  if (!(sum > 0)) return null;
+  return v.map(x => (x / sum * 100).toFixed(4) + '%');
+}
+
 /* 정해 둔 너비(덧쓰기 → 소스 기본값)를 표에 입힌다. 둘 다 없으면 손대지 않는다
    — 그 표는 page-*.js 의 % 기본값이나 내용에 맞춘 폭 그대로 둔다. */
 function applyColW(t){
   const ths = headCells(t);
   if (!ths) return;
   const key = colwKey(t);
-  const saved = colwOf(key, ths.length);
+  const css = colwCss(key, ths.length);
   const endW = t.matches(RZ_END_SEL) ? colwEndOf(key) : null;
-  if (!saved && !endW) return;
+  if (!css && !endW) return;
   t.classList.add('fixed');
-  t.style.width = endW ? endW + 'px' : '100%';
-  if (saved) ths.forEach((th, i) => { th.style.width = saved[i] + 'px'; });
+  if (endW){
+    // 끝선을 옮겨 둔 표도 칸(부모)보다 넓어지지 않게 자른다 — 같은 이유로 가로 스크롤이 생긴다
+    const room = t.parentElement ? t.parentElement.clientWidth : endW;
+    t.style.width = Math.min(endW, room) + 'px';
+  } else {
+    t.style.width = '100%';
+  }
+  if (css) ths.forEach((th, i) => { th.style.width = css[i]; });
 }
 
 /* 끌기 시작할 때 지금 보이는 너비를 그대로 못박고 표를 fixed 로 바꾼다.

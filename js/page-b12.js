@@ -46,8 +46,8 @@ function renderBtTable(){
 
   if (!rows.length){ $('bt-table').innerHTML = '<div class="empty">검색 결과가 없습니다.</div>'; return; }
 
-  const colw = colwOf(BT_ACT_TKEY, BT_ACT_COLW.length);   // common.js — 열 개수가 같을 때만 돌려준다
-  const w = colw ? colw.map(n => n + 'px') : BT_ACT_COLW;
+  // common.js — 저장해 둔 너비를 비율(%)로 돌려준다. px 로 넣으면 좁은 창에서 표가 창을 넘는다
+  const w = colwCss(BT_ACT_TKEY, BT_ACT_COLW.length) || BT_ACT_COLW;
   // '해당' 은 값이 있다는 뜻이라 눈에 띄게, 빈 칸은 —
   const yn = v => v === '해당' ? '<b class="b12-y">' + btMark(v) + '</b>' : '<span class="saved-note">—</span>';
 
