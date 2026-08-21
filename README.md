@@ -31,6 +31,44 @@
 의료급여 2026.07.30.) 화면 안 `b2-src` 에서 탭에 맞춰 따로 보여 준다. `data/updated.js` 에는
 `d:''` 로 두고 출처만 적어 둔다.
 
+### 지난 판 보기
+
+갱신일 배지를 누르면 판 목록이 뜨고, 고르면 **그 시점 데이터로 화면을 다시 그린다.**
+지난 판을 보는 동안은 파란 띠("지금 기준이 아닙니다 · 현재 판으로")가 떠서 최신과 헷갈리지 않게 한다.
+지난 판이 **없는 카테고리는 배지가 그냥 글자**다(눌리지 않는다).
+
+지난 판은 `data/archive/<화면id>.<YYYY-MM-DD>.js` 한 파일에 담고, 그 파일은 한 줄만 부른다.
+
+```js
+SG_ARCHIVE_ADD('page-detail', '2025.08.01', (function(){ …옛 data 파일 그대로… })());
+```
+
+**미리 챙겨 둘 필요가 없다 — 저장소가 이미 모든 판을 들고 있다.** 나중에 필요할 때 뽑으면 된다.
+
+```bash
+git log --oneline -- data/detail-codes.js
+```
+```bash
+powershell -File tools/archive.ps1 -Page page-detail -Date 2025.08.01 -Commit 8103a65
+```
+
+`-Date` 는 **고시·엑셀에 적힌 기준일**이다(커밋한 날이 아니다). `-WhatIf` 를 붙이면 만들 파일만 보여 준다.
+스크립트가 옛 파일을 함수로 감싸(전역이 밖으로 새지 않게) 만들고, `index.html` 에
+`<script>` 한 줄을 **`js/common.js` 뒤에** 붙인다 — `SG_ARCHIVE_ADD` 가 거기 있어서 앞에 두면 없는 함수가 된다.
+`index.html` 은 공용 파일이라 팀원에게 알려야 한다.
+
+돌아가는 데 필요한 두 가지가 있다.
+
+- **데이터 전역은 `var` 여야 한다.** `const`·`let` 은 `window` 에 붙지 않아 지난 판으로 바꿔 끼울 수 없다.
+  그래서 `data/*.js` 의 배열 선언을 `var` 로 바꿨다.
+- **화면마다 다시 그리는 함수**를 `js/common.js` 의 `SG_RERENDER` 에 적어 둔다.
+  새 카테고리를 만들면 한 줄 더한다 — 없으면 지난 판 보기 단추가 뜨지 않는다.
+
+`tools/archive.ps1` 은 **UTF-8 BOM 으로 저장해야 한다.** PowerShell 5.1 은 BOM 이 없으면 ANSI 로 읽어
+한글 주석이 깨지고 파싱이 실패한다. 파일을 읽고 쓸 때도 `[IO.File]::ReadAllText/WriteAllText` 에
+UTF-8 을 명시한다 — `Get-Content -Raw` / `Out-File -Encoding utf8` 은 5.1 에서 한글을 깨뜨린다
+(실제로 이걸로 `index.html` 을 한 번 깨뜨려 HEAD 에서 복구했다).
+
 ## 폴더 구조
 
 ```

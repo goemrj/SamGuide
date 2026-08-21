@@ -1,425 +1,579 @@
-/* ---------- ② 본인부담금 계산기 ----------
-   규칙 출처는 ①(js/page-burden.js)과 같은 엑셀 시트지만, 계산에 쓰는 숫자는
-   ①의 data/burden-rules.js 가 아니라 아래 표(HI_OUT·HI_IN·CS2_*·MG_* …)에 따로 들어 있다.
-   ①은 "보는 용도", ②는 "계산 용도"라 규칙이 바뀌면 두 곳을 다 고쳐야 한다.
+/* ---------- ② 본인부담금 계산기 — 수기 계산 ----------
+   손으로 쓰는 계산지를 그대로 옮긴 원장 한 장이다.
+     ① 총진료비                      ② 산정대상 금액 × 법정본인부담률
+     ③ 본인부담률이 다른 항목 금액      ④ 그 금액 × 그 항목의 부담률
+     ⑤ 산정대상 금액 = ① − Σ③         ⑥ 본인부담 합계 = ② + Σ④ → 절사 → 본인부담금
+   소수점은 그대로 두고 계산한 뒤 마지막에 한 번만 절사한다.
 
-   계산 방식은 시트의 [계산식] 탭과 같다 —
-     나머지 = 총진료비 − 별도항목 금액 합
-     본인부담금 = 나머지 × 기본률 + Σ(별도항목 금액 × 항목별 부담률)
-     소수점은 그대로 두고 계산한 뒤 마지막에 한 번만 절사(외래 100원 · 입원 10원)
+   **부담률은 전부 사용자가 직접 적는다** (2026-08-21).
+   자격 · 종별 · 환자유형 · 산정특례로 부담률을 자동으로 채워 주던 규칙표
+   (HI_OUT · HI_IN · CS2_* · MG_* · SPECIALS · CALC_ITEMS)와 그걸 쓰던 코드
+   (baseBurden · typeTable · seniorBand · autoBase · renderHint · 조건 칸 · 「부담률 규칙값으로」)는
+   화면에서 조건 칸을 걷어내면서 **같이 지웠다** — 규칙값을 볼 곳이 없어 이름만 남아 있었다.
+   그 값들은 ① 「본인부담금 규칙」 화면(data/burden-hira.js)에서 보고,
+   지운 코드는 깃 이력(2026-08-21 이전 판 js/page-calc.js)에 남아 있다.
 
-   세부작성요령(2025.8.1.) 203~206쪽의 예시 8건으로 검산했다.
+   절사 단위는 외래 100원 · 입원 10원이 달라서 **절사 줄에서 고른다**(진료형태 칸은 없앴다).
+
+   검산 — 세부작성요령(2025.8.1.) 203~206쪽 예시:
+     총진료비 28,800 · 진찰료 21,030(부담률 100%) · 법정본인부담률 60%
+     → 산정대상 7,770 × 60% = 4,662 + 21,030 = 25,692 → 100원 미만 절사 25,600원 / 청구 3,200원
+   계산 방식은 두 가지 — 「수기 계산」과 「SAM 파일 불러오기」. SAM 쪽은 아직 비어 있다
+   (어느 레코드의 어느 금액을 읽을지 정해지면 붙인다).
 ------------------------------------------------------------------ */
 
-const QUALS = ['건강보험', '차상위 C (1종)', '차상위 E (2종)', '차상위 F (2종 장애인)', '의료급여 1종', '의료급여 2종'];
-const MODES = ['외래', '입원'];
-const INSTS = ['상급종합병원', '종합병원', '종합병원 (읍·면)', '병원', '병원 (읍·면)', '의원'];
+const WAYS = ['수기 계산', 'SAM 파일 불러오기'];
+// 절사 단위 — 외래는 100원, 입원은 10원 미만을 버린다
+const CUTS = [{ v:100, label:'100원 미만 절사 (외래)' },
+              { v:10,  label:'10원 미만 절사 (입원)' },
+              { v:1,   label:'절사 안 함' }];
 
-// 의료급여는 종별을 1·2·3차로 부른다
-const MG_TIER = {'상급종합병원':'3차', '종합병원':'2차', '종합병원 (읍·면)':'2차',
-                 '병원':'2차', '병원 (읍·면)':'2차', '의원':'1차'};
+/* 계산 한 벌 = 탭 하나. 명세서 여러 건을 동시에 두고 오갈 수 있게 배열로 들고 있고,
+   `calc` 는 늘 **지금 보고 있는 한 벌**을 가리킨다 — 아래 코드는 전부 `calc` 만 본다. */
+function newSheet(){
+  return { total:0, items:[], cut:100,
+           baseUnit:'pct',      // 'pct' 부담률 · 'won' 정액
+           baseVal:null,        // 법정본인부담률(또는 정액) — 안 적으면 null
+           baseFix:null,        // 법정본인부담을 손으로 적었을 때
+           cmp:{ mg:0, hos:0 } };   // MG · 병원 청구액
+}
+let sheets = [newSheet()];
+let cur = 0;
+let calc = sheets[0];
+let calcWay = WAYS[0];                   // 계산 방식은 탭과 상관없이 하나다
 
-/* ---------- 건강보험 외래 — 「건보 외래 본부」 시트
-   consult:true 는 "진찰료 총액(전액) + 나머지 ○○%" 형태. 진찰료는 별도항목 100%로 넣는다.
-   '1세이상 6세미만'은 시트에 "일반환자본인부담률의 70%"로만 적혀 있어 일반율×0.7 로 계산해 둔 값이다. */
-const HI_OUT = {
-  '상급종합병원': { '일반':{consult:1, rate:.60}, '임신부 (F015)':{rate:.40}, '1세미만 (F024)':{rate:.20},
-                    '1세이상 6세미만':{consult:1, rate:.42}, '조산아·저체중아 (F016)':{rate:.05},
-                    '난임진료 (F021)':{consult:1, rate:.30}, '경증질환 외래 (F025)':{rate:1.00} },
-  '종합병원':     { '일반':{rate:.50}, '임신부 (F015)':{rate:.30}, '1세미만 (F024)':{rate:.15},
-                    '1세이상 6세미만':{rate:.35}, '조산아·저체중아 (F016)':{rate:.05}, '난임진료 (F021)':{rate:.30} },
-  // 읍·면지역 종합병원 45%는 엑셀 시트에는 없고 세부작성요령(2025.8.1.) 205쪽에만 있다 —
-  // 같은 쪽 예시(16,000원 → 7,200원)로 확인함
-  '종합병원 (읍·면)': { '일반':{rate:.45}, '임신부 (F015)':{rate:.30}, '1세미만 (F024)':{rate:.15},
-                    '1세이상 6세미만':{rate:.315}, '조산아·저체중아 (F016)':{rate:.05}, '난임진료 (F021)':{rate:.30} },
-  '병원':         { '일반':{rate:.40}, '임신부 (F015)':{rate:.20}, '1세미만 (F024)':{rate:.10},
-                    '1세이상 6세미만':{rate:.28}, '조산아·저체중아 (F016)':{rate:.05}, '난임진료 (F021)':{rate:.30} },
-  '병원 (읍·면)': { '일반':{rate:.35}, '임신부 (F015)':{rate:.20}, '1세미만 (F024)':{rate:.10},
-                    '1세이상 6세미만':{rate:.245}, '조산아·저체중아 (F016)':{rate:.05}, '난임진료 (F021)':{rate:.30} },
-  '의원':         { '일반':{rate:.30}, '임신부 (F015)':{rate:.10}, '1세미만 (F024)':{rate:.05},
-                    '1세이상 6세미만':{rate:.21}, '조산아·저체중아 (F016)':{rate:.05}, '난임진료 (F021)':{rate:.30},
-                    '65세이상':{tier:'senior'} },
-};
+function rateStr(r){ return Math.round((r || 0) * 1000) / 10; }
+function hasVal(v){ return v !== null && v !== undefined; }
 
-/* ---------- 건강보험 입원 — 「건보 입원 본부」 시트 (식대는 별도항목) ---------- */
-const HI_IN = {
-  '일반':{rate:.20},
-  '15세 이하 (F018)':{rate:.05},
-  '신생아 28일 이내 (F005)':{rate:0},
-  '2세 미만 (F027)':{rate:0},
-  '자연분만':{rate:0},
-  '고위험 임신부':{rate:.10},
-  '제왕절개 (25년~)':{rate:0},
-  '장기적출':{rate:0},
-  '선택입원군 (요양병원)':{rate:.40},
-};
-
-/* ---------- 차상위 2종(E·F) ---------- */
-const CS2_OUT = {
-  '일반':{rate:.14},
-  '희귀·중증난치질환자':{rate:.10},
-  '임신부·조산아·저체중아·치매·중증질환자·1세미만':{rate:.05},
-  '암 (V193)':{rate:.05},
-  'V191 · V192 · 결핵 (V000)':{rate:0},
-};
-const CS2_IN = {
-  '일반':{rate:.14},
-  '등록 희귀·중증난치질환자 · 정신과 입원진료':{rate:.10},
-  '중증질환자 · 고위험임신부 (F011) · 치매':{rate:.05},
-  '6~15세 (F020)':{rate:.03},
-  '6세 미만 (F019)':{rate:0},
-  '자연분만 · 제왕절개 · 장기적출 · V191 · V192 · V268 · V273 · V275 · 결핵':{rate:0},
-};
-const CS1_IN = { '일반':{rate:0}, '연장승인 불승인자 (F023)':{rate:.30} };
-
-/* ---------- 의료급여 — 「의료급여」 시트. 1종 외래와 2종 1차 외래는 정액이다. ---------- */
-const MG1_OUT = {                     // [정액원(직접조제 이외), 정액원(원내 직접조제)]
-  '1차':{fixed:[1000, 1500]}, '2차':{fixed:[1500, 2000]}, '3차':{fixed:[2000, 2500]},
-};
-const MG2_OUT = {
-  '1차':{fixed:[1000, 1500], fixedDisabled:[250, 750]},
-  '2차':{rate:.15}, '3차':{rate:.15},
-};
-const MG_OUT_EXTRA = {
-  '일반':null,
-  '치매·임산부·조산아·저체중아 (2종 특별본부)':{rate:.05},
-  '1세미만 (2종 특별본부)':{rate:0},
-  '18세이하 치아홈메우기 (2종)':{rate:.05},
-  '연장승인 불승인자 (F023)':{rate:.30},
-  'AIDS (V103) · 원격협의진찰 · 회송료':{rate:0},
-};
-const MG_IN = {
-  '1종': { '일반':{rate:0}, '연장승인 불승인자 (F023)':{rate:.30} },
-  '2종': { '일반':{rate:.10}, '자연분만 (F001)':{rate:0}, '제왕절개 (F013)':{rate:0},
-           '6세미만 (F004/F019)':{rate:0}, 'AIDS (V103)':{rate:0}, '뇌사자 등 장기기증 (F017)':{rate:0},
-           '고위험 임산부 (F011)':{rate:.05}, '중증치매 (V800·V810)':{rate:.05},
-           '6~15세 (F020)':{rate:.03}, '중증질환자 (V191·V192·V193 등)':{rate:0},
-           '행려환자 (M011)':{rate:0}, '연장승인 불승인자 (F023)':{rate:.30} },
-};
-
-/* ---------- 산정특례 — 선택하면 기본 부담률을 이 값으로 덮어쓴다 ---------- */
-const SPECIALS = {
-  '없음': null,
-  '암 · 중증화상 · 뇌혈관 · 심혈관 · 중증외상 (V193 등)': .05,
-  '희귀 · 중증난치 (MT014 21~ · 23~)': .10,
-  '중증치매 (V800 · V810)': .10,
-  '결핵 (V000)': 0,
-  '미등록 암환자 · 가정간호 (V027 · V008)': .20,
-};
-
-/* ---------- 별도 본인부담 항목 ----------
-   rate(state) 는 그 항목의 기본 부담률을 자격·종별에 맞춰 돌려준다.
-   화면에서 사용자가 직접 고칠 수 있으므로 여기 값은 "기본값"이다. */
-const CALC_ITEMS = [
-  { key:'consult',  label:'진찰료 총액 (전액 본인부담)', mode:'외래',
-    rate: () => 1.00, hint:'상급종합 일반·1~6세미만·난임진료에서 쓴다' },
-  { key:'drug',     label:'약가총액 (의약분업 F003)', mode:'외래',
-    rate: s => s.type.startsWith('1세미만') ? .21 : .30 },
-  { key:'meal',     label:'식대', mode:'입원',
-    rate: s => isHI(s) ? .50 : .20, hint:'건강보험 50% · 차상위/의료급여 기본식대 20%' },
-  { key:'special',  label:'특수장비 S항 (CT · MRI · PET)', mode:'',
-    rate: s => {
-      if (s.qual === '의료급여 1종') return .05;
-      if (s.qual === '의료급여 2종') return MG_TIER[s.inst] === '1차' ? .15 : .15;
-      if (isCS2(s)) return .14;
-      if (s.qual === '차상위 C (1종)') return 0;
-      return outRateOf(s);                       // 건강보험은 그 기관의 외래 본인부담률
-    }, hint:'입원에서도 외래 본인부담률을 적용한다' },
-  { key:'isolate',  label:'격리입원료 · 응급실 격리병상', mode:'',
-    rate: s => isHI(s) ? .10 : .05, hint:'건강보험 10% · 차상위 5% (의료급여는 법정 본부를 따름)' },
-  { key:'long16',   label:'장기입원 16일 이상', mode:'입원', rate: () => .25 },
-  { key:'long31',   label:'장기입원 31일 이상', mode:'입원', rate: () => .30 },
-  { key:'room2',    label:'상급병실 2인실', mode:'입원',
-    rate: s => s.inst === '상급종합병원' ? .50 : .40 },
-  { key:'room3',    label:'상급병실 3인실', mode:'입원',
-    rate: s => s.inst === '상급종합병원' ? .40 : .30 },
-  { key:'room4',    label:'상급병실 4인실 (상급종합)', mode:'입원', rate: () => .30 },
-  { key:'selA',     label:'선별급여 A (100분의 50)', mode:'', rate: () => .50 },
-  { key:'selB',     label:'선별급여 B (100분의 80)', mode:'', rate: () => .80 },
-  { key:'selD',     label:'선별급여 D (100분의 30)', mode:'', rate: () => .30 },
-  { key:'selE',     label:'선별급여 E (100분의 90)', mode:'', rate: () => .90 },
-  { key:'material', label:'특수재료 T항 및 관련 행위료', mode:'외래',
-    rate: s => s.type.includes('6세미만') || s.type.startsWith('1세미만') ? .14 : .20 },
-  { key:'psych',    label:'개인 · 집단정신치료', mode:'외래',
-    rate: s => {
-      const base = {'상급종합병원':.40, '종합병원':.30, '병원':.20, '병원 (읍·면)':.20, '의원':.10}[s.inst];
-      return (s.type.includes('6세미만') || s.type.startsWith('1세미만')) ? base * .7 : base;
-    }, hint:'6세미만은 70% (1세미만도 6세미만과 같게 적용)' },
-  { key:'chuna',    label:'한방 추나요법', mode:'',
-    rate: s => s.qual === '차상위 C (1종)' ? .30 : isCS2(s) ? .40 : .50,
-    hint:'단순·복잡에 따라 50% 또는 80% (차상위 C 30% · E·F 40%)' },
-  { key:'sealant',  label:'18세 이하 치아홈메우기', mode:'',
-    rate: s => isHI(s) ? .10 : .05, hint:'건강보험 10% (15세 이하 5%) · 차상위·의급 5%' },
-  { key:'denture',  label:'65세 이상 등록 틀니', mode:'',
-    rate: s => isHI(s) ? .30 : .15 },
-  { key:'implant',  label:'65세 이상 치과 임플란트', mode:'',
-    rate: s => isHI(s) ? .30 : .20 },
-  { key:'refer',    label:'회송료 · 원격협의진찰료 자문료', mode:'', rate: () => 0 },
-  { key:'rrs',      label:'신속대응시스템 (본인부담 없음)', mode:'입원', rate: () => 0 },
-  { key:'retain',   label:'퇴장방지의약품 사용장려금', mode:'', rate: () => 0 },
-];
-
-function isHI(s){ return s.qual === '건강보험'; }
-function isCS2(s){ return s.qual.startsWith('차상위 E') || s.qual.startsWith('차상위 F'); }
-function isMG(s){ return s.qual.startsWith('의료급여'); }
-
-// 건강보험 그 기관의 외래 일반 부담률 — 특수장비 항목이 참조한다
-function outRateOf(s){
-  const t = HI_OUT[s.inst];
-  return (t && t['일반'] && t['일반'].rate) || .30;
+/* ---------- 계산 방식 (대분류 한 줄) ---------- */
+function applyWayPanes(){
+  const manual = calcWay === WAYS[0];
+  $('c-pane-manual').style.display = manual ? '' : 'none';
+  $('c-pane-sam').style.display    = manual ? 'none' : '';
+  if ($('c-tabs-row')) $('c-tabs-row').style.display = manual ? 'flex' : 'none';
+}
+function renderWays(){
+  $('c-way').innerHTML = WAYS.map(v =>
+    '<button class="chip' + (calcWay === v ? ' on' : '') + '" data-w="' + esc(v) + '">' +
+    esc(v) + '</button>').join('');
+  $('c-way').querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    calcWay = c.dataset.w;
+    applyWayPanes();
+    renderWays();
+    saveCalc();
+  }));
+  applyWayPanes();
 }
 
-/* ---------- 환자유형 목록 · 기본 부담률 결정 ---------- */
-function typeTable(s){
-  if (isMG(s)){
-    if (s.mode === '입원') return MG_IN[s.qual === '의료급여 1종' ? '1종' : '2종'];
-    return MG_OUT_EXTRA;
-  }
-  if (s.qual === '차상위 C (1종)') return s.mode === '입원' ? CS1_IN : {'일반':{rate:0}};
-  if (isCS2(s)) return s.mode === '입원' ? CS2_IN : CS2_OUT;
-  return s.mode === '입원' ? HI_IN : (HI_OUT[s.inst] || HI_OUT['의원']);
+/* ---------- 계산 탭 ----------
+   ✕ 는 두 벌 이상일 때만 나온다. 이름 대신 그 계산의 총진료비를 같이 적어 구분한다. */
+function renderTabs(){
+  if (!$('c-tabs')) return;
+  $('c-tabs').innerHTML = sheets.map((s, i) =>
+    '<button class="chip' + (i === cur ? ' on' : '') + '" data-t="' + i + '">계산 ' + (i + 1) +
+    '<small data-tab-total="' + i + '">' + (s.total ? won(s.total) : '비어 있음') + '</small>' +
+    (sheets.length > 1 ? '<span class="tabx" data-tx="' + i + '" title="이 계산 닫기">✕</span>' : '') +
+    '</button>').join('');
+}
+function switchSheet(i){
+  if (i < 0 || i >= sheets.length || i === cur) return;
+  cur = i; calc = sheets[cur];
+  renderTabs(); refreshCalc();
+}
+function addSheet(){
+  sheets.push(newSheet());
+  cur = sheets.length - 1; calc = sheets[cur];
+  renderTabs(); refreshCalc();
+}
+function closeSheet(i){
+  if (sheets.length <= 1) return;
+  sheets.splice(i, 1);
+  if (cur >= sheets.length) cur = sheets.length - 1;
+  else if (i < cur) cur--;
+  calc = sheets[cur];
+  renderTabs(); refreshCalc();
 }
 
-// 기본 부담: {kind:'rate'|'fixed'|'tier', rate, fixed, label, source}
-function baseBurden(s){
-  const sp = SPECIALS[s.spec];
-  if (sp !== null && sp !== undefined)
-    return { kind:'rate', rate: sp, label:'산정특례 ' + s.spec, source:'산정특례' };
-
-  const tier = MG_TIER[s.inst];
-
-  if (isMG(s) && s.mode === '외래'){
-    const extra = MG_OUT_EXTRA[s.type];
-    if (extra) return { kind:'rate', rate: extra.rate, label:'의료급여 ' + s.type, source:'의료급여 외래' };
-    const t = (s.qual === '의료급여 1종' ? MG1_OUT : MG2_OUT)[tier];
-    if (t.rate !== undefined)
-      return { kind:'rate', rate:t.rate, label:'의료급여 2종 ' + tier + ' 외래', source:'의료급여 외래' };
-    const pair = (s.qual === '의료급여 2종' && s.qual2Disabled && t.fixedDisabled) ? t.fixedDisabled : t.fixed;
-    return { kind:'fixed', fixed: pair[s.dispense ? 1 : 0],
-             label:'의료급여 ' + (s.qual === '의료급여 1종' ? '1종 ' : '2종 ') + tier + ' 정액' +
-                   (s.dispense ? ' (원내 직접조제)' : ''), source:'의료급여 외래' };
-  }
-
-  if (isCS2(s) && s.mode === '외래' && s.inst === '의원' && s.type === '일반'){
-    const pair = s.qual.startsWith('차상위 F') ? [250, 750] : [1000, 1500];
-    return { kind:'fixed', fixed: pair[s.dispense ? 1 : 0],
-             label:'차상위 ' + (s.qual.startsWith('차상위 F') ? 'F' : 'E') + ' 의원 정액' +
-                   (s.dispense ? ' (원내 직접조제)' : ''), source:'차상위 외래' };
-  }
-
-  const t = typeTable(s)[s.type];
-  if (!t) return { kind:'rate', rate:0, label:'해당 규칙 없음', source:'', missing:true };
-  if (t.tier === 'senior') return { kind:'tier', label:'의원 65세 이상 (구간별)', source:'건강보험 외래' };
-  if (t.consult) return { kind:'rate', rate:t.rate, consult:true,
-                          label:'진찰료 총액 + 나머지 ' + pct(t.rate), source:'건강보험 외래' };
-  return { kind:'rate', rate:t.rate,
-           label: (isHI(s) ? '' : s.qual + ' ') + s.type,
-           source: isHI(s) ? '건강보험 ' + s.mode : s.qual + ' ' + s.mode };
+/* ---------- 제외 항목 (본인부담률이 다른 항목) ----------
+   빈 줄은 늘 맨 아래에 한 개 둔다. 부담률은 채워 넣지 않는다 — 사용자가 직접 적는다. */
+function blankItem(){ return { name:'', amount:0, rate:null }; }
+function isBlankItem(it){
+  return !(it.name || '').trim() && !it.amount && !hasVal(it.rate) && !hasVal(it.burdenFix);
+}
+function ensureBlankRow(){
+  const last = calc.items[calc.items.length - 1];
+  if (last && isBlankItem(last)) return false;
+  calc.items.push(blankItem());
+  return true;
 }
 
-// 의원 65세 이상 외래 — 「건보 외래 본부」 시트. 구간은 요양급여비용총액 1로 정한다.
-function seniorBand(total){
-  if (total <= 15000) return { fixed: 1500, desc: '15,000원 이하 → 정액 1,500원' };
-  if (total <= 20000) return { rate: .10, desc: '15,000~20,000원 → 10%' };
-  if (total <= 25000) return { rate: .20, desc: '20,000~25,000원 → 20%' };
-  return { rate: .30, desc: '25,000원 초과 → 30%' };
+/* ---------- 원장 한 장 ----------
+   금액·부담률 입력칸이 이 표 안에 있으므로 글자를 칠 때마다 표를 다시 그리지 않는다
+   (다시 그리면 커서가 빠진다). 계산 결과는 paint() 가 [data-out] 칸만 갈아 넣는다. */
+function baseRateCell(){
+  const v = hasVal(calc.baseVal)
+    ? (calc.baseUnit === 'won' ? calc.baseVal.toLocaleString() : rateStr(calc.baseVal)) : '';
+  return '<span class="rate-cell">' +
+    '<input class="field-input mini" id="c-brate" inputmode="decimal" value="' + v + '">' +
+    '<button class="btn xs" id="c-bunit" title="부담률(%) ⇄ 정액(원)">' +
+      (calc.baseUnit === 'won' ? '원' : '%') + '</button></span>';
+}
+function moneyCell(attrs, val){
+  return '<input class="field-input money mini" ' + attrs +
+         ' type="text" inputmode="numeric" placeholder="0"' +
+         ' title="+ − × ÷ 로 셈도 됩니다 (예: 190040+342080)" value="' +
+         (val ? val.toLocaleString() : '') + '">';
+}
+function cutCell(){
+  return '절사 <select class="field-input mini cutsel" data-cut="1">' +
+    CUTS.map(c => '<option value="' + c.v + '"' + (calc.cut === c.v ? ' selected' : '') + '>' +
+      esc(c.label) + '</option>').join('') + '</select>';
 }
 
-/* ---------- 화면 상태 ---------- */
-const calc = { qual:'건강보험', mode:'외래', inst:'의원', type:'일반', spec:'없음',
-               dispense:0, total:0, items:[] };
-
-function fillSelect(el, list, cur){
-  el.innerHTML = list.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
-}
-function typeList(){ return Object.keys(typeTable(calc)); }
-
-function syncCalcInputs(){
-  fillSelect($('c-qual'), QUALS, calc.qual);
-  fillSelect($('c-mode'), MODES, calc.mode);
-  fillSelect($('c-inst'), INSTS, calc.inst);
-  const types = typeList();
-  if (!types.includes(calc.type)) calc.type = types[0];
-  fillSelect($('c-type'), types, calc.type);
-  fillSelect($('c-spec'), Object.keys(SPECIALS), calc.spec);
-  $('c-dispense').value = String(calc.dispense);
-
-  // 원내 직접조제는 정액이 걸린 경우에만 의미가 있다
-  const b = baseBurden(calc);
-  $('c-dispense-wrap').style.display = (b.kind === 'fixed') ? '' : 'none';
+/* 제외 항목 한 줄. 맨 아래 빈 줄에는 지우는 단추를 두지 않는다(늘 있는 줄이라). */
+function itemRowHTML(it, i){
+  const tail = isBlankItem(it) && i === calc.items.length - 1;
+  return '<tr>' +
+    '<td><input class="field-input mini" data-i="' + i + '" data-f="name" ' +
+      'placeholder="항목명 (예: 식대 · 회송료 · 특수검사)" value="' + esc(it.name || '') + '"></td>' +
+    '<td>' + moneyCell('data-i="' + i + '" data-f="amount"', it.amount) + '</td>' +
+    '<td><input class="field-input mini pctin" data-i="' + i + '" data-f="rate" ' +
+      'inputmode="decimal" value="' + (hasVal(it.rate) ? rateStr(it.rate) : '') +
+      '"><span class="pctsign">%</span></td>' +
+    '<td class="num fixable" data-out="item-' + i + '" data-fixkey="item-' + i + '" ' +
+      'title="두 번 누르면 이 줄 본인부담을 직접 적을 수 있습니다">0</td>' +
+    '<td>' + (tail ? '' : '<button class="btn xs" data-del="' + i + '" title="이 줄 지우기">✕</button>') +
+    '</td></tr>';
 }
 
-function itemDefsFor(){
-  return CALC_ITEMS.filter(it => !it.mode || it.mode === calc.mode);
-}
-function renderAddSelect(){
-  const used = new Set(calc.items.map(i => i.key));
-  const opts = itemDefsFor().filter(d => !used.has(d.key));
-  $('c-add').innerHTML = '<option value="">+ 별도 본인부담 항목 추가</option>' +
-    opts.map(d => '<option value="' + d.key + '">' + esc(d.label) + '</option>').join('');
-}
-function renderItems(){
-  if (!calc.items.length){
-    $('c-items').innerHTML = '<div class="saved-note" style="padding:10px 2px;">추가한 항목이 없습니다. 총진료비 전체에 기본 부담률을 적용합니다.</div>';
-    return;
-  }
-  $('c-items').innerHTML = '<table class="fields items"><thead><tr>' +
-    '<th>항목</th><th style="width:140px;">금액</th><th style="width:96px;">부담률</th><th style="width:34px;"></th>' +
-    '</tr></thead><tbody>' +
-    calc.items.map((it, idx) => {
-      const d = CALC_ITEMS.find(x => x.key === it.key);
-      return '<tr><td class="c-name">' + esc(d.label) +
-        (d.hint ? '<div class="saved-note">' + esc(d.hint) + '</div>' : '') + '</td>' +
-        '<td><input class="field-input money mini" data-i="' + idx + '" data-f="amount" value="' +
-          (it.amount ? it.amount.toLocaleString() : '') + '" inputmode="numeric" placeholder="0"></td>' +
-        '<td><input class="field-input mini pctin" data-i="' + idx + '" data-f="rate" value="' +
-          (Math.round(it.rate * 1000) / 10) + '" inputmode="decimal"><span class="pctsign">%</span></td>' +
-        '<td><button class="btn xs" data-del="' + idx + '">✕</button></td></tr>';
-    }).join('') + '</tbody></table>';
+function renderLed(){
+  const rows = [];
 
-  $('c-items').querySelectorAll('input').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const it = calc.items[Number(inp.dataset.i)];
-      if (inp.dataset.f === 'amount'){
-        it.amount = parseMoney(inp.value);
-        const p = inp.selectionStart, before = inp.value.length;
-        inp.value = it.amount ? it.amount.toLocaleString() : '';
-        const d = inp.value.length - before;
-        inp.setSelectionRange(Math.max(0, p + d), Math.max(0, p + d));
-      } else {
-        it.rate = (parseFloat(inp.value) || 0) / 100;
-      }
-      renderResult();
-    });
-  });
-  $('c-items').querySelectorAll('[data-del]').forEach(b => {
-    b.addEventListener('click', () => {
-      calc.items.splice(Number(b.dataset.del), 1);
-      renderItems(); renderAddSelect(); renderResult();
-    });
-  });
+  // ① 총진료비 ↔ ② 법정본인부담
+  rows.push('<tr>' +
+    '<td><span class="c-name">총진료비</span>' +
+      '<div class="saved-note">요양급여비용총액 1</div></td>' +
+    '<td>' + moneyCell('id="c-total"', calc.total) + '</td>' +
+    '<td>' + baseRateCell() + '</td>' +
+    '<td class="num fixable" data-fixkey="base" ' +
+      'title="두 번 누르면 법정본인부담을 직접 적을 수 있습니다">' +
+      '<span data-out="base-burden">0</span>' +
+      '<div class="saved-note" data-out="base-note"></div></td>' +
+    '<td></td></tr>');
+
+  // ③ 본인부담률이 다른 항목 ↔ ④ 그 항목의 본인부담
+  ensureBlankRow();
+  calc.items.forEach((it, i) => rows.push(itemRowHTML(it, i)));
+
+  $('c-led').innerHTML =
+    '<table class="fields items led fixed"><thead><tr>' +
+      '<th>구분</th><th style="width:150px;">금액</th><th style="width:118px;">부담률</th>' +
+      '<th style="width:150px;">본인부담</th><th style="width:40px;"></th>' +
+    '</tr></thead><tbody>' + rows.join('') + '</tbody><tfoot>' +
+      '<tr><td><span class="c-name">산정대상 금액 · 본인부담 합계</span></td>' +
+        '<td class="num b" data-out="base-amt">0</td><td></td>' +
+        '<td class="num b" data-out="raw">0</td><td></td></tr>' +
+      '<tr><td>' + cutCell() + '</td><td></td><td></td>' +
+        '<td class="num strong" data-out="burden">0</td><td></td></tr>' +
+      '<tr><td>청구액 (총진료비 − 본인부담금)</td><td></td><td></td>' +
+        '<td class="num" data-out="claim">0</td><td></td></tr>' +
+    '</tfoot></table>';
 }
 
-/* ---------- 계산 ---------- */
+/* ---------- 계산 ----------
+   본인부담 칸을 두 번 눌러 손으로 적어 넣은 값(fix)이 있으면 곱셈 결과 대신 그 값을 쓴다. */
 function compute(){
-  const b = baseBurden(calc);
   const T = calc.total;
-  const itemsSum = calc.items.reduce((a, i) => a + i.amount, 0);
-  const rest = T - itemsSum;
-  const lines = [];
-
-  let restBurden = 0;
-  if (b.kind === 'fixed'){
-    restBurden = b.fixed;
-    lines.push({ name:'기본 (' + b.label + ')', amount: rest, rate: null, burden: b.fixed, fixed:true });
-  } else if (b.kind === 'tier'){
-    const t = seniorBand(T);
-    if (t.fixed !== undefined){
-      restBurden = t.fixed;
-      lines.push({ name:'기본 (' + b.label + ' · ' + t.desc + ')', amount: rest, rate: null, burden: t.fixed, fixed:true });
-    } else {
-      restBurden = rest * t.rate;
-      lines.push({ name:'나머지 요양급여비용 (' + t.desc + ')', amount: rest, rate: t.rate, burden: restBurden });
-    }
-  } else {
-    restBurden = rest * b.rate;
-    lines.push({ name:'나머지 요양급여비용', amount: rest, rate: b.rate, burden: restBurden });
-  }
-
-  for (const it of calc.items){
-    const d = CALC_ITEMS.find(x => x.key === it.key);
-    lines.push({ name: d.label, amount: it.amount, rate: it.rate, burden: it.amount * it.rate });
-  }
-
-  const raw = lines.reduce((a, l) => a + l.burden, 0);
-  const unit = calc.mode === '입원' ? 10 : 100;
+  const exSum   = calc.items.reduce((a, i) => a + i.amount, 0);
+  const baseAmt = T - exSum;
+  const baseAuto = calc.baseUnit === 'won' ? (calc.baseVal || 0) : baseAmt * (calc.baseVal || 0);
+  const baseBurdenAmt = hasVal(calc.baseFix) ? calc.baseFix : baseAuto;
+  const itemB   = calc.items.map(i => hasVal(i.burdenFix) ? i.burdenFix
+                                                          : i.amount * (i.rate || 0));
+  const exBurden = itemB.reduce((a, b) => a + b, 0);
+  const raw  = baseBurdenAmt + exBurden;
+  const unit = calc.cut || 1;
   const burden = Math.floor(raw / unit) * unit;
-  return { b, T, rest, itemsSum, lines, raw, unit, burden, claim: T - burden };
+  return { T, exSum, baseAmt, baseBurdenAmt, itemB, exBurden, raw, unit, burden, claim: T - burden };
 }
 
-function renderResult(){
+function paint(){
   const r = compute();
-  const warn = [];
-  if (r.b.missing) warn.push('선택한 조합에 해당하는 규칙이 시트에 없습니다. 부담률 0%로 계산했습니다.');
-  if (r.rest < 0) warn.push('별도 항목 금액의 합이 총진료비보다 큽니다. 금액을 확인해 주세요.');
-  if (r.b.consult && !calc.items.some(i => i.key === 'consult'))
-    warn.push('이 유형은 “진찰료 총액 + 나머지 ' + pct(r.b.rate) + '”입니다. 별도 항목에서 <b>진찰료 총액</b>을 추가해 주세요.');
-  if (r.b.kind === 'fixed' && r.T === 0) warn.push('정액 대상입니다. 총진료비와 무관하게 정액이 본인부담금이 됩니다.');
-
-  $('c-result').innerHTML =
-    '<div class="res-head">' +
-      '<div class="res-big"><span>본인부담금</span><b>' + won(r.burden) + '</b><i>원</i></div>' +
-      '<div class="res-sub">청구액 <b>' + won(r.claim) + '</b>원 · 총진료비 ' + won(r.T) + '원</div>' +
-    '</div>' +
-    (warn.length ? '<div class="res-warn">' + warn.map(w => '<div>· ' + w + '</div>').join('') + '</div>' : '') +
-    '<table class="fields res"><thead><tr><th>항목</th><th>금액</th><th>부담률</th><th>본인부담</th></tr></thead><tbody>' +
-      r.lines.map(l =>
-        '<tr><td class="c-name">' + esc(l.name) + '</td>' +
-        '<td class="num">' + won(l.amount) + '</td>' +
-        '<td class="num">' + (l.fixed ? '정액' : pct(l.rate)) + '</td>' +
-        '<td class="num strong">' + won2(l.burden) + '</td></tr>'
-      ).join('') +
-    '</tbody><tfoot>' +
-      '<tr><td colspan="3">절사 전 합계</td><td class="num strong">' + won2(r.raw) + '</td></tr>' +
-      '<tr><td colspan="3">' + r.unit + '원 미만 절사 (' + calc.mode + ')</td>' +
-        '<td class="num strong">' + won(r.burden) + '</td></tr>' +
-    '</tfoot></table>' +
-    '<div class="dt-src">기본 부담: ' + esc(r.b.label) + (r.b.source ? ' · ' + esc(r.b.source) : '') + '</div>';
+  // 지금 손으로 적어 넣는 중인 칸(입력칸이 들어 있는 칸)은 건드리지 않는다
+  const set = (k, v) => document.querySelectorAll('#page-calc [data-out="' + k + '"]')
+                                .forEach(el => { if (!el.querySelector('[data-fix]')) el.innerHTML = v; });
+  set('base-burden', won2(r.baseBurdenAmt));
+  set('base-note', hasVal(calc.baseFix) ? '수기로 적은 값'
+        : (calc.baseUnit === 'won' ? (hasVal(calc.baseVal) ? '정액' : '')
+                                   : (hasVal(calc.baseVal)
+                                        ? esc(won(r.baseAmt) + ' × ' + pct(calc.baseVal)) : '')));
+  r.itemB.forEach((b, i) => set('item-' + i,
+    won2(b) + (hasVal(calc.items[i] && calc.items[i].burdenFix) ? '<div class="saved-note">수기</div>' : '')));
+  set('exburden', won2(r.exBurden));
+  set('base-amt', won(r.baseAmt));
+  set('raw', won2(r.raw));
+  set('burden', won(r.burden));
+  set('claim', won(r.claim));
+  set('total', won(r.T));
+  renderWarn(r);
+  paintCmp();
+  const lab = document.querySelector('[data-tab-total="' + cur + '"]');
+  if (lab) lab.textContent = calc.total ? won(calc.total) : '비어 있음';
+  saveCalc();                    // 적어 둔 것은 이 브라우저에 남긴다
 }
 
-function renderHint(){
-  const b = baseBurden(calc);
-  const tier = isMG(calc) ? ' · ' + MG_TIER[calc.inst] + ' 의료급여기관' : '';
-  $('c-hint').innerHTML =
-    '<b>기본 부담</b> ' + esc(b.label) +
-    (b.kind === 'rate' ? ' <span class="hint-rate">' + pct(b.rate) + '</span>' : '') +
-    (b.kind === 'fixed' ? ' <span class="hint-rate">' + won(b.fixed) + '원</span>' : '') +
-    esc(tier);
+function renderWarn(r){
+  const w = [];
+  if (r.baseAmt < 0) w.push('제외 항목 금액의 합이 총진료비보다 큽니다. 금액을 확인해 주세요.');
+  $('c-warn').innerHTML = w.length
+    ? '<div class="res-warn">' + w.map(x => '<div>· ' + x + '</div>').join('') + '</div>' : '';
+}
+
+/* ---------- MG · 병원 두 벌 비교 (오른쪽 칸) ----------
+   총진료비는 왼쪽 원장의 값을 그대로 따라오고, 청구액만 적으면
+   본인부담금 = 총진료비 − 청구액. 두 벌의 본인부담금 차액도 같이 보여 준다. */
+const CMP_COLS = [{ key:'mg', label:'MG' }, { key:'hos', label:'병원' }];
+function cmpBurden(k){ return calc.total - (calc.cmp[k] || 0); }
+function renderCmp(){
+  if (!$('c-cmp')) return;
+  $('c-cmp').innerHTML =
+    '<table class="fields items cmp fixed"><thead><tr><th>구분</th>' +
+      CMP_COLS.map(c => '<th style="width:104px;">' + esc(c.label) + '</th>').join('') +
+    '</tr></thead><tbody>' +
+      '<tr><td>총진료비</td>' +
+        CMP_COLS.map(() => '<td class="num" data-out="cmp-total">0</td>').join('') + '</tr>' +
+      '<tr><td>청구액</td>' +
+        CMP_COLS.map(c => '<td>' + moneyCell('data-cmp="' + c.key + '"', calc.cmp[c.key]) + '</td>').join('') +
+      '</tr>' +
+      '<tr><td><span class="c-name">본인부담금</span></td>' +
+        CMP_COLS.map(c => '<td class="num b" data-out="cmp-burden-' + c.key + '">0</td>').join('') +
+      '</tr>' +
+    '</tbody><tfoot><tr><td>차액 (MG − 병원)</td>' +
+      '<td class="num b" colspan="2" data-out="cmp-diff">0</td></tr></tfoot></table>';
+}
+function paintCmp(){
+  if (!$('c-cmp')) return;
+  const set = (k, v) => document.querySelectorAll('#c-cmp [data-out="' + k + '"]')
+                                .forEach(el => el.innerHTML = v);
+  const mg = cmpBurden('mg'), hos = cmpBurden('hos');
+  set('cmp-total', won(calc.total));
+  set('cmp-burden-mg', won(mg));
+  set('cmp-burden-hos', won(hos));
+  set('cmp-diff', won(mg - hos) + '원');
+  // 병원 본인부담금이 MG 보다 적으면 빨강 · 크면 파랑 (차액도 같은 색)
+  const dir = hos === mg ? '' : (hos < mg ? 'cmp-less' : 'cmp-more');
+  ['cmp-burden-hos', 'cmp-diff'].forEach(k => {
+    const el = $('c-cmp').querySelector('[data-out="' + k + '"]');
+    if (!el) return;
+    el.classList.remove('cmp-less', 'cmp-more');
+    if (dir) el.classList.add(dir);
+  });
+}
+
+/* 표를 다시 그리지 않고 법정본인부담 칸만 맞춘다 */
+function syncBaseInput(){
+  const inp = $('c-brate'), btn = $('c-bunit');
+  if (!inp) return;
+  if (document.activeElement !== inp)
+    inp.value = hasVal(calc.baseVal)
+      ? (calc.baseUnit === 'won' ? calc.baseVal.toLocaleString() : rateStr(calc.baseVal)) : '';
+  if (btn) btn.textContent = calc.baseUnit === 'won' ? '원' : '%';
+}
+function reformatMoney(inp, val){
+  const p = inp.selectionStart, before = inp.value.length;
+  inp.value = val ? val.toLocaleString() : '';
+  const d = inp.value.length - before;
+  try { inp.setSelectionRange(Math.max(0, p + d), Math.max(0, p + d)); } catch (e) {}
+}
+
+/* ---------- 금액 칸 안에서 셈하기 ----------
+   `190040+342080` 처럼 적으면 합계를 쓴다. + − × ÷ 네 가지만 하고 괄호는 없다.
+   eval 은 쓰지 않는다 — 숫자와 연산자만 받아 곱하기·나누기를 먼저 접고 더하기·빼기를 잇는다.
+   식이 아직 덜 적혔으면(`190040+`) null 을 돌려주고, 그때는 앞서 계산한 값을 그대로 둔다. */
+function calcExpr(str){
+  const t = String(str).replace(/[,\s]/g, '').replace(/[xX×]/g, '*').replace(/÷/g, '/');
+  if (!/^\d+(\.\d+)?([+\-*/]\d+(\.\d+)?)*$/.test(t)) return null;
+  const nums = t.split(/[+\-*/]/).map(Number);
+  const ops  = t.match(/[+\-*/]/g) || [];
+  for (let i = 0; i < ops.length; ){
+    if (ops[i] === '*' || ops[i] === '/'){
+      const v = ops[i] === '*' ? nums[i] * nums[i + 1]
+                               : (nums[i + 1] === 0 ? NaN : nums[i] / nums[i + 1]);
+      nums.splice(i, 2, v); ops.splice(i, 1);
+    } else i++;
+  }
+  let acc = nums[0];
+  ops.forEach((o, i) => { acc = o === '+' ? acc + nums[i + 1] : acc - nums[i + 1]; });
+  return isFinite(acc) ? acc : null;
+}
+const HAS_OP = /[+\-*/xX×÷]/;
+// {val, formula, ok} — formula 면 글자를 손대지 않는다(치던 식이 지워지면 안 된다)
+function readAmount(inp){
+  const formula = HAS_OP.test(inp.value);
+  const v = formula ? calcExpr(inp.value) : parseMoney(inp.value);
+  return { val: v === null ? 0 : Math.max(0, Math.round(v)), formula, ok: v !== null };
+}
+// 칸을 떠나거나 Enter 를 누르면 식을 계산 결과로 바꿔 적는다
+function commitMoney(inp){
+  if (!inp || !inp.classList || !inp.classList.contains('money')) return;
+  if (inp.value.trim() === '') return;
+  let val;
+  if (inp.id === 'c-total') val = calc.total;
+  else if (inp.dataset.cmp) val = calc.cmp[inp.dataset.cmp] || 0;
+  else val = (calc.items[Number(inp.dataset.i)] || {}).amount || 0;
+  inp.value = val ? val.toLocaleString() : '';
+}
+
+/* ---------- 적어 둔 것 남기기 (이 브라우저에만) ----------
+   메모장과 같은 방식이다 — 화면을 옮기거나 새로고침해도 그대로 있게 localStorage 에 담는다.
+   {v:2, way, cur, sheets:[…]} — 탭이 없던 예전 판(낱개 객체)은 첫 탭으로 옮겨 담는다. */
+const CALC_KEY = 'samguide_calc';
+function sheetToSave(s){
+  return {
+    total:s.total, cut:s.cut, baseUnit:s.baseUnit, baseVal:s.baseVal, baseFix:s.baseFix,
+    cmp:{ mg:s.cmp.mg, hos:s.cmp.hos },
+    items:s.items.map(i => ({ name:i.name || '', amount:i.amount, rate:i.rate,
+                              burdenFix:(i.burdenFix === undefined ? null : i.burdenFix) }))
+  };
+}
+function saveCalc(){
+  try {
+    localStorage.setItem(CALC_KEY, JSON.stringify({
+      v:2, way:calcWay, cur:cur, sheets:sheets.map(sheetToSave)
+    }));
+  } catch (e) {}
+}
+function sheetFromSave(s){
+  const o = newSheet();
+  if (!s || typeof s !== 'object') return o;
+  o.total = Number(s.total) || 0;
+  // 절사 단위 — 예전 판은 진료형태(mode)로 갈랐다
+  const cut = Number(s.cut);
+  o.cut = CUTS.some(c => c.v === cut) ? cut : (s.mode === '입원' ? 10 : 100);
+  if (s.baseUnit === 'won' || s.baseUnit === 'pct') o.baseUnit = s.baseUnit;
+  o.baseVal = typeof s.baseVal === 'number' ? s.baseVal : null;
+  o.baseFix = typeof s.baseFix === 'number' ? s.baseFix : null;
+  if (s.cmp && typeof s.cmp === 'object')
+    o.cmp = { mg:Number(s.cmp.mg) || 0, hos:Number(s.cmp.hos) || 0 };
+  if (Array.isArray(s.items))
+    o.items = s.items.filter(i => i && typeof i === 'object')
+      .map(i => ({ name:String(i.name || ''), amount:Number(i.amount) || 0,
+                   rate:typeof i.rate === 'number' ? i.rate : null,
+                   burdenFix:typeof i.burdenFix === 'number' ? i.burdenFix : null }));
+  return o;
+}
+function loadCalc(){
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(CALC_KEY) || 'null'); } catch (e) {}
+  if (!s || typeof s !== 'object') return;
+  if (WAYS.includes(s.way)) calcWay = s.way;
+  const list = Array.isArray(s.sheets) ? s.sheets : [s];
+  sheets = list.length ? list.map(sheetFromSave) : [newSheet()];
+  cur = Number.isInteger(s.cur) && s.cur >= 0 && s.cur < sheets.length ? s.cur : 0;
+  calc = sheets[cur];
 }
 
 function refreshCalc(){
-  syncCalcInputs();
-  renderAddSelect();
-  renderItems();
-  renderHint();
-  renderResult();
+  renderLed();
+  renderCmp();
+  paint();
 }
 
-['c-qual', 'c-mode', 'c-inst', 'c-type', 'c-spec', 'c-dispense'].forEach(id => {
-  $(id).addEventListener('change', () => {
-    calc.qual = $('c-qual').value;
-    calc.mode = $('c-mode').value;
-    calc.inst = $('c-inst').value;
-    calc.spec = $('c-spec').value;
-    calc.dispense = Number($('c-dispense').value);
-    if (id === 'c-type') calc.type = $('c-type').value;
-    // 진료형태가 바뀌면 그 형태에 없는 별도항목은 정리한다
-    const ok = new Set(itemDefsFor().map(d => d.key));
-    calc.items = calc.items.filter(i => ok.has(i.key));
-    // 자격·종별이 바뀌면 사용자가 직접 고치지 않은 부담률은 다시 채운다
-    for (const it of calc.items){
-      if (it.touched) continue;
-      it.rate = CALC_ITEMS.find(d => d.key === it.key).rate(calc);
-    }
-    refreshCalc();
-  });
-});
-$('c-total').addEventListener('input', () => {
-  calc.total = parseMoney($('c-total').value);
-  $('c-total').value = calc.total ? calc.total.toLocaleString() : '';
-  renderResult();
-});
-$('c-add').addEventListener('change', () => {
-  const key = $('c-add').value;
-  if (!key) return;
-  const d = CALC_ITEMS.find(x => x.key === key);
-  calc.items.push({ key, amount: 0, rate: d.rate(calc) });
-  $('c-add').value = '';
-  renderAddSelect(); renderItems(); renderResult();
-});
-// 부담률을 손으로 고치면 그 뒤로는 자동으로 덮어쓰지 않는다
-$('c-items').addEventListener('input', e => {
-  if (e.target.dataset && e.target.dataset.f === 'rate') calc.items[Number(e.target.dataset.i)].touched = true;
+/* ---------- 손 ---------- */
+$('c-led').addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'c-total'){
+    const a = readAmount(t);
+    if (a.ok) calc.total = a.val;
+    if (!a.formula) reformatMoney(t, calc.total);
+    paint();
+    return;
+  }
+  if (t.id === 'c-brate'){
+    const s = t.value.trim();
+    calc.baseVal = s === ''
+      ? null
+      : (calc.baseUnit === 'won' ? parseMoney(s) : (parseFloat(s) || 0) / 100);
+    paint();
+    return;
+  }
+  const i = Number(t.dataset.i);
+  const it = calc.items[i];
+  if (!it) return;
+  if (t.dataset.f === 'amount'){
+    const a = readAmount(t);
+    if (a.ok) it.amount = a.val;
+    if (!a.formula) reformatMoney(t, it.amount);
+  }
+  else if (t.dataset.f === 'rate'){
+    const s = t.value.trim();
+    it.rate = s === '' ? null : (parseFloat(s) || 0) / 100;   // 비워 두면 안 적은 것으로 본다
+  }
+  else if (t.dataset.f === 'name'){ it.name = t.value; }
+  // 맨 아래 줄에 뭔가 적으면 그 밑에 빈 줄을 하나 더 만든다.
+  // 표를 다시 그리지 않고 줄만 붙인다 — 치던 커서가 빠지지 않게.
+  if (i === calc.items.length - 1 && !isBlankItem(it)){
+    const tb = $('c-led').querySelector('tbody');
+    const tr = tb && tb.querySelectorAll('tr')[i + 1];          // tbody 첫 줄은 총진료비
+    if (tr && !tr.querySelector('[data-del]'))                  // 채워졌으니 지우는 단추를 준다
+      tr.lastElementChild.innerHTML =
+        '<button class="btn xs" data-del="' + i + '" title="이 줄 지우기">✕</button>';
+    calc.items.push(blankItem());
+    if (tb) tb.insertAdjacentHTML('beforeend',
+      itemRowHTML(calc.items[calc.items.length - 1], calc.items.length - 1));
+  }
+  paint();
 });
 
+// 절사 단위
+$('c-led').addEventListener('change', e => {
+  if (!e.target.dataset || e.target.dataset.cut === undefined) return;
+  calc.cut = Number(e.target.value) || 1;
+  paint();
+});
+
+/* 옮겨 가는 순서 — 금액 → **같은 줄 부담률** → **다음 줄 금액**. Tab 과 Enter 가 같게 움직인다.
+   부담률 뒤의 ✕(과 총진료비 줄의 원/% 단추)은 건너뛴다. */
+function nextCell(t){
+  const led = $('c-led');
+  const moneys = [...led.querySelectorAll('input.money')];          // [총진료비, 각 줄 금액…]
+  const rates  = [...led.querySelectorAll('input[data-f="rate"]')]; // 줄별 부담률 (c-brate 는 빠짐)
+  if (t.classList.contains('money')){
+    const i = moneys.indexOf(t);
+    return i <= 0 ? $('c-brate') : rates[i - 1];
+  }
+  const row = t.id === 'c-brate' ? 0 : rates.indexOf(t) + 1;
+  return moneys[row + 1] || null;
+}
+function goCell(el){
+  if (!el) return false;
+  el.focus();
+  try { el.select(); } catch (e) {}
+  return true;
+}
+$('c-led').addEventListener('keydown', e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.fix !== undefined){          // 본인부담을 손으로 적는 칸
+    if (e.key === 'Enter'){ e.preventDefault(); commitFix(t, true); }
+    else if (e.key === 'Escape'){ e.preventDefault(); commitFix(t, false); }
+    return;
+  }
+  const isMoney = t.classList && t.classList.contains('money');
+  const isRate  = t.id === 'c-brate' || (t.dataset && t.dataset.f === 'rate');
+  if (!isMoney && !isRate) return;
+  if (e.key === 'Enter'){
+    e.preventDefault();
+    if (isMoney) commitMoney(t);
+    goCell(nextCell(t));
+    return;
+  }
+  if (e.key !== 'Tab' || e.shiftKey || e.altKey || e.ctrlKey) return;
+  if (isMoney) return;                                    // 금액 → 부담률은 브라우저 기본 순서
+  if (goCell(nextCell(t))) e.preventDefault();            // 다음 줄이 없으면 그대로 둔다
+});
+// 금액 칸을 떠나면 적어 둔 식을 계산 결과로 바꿔 적는다
+$('c-led').addEventListener('focusout', e => {
+  if (e.target.dataset && e.target.dataset.fix !== undefined) commitFix(e.target, true);
+  else commitMoney(e.target);
+});
+
+/* ---------- 본인부담 칸을 두 번 눌러 손으로 적기 ----------
+   곱셈 결과를 그대로 못 쓰는 줄(원단위 절사·가산이 섞인 줄 등)이 있어서 열어 둔다.
+   비우고 나가면 다시 자동 계산으로 돌아간다. */
+function fixOf(key){
+  if (key === 'base') return calc.baseFix;
+  const it = calc.items[Number(key.slice(5))];
+  return it ? it.burdenFix : null;
+}
+function setFix(key, v){
+  if (key === 'base'){ calc.baseFix = v; return; }
+  const it = calc.items[Number(key.slice(5))];
+  if (it) it.burdenFix = v;
+}
+function fixCellHTML(key){
+  return key === 'base'
+    ? '<span data-out="base-burden">0</span><div class="saved-note" data-out="base-note"></div>'
+    : '0';
+}
+function commitFix(inp, keep){
+  const cell = inp.closest('[data-fixkey]');
+  if (!cell) return;
+  const key = cell.dataset.fixkey;
+  if (keep){
+    const s = inp.value.trim();
+    const v = s === '' ? null : (HAS_OP.test(s) ? calcExpr(s) : parseMoney(s));
+    setFix(key, hasVal(v) ? Math.max(0, Math.round(v)) : null);
+  }
+  cell.innerHTML = fixCellHTML(key);
+  paint();
+}
+$('c-led').addEventListener('dblclick', e => {
+  const cell = e.target.closest('[data-fixkey]');
+  if (!cell || cell.querySelector('[data-fix]')) return;
+  const key = cell.dataset.fixkey;
+  const cur0 = fixOf(key);
+  cell.innerHTML = '<input class="field-input money mini" data-fix="' + esc(key) + '" ' +
+    'inputmode="numeric" placeholder="자동" title="비우고 나가면 다시 자동 계산" value="' +
+    (hasVal(cur0) ? cur0.toLocaleString() : '') + '">';
+  const inp = cell.querySelector('[data-fix]');
+  inp.focus();
+  try { inp.select(); } catch (err) {}
+});
+
+$('c-led').addEventListener('click', e => {
+  const del = e.target.closest('[data-del]');
+  if (del){
+    calc.items.splice(Number(del.dataset.del), 1);
+    renderLed(); paint();
+    return;
+  }
+  if (e.target.id === 'c-bunit'){        // 부담률(%) ⇄ 정액(원)
+    calc.baseUnit = calc.baseUnit === 'won' ? 'pct' : 'won';
+    calc.baseVal = null;
+    renderLed(); paint();
+    const inp = $('c-brate'); if (inp) inp.focus();
+  }
+});
+
+/* MG · 병원 청구액 칸 — 원장과 같게 셈(+ − × ÷)도 되고 Enter 로 옆 칸으로 넘어간다 */
+if ($('c-cmp')){
+  $('c-cmp').addEventListener('input', e => {
+    const k = e.target.dataset && e.target.dataset.cmp;
+    if (!k) return;
+    const a = readAmount(e.target);
+    if (a.ok) calc.cmp[k] = a.val;
+    if (!a.formula) reformatMoney(e.target, calc.cmp[k]);
+    paintCmp(); saveCalc();
+  });
+  $('c-cmp').addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !e.target.dataset || !e.target.dataset.cmp) return;
+    e.preventDefault();
+    commitMoney(e.target);
+    const ins = [...$('c-cmp').querySelectorAll('input.money')];
+    goCell(ins[ins.indexOf(e.target) + 1]);
+  });
+  $('c-cmp').addEventListener('focusout', e => commitMoney(e.target));
+}
+
+$('c-clear').addEventListener('click', () => {
+  const keep = calc.cut;
+  sheets[cur] = newSheet();
+  sheets[cur].cut = keep;              // 절사 단위는 그대로 둔다
+  calc = sheets[cur];
+  renderTabs(); refreshCalc();
+});
+
+/* 계산 탭 — 명세서 여러 건을 동시에 */
+if ($('c-tabs'))
+  $('c-tabs').addEventListener('click', e => {
+    const x = e.target.closest('[data-tx]');
+    if (x){ closeSheet(Number(x.dataset.tx)); return; }
+    const t = e.target.closest('[data-t]');
+    if (t) switchSheet(Number(t.dataset.t));
+  });
+if ($('c-newtab')) $('c-newtab').addEventListener('click', addSheet);
+
+loadCalc();          // 지난번에 적어 둔 것부터 되살린다
+renderWays();
+renderTabs();
 refreshCalc();

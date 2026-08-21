@@ -27,7 +27,7 @@
    rows 에 [B2_SUB] 한 줄을 끼워 넣으면 그 자리에 띠가 그려진다 — js/page-burden.js 참고. */
 const B2_SUB = '주) 본인부담률을 달리 운영하고 있는 특정 항목 및 본인부담률';
 
-const HIRA_BURDEN = [
+var HIRA_BURDEN = [
 
 /* ================= 건강보험 · 입원진료시 ================= */
 { sys:'건강보험', key:'hi-in', title:'입원진료시', sections:[

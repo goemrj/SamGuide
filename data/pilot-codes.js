@@ -4,7 +4,7 @@
    빈 기호는 PILOT_BLANK 에 남겨 두어 "아직 안 채운 것"과 "없는 것"을 구별할 수 있게 했다.
 ------------------------------------------------------------------ */
 
-const PILOT_CODES =[
+var PILOT_CODES =[
     {
         "sym":  "S016",
         "name":  "복막투석 환자 재택관리 시범사업",
@@ -91,7 +91,7 @@ const PILOT_CODES =[
     }
 ];
 
-const PILOT_BLANK = [
+var PILOT_BLANK = [
     "S001",
     "S002",
     "S003",

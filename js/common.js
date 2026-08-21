@@ -425,19 +425,116 @@ function wrapPageTops(){
   });
 }
 
+/* ---------- 지난 판 보기 ----------
+   갱신일 배지를 누르면 그 카테고리의 지난 판 목록이 뜨고, 고르면 그 시점 데이터로 화면을 다시 그린다.
+
+   지난 판은 `data/archive/<화면id>.<날짜>.js` 파일 하나에 담는다. 그 파일은 아래 한 줄만 부른다 —
+     SG_ARCHIVE_ADD('page-detail', '2025.08.01', { DETAIL_CODES:[ … ] });
+   `tools/archive.ps1` 이 git 에 남아 있는 옛 data 파일을 그대로 감싸 만들어 준다.
+   저장소가 이미 모든 판을 들고 있으니 미리 챙겨 두지 않아도 나중에 뽑을 수 있다.
+
+   데이터 전역이 let 인 이유가 이것이다 — const 면 지난 판으로 바꿔 끼울 수 없다.        */
+const SG_ARCHIVE = {};                 // 화면id → { 날짜: {전역이름: 값} }
+function SG_ARCHIVE_ADD(page, date, vars){
+  (SG_ARCHIVE[page] = SG_ARCHIVE[page] || {})[date] = vars;
+}
+/* 화면을 다시 그리는 방법. 화면마다 렌더 함수 이름이 달라 여기 모아 둔다.
+   새 카테고리를 만들면 한 줄 더한다 — 없으면 지난 판 보기 단추가 안 뜬다. */
+const SG_RERENDER = {
+  'page-detail':   () => { renderDtFilters(); renderDtTable(); },
+  'page-special':  () => { renderSpGroups();  renderSpTable(); },
+  'page-pharm':    () => { renderPhSyms();    renderPhTable(); renderPhNotes(); },
+  'page-injury':   () => { renderIjTable();   renderIjNotes(); },
+  'page-pilot':    () => { renderPlTable(); },
+  'page-b12':      () => { renderBtIntro();   renderBtGbs();   renderBtTable(); },
+  'page-emergency':() => { renderEmgTabs();   renderEmgChs();  renderEmgTable(); },
+  'page-burden':   () => { renderB2Tabs();    renderB2(); },
+};
+const SG_LIVE = {};                    // 화면id → 현재 판 값 보관(되돌릴 때 쓴다)
+
+/* 그 화면의 데이터 전역을 vars 로 바꿔 끼우고 다시 그린다.
+   데이터 전역이 var 인 이유가 이것이다 — let/const 는 window 에 붙지 않아 바꿔 끼울 수 없다. */
+function sgApplyVars(page, vars){
+  for (const k in vars) window[k] = vars[k];
+  const fn = SG_RERENDER[page];
+  if (fn) try { fn(); } catch (e) { console.warn('다시 그리기 실패', page, e); }
+}
 /* 화면 제목 뒤에 자료 갱신일을 작게 붙인다 (data/updated.js).
    고시가 바뀌면 그 파일의 날짜를 고치는 것이 유일한 할 일이 되도록 한 곳에 모아 뒀다.
-   날짜가 '' 인 카테고리는 "갱신일 미확인" 으로 두고 추측해 채우지 않는다. */
+   날짜가 '' 인 카테고리는 "갱신일 미확인" 으로 두고 추측해 채우지 않는다.
+   지난 판(data/archive/…)이 있는 카테고리는 배지가 눌리는 단추가 되어 판 목록을 띄운다. */
 function showUpdated(){
   if (typeof SG_UPDATED === 'undefined') return;
   document.querySelectorAll('.page').forEach(p => {
     const h1 = p.querySelector('.page-head h1');
     const info = SG_UPDATED[p.id];
     if (!h1 || !info || h1.querySelector('.upd')) return;
-    const s = document.createElement('span');
-    s.className = 'upd' + (info.d ? '' : ' none');
-    s.textContent = info.d ? '자료 갱신 ' + info.d : '갱신일 미확인';
-    if (info.src) s.title = '출처: ' + info.src;
+    const past = SG_ARCHIVE[p.id];
+    const has = !!past && Object.keys(past).length > 0 && !!SG_RERENDER[p.id];
+    const s = document.createElement(has ? 'button' : 'span');
+    s.className = 'upd' + (info.d ? '' : ' none') + (has ? ' has-past' : '');
+    s.textContent = (info.d ? '자료 갱신 ' + info.d : '갱신일 미확인') + (has ? ' ▾' : '');
+    s.title = (info.src ? '출처: ' + info.src : '') +
+              (has ? '\n누르면 지난 판을 볼 수 있습니다' : '');
+    if (has) s.addEventListener('click', e => { e.stopPropagation(); sgVerMenu(p.id, s, info); });
     h1.appendChild(s);
   });
+}
+
+/* 판 고르는 목록. 현재 판 + 지난 판을 날짜 내림차순으로 놓는다. */
+function sgVerMenu(page, anchor, info){
+  document.querySelectorAll('.upd-menu').forEach(m => m.remove());
+  const past = SG_ARCHIVE[page] || {};
+  const cur = sgCurVer[page] || '';
+  const box = document.createElement('div');
+  box.className = 'upd-menu';
+  const rows = [{ d: '', label: '현재 판' + (info.d ? ' (' + info.d + ')' : '') }]
+    .concat(Object.keys(past).sort().reverse().map(d => ({ d, label: '지난 판 ' + d })));
+  box.innerHTML = rows.map(r =>
+    '<button data-d="' + r.d + '"' + (r.d === cur ? ' class="on"' : '') + '>' + esc(r.label) + '</button>'
+  ).join('');
+  anchor.parentElement.appendChild(box);
+  box.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    sgShowVer(page, b.dataset.d);
+    box.remove();
+  }));
+  setTimeout(() => document.addEventListener('click', function once(){
+    box.remove(); document.removeEventListener('click', once);
+  }), 0);
+}
+
+const sgCurVer = {};   // 화면id → 지금 보고 있는 판('' = 현재 판)
+
+/* 판을 바꿔 그린다. date 가 '' 면 현재 판으로 되돌린다. */
+function sgShowVer(page, date){
+  const past = SG_ARCHIVE[page] || {};
+  const vars = date ? past[date] : SG_LIVE[page];
+  if (!vars) return;
+  // 처음 지난 판으로 갈 때 현재 판 값을 보관해 둔다 — 되돌릴 때 쓴다
+  if (date && !SG_LIVE[page]){
+    const keep = {};
+    for (const k in past[date]) keep[k] = window[k];
+    SG_LIVE[page] = keep;
+  }
+  sgCurVer[page] = date || '';
+  sgApplyVars(page, vars);
+  sgVerBanner(page, date);
+  showUpdated();
+}
+
+/* 지난 판을 보고 있는 동안 띠를 띄운다 — 지금 보는 것이 최신이 아님을 놓치지 않게. */
+function sgVerBanner(page, date){
+  const p = document.getElementById(page);
+  if (!p) return;
+  const old = p.querySelector(':scope > .upd-banner');
+  if (old) old.remove();
+  if (!date) return;
+  const b = document.createElement('div');
+  b.className = 'upd-banner';
+  b.innerHTML = '<b>지난 판 ' + esc(date) + '</b> 을 보고 있습니다 — 지금 기준이 아닙니다. ' +
+                '<button type="button">현재 판으로</button>';
+  b.querySelector('button').addEventListener('click', () => sgShowVer(page, ''));
+  const top = p.querySelector(':scope > .page-top');
+  p.insertBefore(b, top ? top.nextSibling : p.firstChild);
 }
