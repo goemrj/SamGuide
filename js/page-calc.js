@@ -264,40 +264,9 @@ function syncBaseInput(){
       ? (calc.baseUnit === 'won' ? calc.baseVal.toLocaleString() : rateStr(calc.baseVal)) : '';
   if (btn) btn.textContent = calc.baseUnit === 'won' ? '원' : '%';
 }
-function reformatMoney(inp, val){
-  const p = inp.selectionStart, before = inp.value.length;
-  inp.value = val ? val.toLocaleString() : '';
-  const d = inp.value.length - before;
-  try { inp.setSelectionRange(Math.max(0, p + d), Math.max(0, p + d)); } catch (e) {}
-}
+/* calcExpr · HAS_OP · readAmount · reformatMoney 는 질병군 계산기도 같이 쓰게 되어
+   js/common.js 로 옮겼다 (2026-08-21). */
 
-/* ---------- 금액 칸 안에서 셈하기 ----------
-   `190040+342080` 처럼 적으면 합계를 쓴다. + − × ÷ 네 가지만 하고 괄호는 없다.
-   eval 은 쓰지 않는다 — 숫자와 연산자만 받아 곱하기·나누기를 먼저 접고 더하기·빼기를 잇는다.
-   식이 아직 덜 적혔으면(`190040+`) null 을 돌려주고, 그때는 앞서 계산한 값을 그대로 둔다. */
-function calcExpr(str){
-  const t = String(str).replace(/[,\s]/g, '').replace(/[xX×]/g, '*').replace(/÷/g, '/');
-  if (!/^\d+(\.\d+)?([+\-*/]\d+(\.\d+)?)*$/.test(t)) return null;
-  const nums = t.split(/[+\-*/]/).map(Number);
-  const ops  = t.match(/[+\-*/]/g) || [];
-  for (let i = 0; i < ops.length; ){
-    if (ops[i] === '*' || ops[i] === '/'){
-      const v = ops[i] === '*' ? nums[i] * nums[i + 1]
-                               : (nums[i + 1] === 0 ? NaN : nums[i] / nums[i + 1]);
-      nums.splice(i, 2, v); ops.splice(i, 1);
-    } else i++;
-  }
-  let acc = nums[0];
-  ops.forEach((o, i) => { acc = o === '+' ? acc + nums[i + 1] : acc - nums[i + 1]; });
-  return isFinite(acc) ? acc : null;
-}
-const HAS_OP = /[+\-*/xX×÷]/;
-// {val, formula, ok} — formula 면 글자를 손대지 않는다(치던 식이 지워지면 안 된다)
-function readAmount(inp){
-  const formula = HAS_OP.test(inp.value);
-  const v = formula ? calcExpr(inp.value) : parseMoney(inp.value);
-  return { val: v === null ? 0 : Math.max(0, Math.round(v)), formula, ok: v !== null };
-}
 // 칸을 떠나거나 Enter 를 누르면 식을 계산 결과로 바꿔 적는다
 function commitMoney(inp){
   if (!inp || !inp.classList || !inp.classList.contains('money')) return;

@@ -24,6 +24,7 @@
            stroke="currentColor" 라 선택·hover 색을 그대로 따라간다. CDN 은 쓰지 않는다. -->
       <button class="navbtn on" data-page="burden"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>본인부담금 규칙</button>
       <button class="navbtn" data-page="calc"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h4"/></svg>본인부담금 계산기</button>
+      <button class="navbtn" data-page="drg"><svg class="ico" viewBox="0 0 24 24"><path d="M4 19V9M9 19V5M14 19v-7M19 19v-4"/><path d="M3 21h18"/></svg>질병군(DRG) 계산기</button>
       <button class="navbtn" data-page="layout"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>SAM 파일 레이아웃</button>
       <button class="navbtn" data-page="hangmok"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>항 · 목 코드</button>
       <button class="navbtn" data-page="detail"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>특정내역</button>
@@ -169,6 +170,66 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- 질병군(DRG) 계산기 -->
+    <section class="page" id="page-drg">
+      <div class="page-head">
+        <h1>질병군(DRG) 계산기</h1>
+        <p>일자별 포괄수가 + 별도산정(행위별) + 2인실~5인실 입원료 + 열외군 차액으로 <b>본인일부부담금</b>을 계산합니다.
+           출처: 「포괄수가제 요양급여비용 및 청구방법(2026.3.)」 214~216 · 234~238쪽, (별표 2의3) 36~37쪽 · 점수는 「일자별수가(2026.01.01.기준)」 붙임1.</p>
+      </div>
+
+      <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <input class="field-input" id="dg-q" type="search" style="flex:1;min-width:260px;"
+               placeholder="DRG코드 · 질병군 명칭 검색  (예: C05, 백내장, 제왕절개, N047)">
+        <select class="field-input" id="dg-code" style="flex:2;min-width:360px;"></select>
+      </div>
+      <div class="toolbar" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <label class="saved-note">종별 <select class="field-input" id="dg-inst"></select></label>
+        <label class="saved-note">입원일수 <input class="field-input" id="dg-los" inputmode="numeric" style="width:60px;text-align:right;" value="1"></label>
+        <label class="saved-note">본인부담률 <select class="field-input" id="dg-rate"></select></label>
+        <label class="saved-note"><input type="checkbox" id="dg-night"> 야간·공휴 수술</label>
+        <label class="saved-note" id="dg-gyn-wrap"><input type="checkbox" id="dg-gyn"> 부인과 가산</label>
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn xs" id="dg-clear">비우기</button>
+      </div>
+
+      <div class="card"><div class="card-pad" id="dg-sum"></div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h">① 포괄수가</b>
+        <div id="dg-pack" style="margin-top:10px;"></div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h">② 별도산정 (행위별)</b>
+        <div id="dg-extra" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          식대 · 외과전문의 가산 · PCA 등 포괄수가 밖에서 따로 산정하는 항목입니다.
+          금액 = 단가 × 1회량 × 일투 × 총투 × 보상률 (원 미만 4사5입).
+          부담률을 비워 두면 위에서 고른 본인부담률을 씁니다 (기본식대 20% · 식대총액 50% · 선별급여 80% 등은 직접 적으세요).
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h">③ 2인실~5인실 입원료 <span class="saved-note">(별표 2의3)</span></b>
+        <div id="dg-room" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          기본점수입원료 단가는 직접 적습니다(가산·감산 적용 안 한 금액).
+          추가비용 = (그 인실 − 6인실 이상) × 이용일수 · 본인부담 = Σ(인실 단가 × 일수 × 인실 부담률) − (6인실 이상 × 총 이용일수 × 자격 부담률).
+          부담률은 종별·자격에 맞게 자동으로 채워지고 직접 고칠 수 있습니다.
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h">④ 요양급여비용 열외군</b>
+        <div id="dg-out" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          행위별 진료비총액이 질병군 요양급여비용총액보다 <b>100만원을 초과</b>해 많으면 열외군입니다.
+          그 초과액을 총액과 본인부담(× 자격 부담률)에 더합니다.
+        </div>
+      </div></div>
     </section>
 
     <!-- SAM 파일 레이아웃 -->
@@ -412,6 +473,7 @@
 <script src="data/pilot-codes.js"></script>
 <script src="data/pharm-codes.js"></script>
 <script src="data/b12-codes.js"></script>
+<script src="data/drg-scores.js"></script>
 <script src="data/emergency-codes.js"></script>
 <script src="data/memo-seed.js"></script>
 <!-- 열 너비 기본값 — common.js 보다 먼저 읽혀야 한다 -->
@@ -422,6 +484,7 @@
 
 <script src="js/page-burden.js"></script>
 <script src="js/page-calc.js"></script>
+<script src="js/page-drg.js"></script>
 <script src="js/page-layout.js"></script>
 <script src="js/page-hangmok.js"></script>
 <script src="js/page-detail.js"></script>

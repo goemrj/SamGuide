@@ -318,6 +318,21 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 /* 본인부담 칸은 두 번 눌러 손으로 적을 수 있다 */
 .fixable{cursor:cell;}
 
+/* ---------- 질병군(DRG) 계산기 — 계산기와 같은 작은 입력 표 ---------- */
+.dg-h{font-size:14px; letter-spacing:-.02em;}
+table.fields.dgt td{padding:6px 10px;}
+table.fields.dgt .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+table.fields.dgt .num.b{font-weight:700; color:var(--text);}
+table.fields.dgt .num.strong{font-weight:700; color:var(--accent);}
+table.fields.dgt tfoot td{
+  border-top:1px solid var(--line); background:var(--group-tint); color:var(--text-2);
+}
+.num-in{text-align:right;}
+/* 일자별 포괄수가 — 줄을 눌러 입원일수를 고른다 */
+tr.dg-day{cursor:pointer;}
+tr.dg-day.hit td{background:var(--accent-tint);}
+tr.dg-day.hit:hover td{background:var(--accent-tint);}
+
 /* MG · 병원 두 벌 비교 — 원장과 같은 규칙 */
 table.fields.cmp td{padding:6px 10px;}
 table.fields.cmp .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}

@@ -220,6 +220,41 @@ function won2(n){
 }
 function parseMoney(v){ return Math.max(0, Math.round(Number(String(v).replace(/[^0-9.]/g, '')) || 0)); }
 
+/* ---------- 금액 칸 안에서 셈하기 (② 계산기 · 질병군 계산기가 함께 쓴다) ----------
+   `190040+342080` 처럼 적으면 합계를 쓴다. + − × ÷ 네 가지만 하고 괄호는 없다.
+   eval 은 쓰지 않는다 — 숫자와 연산자만 받아 곱하기·나누기를 먼저 접고 더하기·빼기를 잇는다.
+   식이 아직 덜 적혔으면(`190040+`) null 을 돌려주고, 부르는 쪽은 앞서 계산한 값을 그대로 둔다. */
+function calcExpr(str){
+  const t = String(str).replace(/[,\s]/g, '').replace(/[xX×]/g, '*').replace(/÷/g, '/');
+  if (!/^\d+(\.\d+)?([+\-*/]\d+(\.\d+)?)*$/.test(t)) return null;
+  const nums = t.split(/[+\-*/]/).map(Number);
+  const ops  = t.match(/[+\-*/]/g) || [];
+  for (let i = 0; i < ops.length; ){
+    if (ops[i] === '*' || ops[i] === '/'){
+      const v = ops[i] === '*' ? nums[i] * nums[i + 1]
+                               : (nums[i + 1] === 0 ? NaN : nums[i] / nums[i + 1]);
+      nums.splice(i, 2, v); ops.splice(i, 1);
+    } else i++;
+  }
+  let acc = nums[0];
+  ops.forEach((o, i) => { acc = o === '+' ? acc + nums[i + 1] : acc - nums[i + 1]; });
+  return isFinite(acc) ? acc : null;
+}
+const HAS_OP = /[+\-*/xX×÷]/;
+// {val, formula, ok} — formula 면 글자를 손대지 않는다(치던 식이 지워지면 안 된다)
+function readAmount(inp){
+  const formula = HAS_OP.test(inp.value);
+  const v = formula ? calcExpr(inp.value) : parseMoney(inp.value);
+  return { val: v === null ? 0 : Math.max(0, Math.round(v)), formula, ok: v !== null };
+}
+// 천 단위 쉼표를 다시 넣으면서 커서 자리를 지킨다
+function reformatMoney(inp, val){
+  const p = inp.selectionStart, before = inp.value.length;
+  inp.value = val ? val.toLocaleString() : '';
+  const d = inp.value.length - before;
+  try { inp.setSelectionRange(Math.max(0, p + d), Math.max(0, p + d)); } catch (e) {}
+}
+
 /* ---------- 상단 바 고정 높이 ----------
    화면마다 상단 바(① 은 .b2-top, 나머지는 .page-head)의 높이가 달라서,
    표의 머리줄을 그 아래에 붙이려면 높이를 재서 CSS 변수로 넘겨야 한다.
