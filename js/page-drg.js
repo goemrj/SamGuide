@@ -78,7 +78,8 @@ function dgLoad(){
   if (!s || typeof s !== 'object') return;
   const o = dgNewState();
   if (typeof s.code === 'string' && DRG_SCORES.some(d => d.c === s.code)) o.code = s.code;
-  if (typeof s.q === 'string') o.q = s.q;
+  // 적어 둔 글자가 곧 질병군번호다. 예전 자료(고르는 칸이던 판)는 코드를 그대로 옮긴다.
+  o.q = typeof s.q === 'string' && s.q.trim() ? s.q : o.code;
   if (DG_INSTS.some(i => i.name === s.inst)) o.inst = s.inst;
   o.los = Math.max(1, Number(s.los) || 1);
   if (DG_RATES.some(r => r.v === s.rate)) o.rate = s.rate;
@@ -206,16 +207,37 @@ function dgFill(el, list, cur, val, label){
     '<option value="' + esc(val(v)) + '"' + (val(v) === cur ? ' selected' : '') + '>' +
     esc(label(v)) + '</option>').join('');
 }
+/* 질병군번호는 손으로 적는다. 딱 맞는 번호가 없으면 오류를 띄우고, 비슷한 것을 후보로 보여 준다
+   (번호를 다 외우지 않아도 되게 — 명칭으로 적어도 후보에 걸린다). */
+function dgMatch(){
+  const t = (dg.q || '').trim().toUpperCase();
+  if (!t) return { state:'empty', list:[] };
+  const exact = DRG_SCORES.find(d => d.c === t);
+  if (exact) return { state:'ok', hit:exact, list:[] };
+  const list = DRG_SCORES.filter(d => sgHit(d.c + ' ' + d.n, dg.q.trim())).slice(0, 12);
+  return { state:list.length ? 'cand' : 'bad', list };
+}
 function dgRenderPickers(){
-  const q = dg.q.trim().toLowerCase();
-  const list = DRG_SCORES.filter(d => !q || sgHit(d.c + ' ' + d.n, q));
-  const sel = $('dg-code');
-  sel.innerHTML = '<option value="">— 질병군을 고르세요 (' + list.length + '건) —</option>' +
-    list.map(d => '<option value="' + d.c + '"' + (d.c === dg.code ? ' selected' : '') + '>' +
-      esc(d.c + '  ' + d.n) + '</option>').join('');
-  if (dg.code && !list.some(d => d.c === dg.code))     // 검색에서 빠진 것도 고른 채로 둔다
-    sel.insertAdjacentHTML('afterbegin',
-      '<option value="' + dg.code + '" selected>' + esc(dg.code + '  ' + (dgPick() || {}).n) + '</option>');
+  const m = dgMatch();
+  dg.code = m.state === 'ok' ? m.hit.c : '';
+  if ($('dg-code-in').value !== (dg.q || '')) $('dg-code-in').value = dg.q || '';
+  $('dg-name').innerHTML =
+    m.state === 'ok'   ? '<b>' + esc(m.hit.c) + '</b> <span class="saved-note">' + esc(m.hit.n) + '</span>' :
+    m.state === 'empty' ? '<span class="saved-note">질병군번호를 적으세요 — 7개 질병군 ' + DRG_SCORES.length + '건 (예: C05100 · G08300 · N04700 · O01600)</span>' :
+    // 치는 중일 수 있으니 후보가 있으면 안내만, 아예 없으면 빨간 오류
+    m.state === 'cand'  ? '<span class="saved-note">아래 후보에서 고르세요 (' + m.list.length + '건).</span>' :
+                          '<span class="dg-err">일치하는 질병군번호가 없습니다. 7개 질병군(C05 · D11 · G08 · G09 · G10 · N04 · O01) 안에서 확인해 주세요.</span>';
+  $('dg-code-in').classList.toggle('dg-bad', m.state === 'bad');
+  const row = $('dg-cand-row');
+  if (m.list.length){
+    row.style.display = '';
+    $('dg-cand').innerHTML = m.list.map(d =>
+      '<button class="chip" data-dcand="' + d.c + '">' + esc(d.c) +
+      '<small>' + esc(d.n.length > 28 ? d.n.slice(0, 28) + '…' : d.n) + '</small></button>').join('');
+  } else {
+    row.style.display = 'none';
+    $('dg-cand').innerHTML = '';
+  }
   dgFill($('dg-inst'), DG_INSTS, dg.inst, i => i.name, i => i.name);
   dgFill($('dg-rate'), DG_RATES, String(dg.rate), r => String(r.v), r => r.label);
   $('dg-los').value = dg.los;
@@ -239,7 +261,11 @@ function dgNum(attrs, val){
 function dgRenderPack(o){
   const S = o.S;
   if (!S){
-    $('dg-pack').innerHTML = '<div class="saved-note" style="padding:10px 2px;">질병군을 고르면 포괄수가를 계산합니다.</div>';
+    const m = dgMatch();
+    $('dg-pack').innerHTML = '<div style="padding:10px 2px;" class="' + (m.state === 'bad' ? 'dg-err' : 'saved-note') + '">' +
+      (m.state === 'bad'
+        ? '「' + esc((dg.q || '').trim()) + '」와 일치하는 질병군번호가 없습니다 — 포괄수가를 계산할 수 없습니다.'
+        : '질병군번호를 적으면 포괄수가를 계산합니다.') + '</div>';
     return;
   }
   const u = o.unit;
@@ -443,8 +469,16 @@ function dgRefresh(){
 }
 
 /* ---------- 손 ---------- */
-$('dg-q').addEventListener('input', () => { dg.q = $('dg-q').value; dgRenderPickers(); dgSave(); });
-$('dg-code').addEventListener('change', () => { dg.code = $('dg-code').value; dgRefresh(); });
+$('dg-code-in').addEventListener('input', () => {
+  dg.q = $('dg-code-in').value.toUpperCase();
+  dgRefresh();
+});
+$('dg-cand').addEventListener('click', e => {
+  const b = e.target.closest('[data-dcand]');
+  if (!b) return;
+  dg.q = b.dataset.dcand;
+  dgRefresh();
+});
 $('dg-inst').addEventListener('change', () => { dg.inst = $('dg-inst').value; dgRefresh(); });
 $('dg-rate').addEventListener('change', () => { dg.rate = Number($('dg-rate').value); dgRefresh(); });
 $('dg-los').addEventListener('input', () => {

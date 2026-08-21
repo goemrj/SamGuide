@@ -181,9 +181,14 @@
       </div>
 
       <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <input class="field-input" id="dg-q" type="search" style="flex:1;min-width:260px;"
-               placeholder="DRG코드 · 질병군 명칭 검색  (예: C05, 백내장, 제왕절개, N047)">
-        <select class="field-input" id="dg-code" style="flex:2;min-width:360px;"></select>
+        <label class="saved-note">질병군번호
+          <input class="field-input" id="dg-code-in" style="width:120px;text-transform:uppercase;"
+                 placeholder="C05100" autocomplete="off">
+        </label>
+        <span id="dg-name" style="flex:1;min-width:240px;"></span>
+      </div>
+      <div class="toolbar" id="dg-cand-row" style="display:none;">
+        <div class="chips chips-rec" id="dg-cand"></div>
       </div>
       <div class="toolbar" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
         <label class="saved-note">종별 <select class="field-input" id="dg-inst"></select></label>

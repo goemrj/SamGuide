@@ -320,6 +320,10 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 
 /* ---------- 질병군(DRG) 계산기 — 계산기와 같은 작은 입력 표 ---------- */
 .dg-h{font-size:14px; letter-spacing:-.02em;}
+/* 질병군번호를 잘못 적었을 때 — 빨강은 계산기 비교표와 같은 --minus 를 쓴다 */
+.dg-err{color:var(--minus); font-size:12px; font-weight:600;}
+.field-input.dg-bad{border-color:var(--minus); color:var(--minus);}
+.field-input.dg-bad:focus{box-shadow:0 0 0 3px rgba(220,38,38,.14);}
 table.fields.dgt td{padding:6px 10px;}
 table.fields.dgt .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
 table.fields.dgt .num.b{font-weight:700; color:var(--text);}
