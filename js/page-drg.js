@@ -75,6 +75,27 @@ function dgFee(k){                       // 적어 넣은 값이 있으면 그�
 function dgRoomP(k){ const p = dg.rooms[k].p; return p ? p : dgFee(k); }
 function dgBase6(){ return dg.base6 ? dg.base6 : dgFee('base6'); }
 
+/* ---------- 인공수정체 제외금액 — (별표 9) 질병군별 인공수정체 제외금액표 및 제외유형 ----------
+   질병군 분류번호 앞 4자리로 고른다. 7개 질병군 중 수정체 수술(C05)만 대상이고
+   C051~C054 네 줄이 C05 12개 코드를 모두 덮는다(단안/양안 × 소절개/대절개).
+     C051 수정체 소절개·단안 : 연성 단안제외 129,300 (유형 1)
+     C052 수정체 소절개·양안 : 연성 단안제외 129,300 (유형 1) · 연성 양안제외 258,600 (유형 2)
+     C053 수정체 대절개·단안 : 경성 단안제외  47,600 (유형 3)
+     C054 수정체 대절개·양안 : 경성 단안제외  47,600 (유형 3) · 경성 양안제외  95,200 (유형 4) */
+const DG_LENS = {
+  'C051': [{ t:1, label:'연성 인공수정체, 단안제외', v:129300 }],
+  'C052': [{ t:1, label:'연성 인공수정체, 단안제외', v:129300 },
+           { t:2, label:'연성 인공수정체, 양안제외', v:258600 }],
+  'C053': [{ t:3, label:'경성 인공수정체, 단안제외', v:47600 }],
+  'C054': [{ t:3, label:'경성 인공수정체, 단안제외', v:47600 },
+           { t:4, label:'경성 인공수정체, 양안제외', v:95200 }],
+};
+function dgLensOpts(){ return DG_LENS[(dg.code || '').slice(0, 4)] || []; }
+function dgLensAmt(){
+  const o = dgLensOpts().find(x => x.t === dg.lens);
+  return o ? o.v : 0;
+}
+
 /* ---------- 숫자 다루기 ---------- */
 const r3 = n => Math.round(n * 1000) / 1000;      // 계산 과정마다 소수 셋째 자리 4사5입
 const r2 = n => Math.round(n * 100) / 100;        // 점수 총합은 소수 둘째 자리까지
@@ -87,7 +108,9 @@ function dgNewItem(){ return { name:'', amount:0, rate:null, burdenFix:null }; }
 function dgNewState(){
   return { code:'', q:'', inst:'상급종합병원', los:1, rate:.20,
            night:false, mid:false, rural:false, gyn:false,   // 야간·공휴 / 심야 / 분만취약지 / 부인과
-           items:[], excl:0,                    // 제외금액 (1인실 · 인공수정체)
+           items:[],
+           solo:0,                              // 1인실 이용일수 → 6인실이상 기본점수입원료 × 일수를 뺀다
+           lens:0,                              // 인공수정체 제외유형 (별표 9) — 0 이면 없음
            fee:0,                               // 행위별 진료비총액 (열외군 판정)
            base6:0,                             // 6인실이상 기본점수입원료
            width:980, tableW:980,               // 칸(카드) 폭 · 표 폭 — 화면에서 조절한다
@@ -113,7 +136,8 @@ function dgLoad(){
   o.los = Math.max(1, Number(s.los) || 1);
   if (DG_RATES.some(r => r.v === s.rate)) o.rate = s.rate;
   o.night = !!s.night; o.mid = !!s.mid; o.rural = !!s.rural; o.gyn = !!s.gyn;
-  o.excl = Number(s.excl) || 0;
+  o.solo = Math.max(0, Number(s.solo) || 0);
+  o.lens = Number(s.lens) || 0;
   o.fee = Number(s.fee) || 0;
   o.base6 = Number(s.base6) || 0;
   const w = Number(s.width);
@@ -221,8 +245,11 @@ function dgCompute(){
   });
   o.extra    = o.items.reduce((a, x) => a + x.amt, 0);
   o.extraOwn = o.items.reduce((a, x) => a + x.own, 0);
-  o.excl     = dg.excl;
-  o.exclOwn  = dg.excl * dg.rate;
+  // 제외금액 — 1인실(6인실이상 기본점수입원료 × 이용일수)과 인공수정체(별표 9)를 따로 센다
+  o.exclSolo = dgBase6() * (dg.solo || 0);
+  o.exclLens = dgLensAmt();
+  o.excl     = o.exclSolo + o.exclLens;
+  o.exclOwn  = o.excl * dg.rate;
 
   // ③ 2인실~5인실 (별표 2의3)
   const base6 = dgBase6();
@@ -373,6 +400,20 @@ function dgEnsureBlank(){
   if (last && dgIsBlank(last)) return;
   dg.items.push(dgNewItem());
 }
+/* 인공수정체 제외유형 고르는 칸 — 그 질병군에 있는 유형만 나온다 (별표 9) */
+function dgLensSel(){
+  const opts = dgLensOpts();
+  if (!opts.length)
+    return '<span class="saved-note">' +
+      (dg.code ? '이 질병군은 인공수정체 제외 대상이 아닙니다 (수정체 수술 C051~C054만 해당)'
+               : '질병군번호를 먼저 적으세요') + '</span>';
+  return '<select class="field-input mini" id="dg-lens" style="width:auto;display:inline-block;">' +
+    '<option value="0">없음</option>' +
+    opts.map(o => '<option value="' + o.t + '"' + (dg.lens === o.t ? ' selected' : '') + '>' +
+      esc(o.label) + ' · ' + won(o.v) + '원 (유형 ' + o.t + ')</option>').join('') +
+    '</select>';
+}
+
 function dgRenderItems(){
   dgEnsureBlank();
   $('dg-extra').innerHTML =
@@ -382,10 +423,18 @@ function dgRenderItems(){
     '</tr></thead><tbody>' +
       dg.items.map((it, i) => dgItemRow(it, i)).join('') +
     '</tbody><tfoot>' +
-      '<tr><td>제외금액 <span class="saved-note">1인실 이용 · 인공수정체 제외금액 — 빼는 금액</span></td>' +
-        '<td>' + dgMoney('id="dg-excl"', dg.excl) + '</td>' +
+      // 제외금액 두 줄 — 1인실(일수 × 6인실이상 기본점수입원료)과 인공수정체(별표 9)
+      '<tr><td>제외 · <b>1인실</b> ' +
+        '<input class="field-input mini num-in" id="dg-solo" inputmode="numeric" ' +
+          'style="width:52px;display:inline-block;" value="' + (dg.solo || '') + '" placeholder="0">일' +
+        '<div class="saved-note">6인실 이상 기본점수입원료 ' + won(dgBase6()) + '원 × 이용일수</div></td>' +
+        '<td class="num" data-dout="excl-solo">0</td>' +
         '<td class="num">' + pct(dg.rate) + '</td>' +
-        '<td class="num" data-dout="excl-own">0</td><td></td></tr>' +
+        '<td class="num" data-dout="excl-solo-own">0</td><td></td></tr>' +
+      '<tr><td>제외 · <b>인공수정체</b> ' + dgLensSel() + '</td>' +
+        '<td class="num" data-dout="excl-lens">0</td>' +
+        '<td class="num">' + pct(dg.rate) + '</td>' +
+        '<td class="num" data-dout="excl-lens-own">0</td><td></td></tr>' +
       '<tr><td><span class="c-name">별도산정 합계</span> ' +
         '<span class="saved-note">제외금액은 맨 위 합계 카드에서 뺍니다</span></td>' +
         '<td class="num b" data-dout="extra">0</td><td></td>' +
@@ -482,7 +531,10 @@ function dgPaint(){
     (dgHas(dg.items[i] && dg.items[i].burdenFix) ? '<div class="saved-note">수기</div>' : '')));
   set('extra', won(o.extra));
   set('extra-own', won2(o.extraOwn));
-  set('excl-own', '−' + won2(o.exclOwn));
+  set('excl-solo', o.exclSolo ? '−' + won(o.exclSolo) : '0');
+  set('excl-solo-own', o.exclSolo ? '−' + won2(o.exclSolo * dg.rate) : '0');
+  set('excl-lens', o.exclLens ? '−' + won(o.exclLens) : '0');
+  set('excl-lens-own', o.exclLens ? '−' + won2(o.exclLens * dg.rate) : '0');
   o.rooms.forEach(r => { set('room-add-' + r.k, won(r.add)); set('room-own-' + r.k, won2(r.own)); });
   set('room-days', o.days6 + '일');
   set('room6-own', '−' + won2(o.room6Own));
@@ -572,9 +624,14 @@ $('dg-clear').addEventListener('click', () => {
 function dgOnInput(e){
   const t = e.target;
   if (!t.dataset) return;
-  if (t.id === 'dg-excl' || t.id === 'dg-fee' || t.id === 'dg-base6'){
+  if (t.id === 'dg-solo'){                    // 1인실 이용일수
+    dg.solo = Math.max(0, Math.round(Number(String(t.value).replace(/[^0-9]/g, '')) || 0));
+    dgPaint();
+    return;
+  }
+  if (t.id === 'dg-fee' || t.id === 'dg-base6'){
     const a = readAmount(t);
-    const key = t.id === 'dg-excl' ? 'excl' : (t.id === 'dg-fee' ? 'fee' : 'base6');
+    const key = t.id === 'dg-fee' ? 'fee' : 'base6';
     if (a.ok) dg[key] = a.val;
     if (!a.formula) reformatMoney(t, dg[key]);
     dgPaint();
@@ -610,12 +667,17 @@ function dgOnInput(e){
   dgPaint();
 }
 function dgMoneyValue(t){                 // 그 칸이 지금 들고 있는 값
-  if (t.id === 'dg-excl') return dg.excl;
   if (t.id === 'dg-fee') return dg.fee;
   if (t.id === 'dg-base6') return dg.base6;
   if (t.dataset.dr) return (dg.rooms[t.dataset.dr] || {}).p || 0;
   return (dg.items[Number(t.dataset.di)] || {}).amount || 0;
 }
+// 인공수정체 제외유형
+$('dg-extra').addEventListener('change', e => {
+  if (e.target.id !== 'dg-lens') return;
+  dg.lens = Number(e.target.value) || 0;
+  dgPaint();
+});
 ['dg-extra', 'dg-room', 'dg-out'].forEach(id => {
   $(id).addEventListener('input', dgOnInput);
   $(id).addEventListener('focusout', e => {
