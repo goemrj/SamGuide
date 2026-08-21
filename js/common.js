@@ -146,6 +146,10 @@ function colwKey(table){
          '#' + (headCells(table) || []).length;
 }
 const COLW_MIN = 48;
+/* 이 행 수까지는 끌 때 표가 바로 따라 움직이고, 넘으면 안내선만 움직인다.
+   ① 본인부담금 규칙의 카드들(대개 수십 행)은 바로 따라 움직이고,
+   특정내역·산정특례·소아가산·응급의료행위처럼 긴 표는 안내선으로 넘어간다. */
+const RZ_LIVE_ROWS = 60;
 
 /* 머리줄 칸마다 오른쪽 경계에 손잡이를 하나씩 넣는다(마지막 열은 뺀다 — 잡을 짝이 없다).
    화면을 다시 그릴 때마다 없어지므로 아래 MutationObserver 가 다시 넣는다. */
@@ -180,7 +184,7 @@ function pinWidths(table){
   table.classList.add('fixed');
   table.style.width = '100%';
   ths.forEach((th, i) => { th.style.width = w[i] + 'px'; });
-  return ths;
+  return { ths, w };                        // 잰 너비도 함께 — 끝날 때 다시 재지 않으려고
 }
 
 document.addEventListener('mousedown', e => {
@@ -188,28 +192,63 @@ document.addEventListener('mousedown', e => {
   if (!grip) return;
   const th = grip.parentElement, table = th.closest('table');
   if (!table) return;
-  const ths = pinWidths(table);
-  if (!ths) return;
+  const pin = pinWidths(table);
+  if (!pin) return;
+  const ths = pin.ths;
   const i = ths.indexOf(th), next = ths[i + 1];
   if (!next) return;
 
   e.preventDefault();                       // 끌 때 글자가 선택되지 않게
   const x0 = e.clientX;
-  const w0 = th.getBoundingClientRect().width;
-  const n0 = next.getBoundingClientRect().width;
+  const w0 = pin.w[i], n0 = pin.w[i + 1];   // 방금 pinWidths 가 잰 값 — 다시 재지 않는다
   document.body.classList.add('rz-on');
 
-  const move = ev => {
-    // 두 열 다 최소 폭을 지키는 범위로 자른다
-    const d = Math.max(COLW_MIN - w0, Math.min(ev.clientX - x0, n0 - COLW_MIN));
+  /* 끌 때 표를 건드릴지, 안내선만 옮길지 — 행 수로 정한다.
+     열 폭을 1px 바꾸면 table-layout:fixed 라도 그 두 열의 글자를 모든 행에서 다시 흘려야 해서
+     표 전체가 다시 배치된다. 재어 보니 한 번에 특정내역(164행) 13ms · 소아가산(618행) 32ms ·
+     응급의료행위(1,277행) 54ms 라, 마우스를 움직이는 내내 화면이 멎은 것처럼 느껴졌다.
+     그래서 큰 표는 **엑셀처럼 세로 안내선만 옮기고 폭은 놓을 때 한 번만** 준다.
+     작은 표는 원래대로 바로 따라 움직인다 — 공짜(1ms 미만)이고 그 편이 보기 좋다. */
+  const body = table.tBodies[0];
+  const live = !body || body.rows.length <= RZ_LIVE_ROWS;
+
+  let d = 0, raf = 0, line = null, edge = 0;
+  if (!live){
+    // 안내선은 마우스를 누른 자리가 아니라 **지금 열 경계**에서 시작한다
+    // (손잡이가 9px 폭이라 누른 자리는 경계에서 몇 px 어긋나 있다)
+    edge = th.getBoundingClientRect().right;
+    line = document.createElement('div');
+    line.className = 'rz-line';
+    line.style.left = edge + 'px';
+    document.body.appendChild(line);
+  }
+  // 표를 따라 움직이는 쪽만 프레임당 한 번으로 모은다(레이아웃이 비싸다).
+  // 안내선은 위치만 바꾸면 되니 바로 옮긴다 — rAF 는 화면이 가려지면 멈춘다.
+  const draw = () => {
+    raf = 0;
     th.style.width   = (w0 + d) + 'px';
     next.style.width = (n0 - d) + 'px';
+  };
+  const move = ev => {
+    // 두 열 다 최소 폭을 지키는 범위로 자른다
+    d = Math.max(COLW_MIN - w0, Math.min(ev.clientX - x0, n0 - COLW_MIN));
+    if (line) line.style.left = (edge + d) + 'px';
+    else if (!raf) raf = requestAnimationFrame(draw);
   };
   const up = () => {
     document.removeEventListener('mousemove', move);
     document.removeEventListener('mouseup', up);
+    if (raf) cancelAnimationFrame(raf);
+    if (line) line.remove();
     document.body.classList.remove('rz-on');
-    COLW[colwKey(table)] = ths.map(t => Math.round(t.getBoundingClientRect().width));
+    // 안내선으로 끌었으면 여기서 딱 한 번 폭을 준다(표를 한 번만 다시 배치한다)
+    th.style.width   = (w0 + d) + 'px';
+    next.style.width = (n0 - d) + 'px';
+    // 저장값은 계산으로 만든다 — 여기서 다시 재면 방금 준 폭 때문에 레이아웃이 한 번 더 돈다
+    const out = pin.w.map(v => Math.round(v));
+    out[i] = Math.round(w0 + d);
+    out[i + 1] = Math.round(n0 - d);
+    COLW[colwKey(table)] = out;
     saveColW();
   };
   document.addEventListener('mousemove', move);
