@@ -321,11 +321,14 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 /* ---------- 질병군(DRG) 계산기 — 계산기와 같은 작은 입력 표 ---------- */
 /* 왼쪽에 계산 카드(①~④), 오른쪽에 합계 — 오른쪽은 스크롤을 내려도 따라온다 (2026-08-21 요청).
    sticky 는 상단 흰 띠(.page-top) 아래에 붙어야 해서 그 높이(--stick)를 더한다. */
-/* 칸 폭을 줄여도 왼쪽으로 쏠려 보이지 않게 두 칸을 한 덩어리로 **가운데** 놓는다.
+/* 칸 폭을 줄였을 때 왼쪽에 여백을 조금만 둔다 — 가운데까지 밀면 너무 멀다(2026-08-21 요청).
+   남는 폭의 1/4 만, 최대 120px 까지만 밀고 나머지는 오른쪽에 둔다.
    --dgw(칸 폭)는 page-drg.js 의 슬라이더가 넣는다. 348px = 오른쪽 칸 330 + 사이 18 */
 .dg-wrap{
   display:flex; gap:18px; align-items:flex-start;
-  max-width:calc(var(--dgw, 980px) + 348px); margin:0 auto;
+  max-width:calc(var(--dgw, 980px) + 348px);
+  margin-right:auto;
+  margin-left:min(120px, max(0px, calc((100% - (var(--dgw, 980px) + 348px)) / 4)));
 }
 .dg-main{flex:1; min-width:0;}
 /* 표 폭은 칸 폭과 따로 맞춘다 — --dgtw 는 page-drg.js 의 슬라이더가 넣는다 */
@@ -897,6 +900,7 @@ table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border
 .sc-drop.over .sc-ico{stroke:var(--accent);}
 .sc-drop b{font-size:15px; color:var(--text); letter-spacing:-.01em;}
 .sc-drop .sc-hint{font-size:12px; color:var(--text-3);}
+.sc-drop .sc-note{font-size:11.5px; color:var(--text-4);}
 .sc-drop .sc-btns{display:flex; gap:8px; margin-top:2px;}
 
 .sc-drop.slim{
@@ -906,6 +910,7 @@ table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border
 .sc-drop.slim .sc-ico{width:18px; height:18px; flex:0 0 18px;}
 .sc-drop.slim b{font-size:13px;}
 .sc-drop.slim .sc-hint{flex:1; min-width:160px; font-size:11.5px;}
+.sc-drop.slim .sc-note{display:none;}       /* 결과를 보는 동안에는 안내문을 접는다 */
 .sc-drop.slim .sc-btns{margin-top:0;}
 
 .sc-dim{color:var(--text-3); font-size:11.5px; margin-top:2px;}

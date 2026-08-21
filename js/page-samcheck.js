@@ -41,15 +41,20 @@ const SC_OPT_RE = /생략 허용|기재 허용|\(옵션\)/;
 
 function scFull(L){ return L.fields.reduce((m, f) => Math.max(m, f.pos + f.len - 1), 0); }
 
-// 허용 길이 — 전체 길이 + 뒤에서부터 생략이 허용된 필드를 떼어낸 길이들
+/* 허용 길이 — 전체 길이 + 뒤쪽 "생략 허용" 필드 묶음을 통째로 뗀 길이.
+   묶음 중간 경계(치식 4칸 중 2칸만)는 만들지 않는다 — 실제로 다 있거나 다 없고
+   (실샘플 1,047줄: 진료내역 708줄이 모두 236byte), 중간 경계를 허용하면 진단이 나빠진다
+   (231byte 를 "236 에서 5byte 모자람"이 아니라 "228 에 3byte 더 붙음"으로 읽는다). */
 function scAllowed(claim, rk){
   const L = layoutsOf(claim)[rk];
   const set = new Set([scFull(L)]);
+  let cut = 0;
   for (let i = L.fields.length - 1; i >= 0; i--){
     const f = L.fields[i];
     if (!SC_OPT_RE.test(f.desc || '')) break;
-    set.add(f.pos - 1);
+    cut = f.pos - 1;
   }
+  if (cut > 0) set.add(cut);
   const blank = (CLAIM_TYPES[claim].blankRowLen || {})[rk];
   if (blank) set.add(blank);
   return Array.from(set).sort((a, b) => a - b);
@@ -394,6 +399,8 @@ function scCheckFile(file, claim){
 function scRender(){
   const wrap = $('sc-out');
   $('sc-clear').style.display = SC.list.length ? '' : 'none';
+  // 파일을 놓기 전에는 크게, 결과를 보는 동안에는 얇은 띠로
+  $('sc-drop').classList.toggle('slim', !!SC.list.length);
   if (!SC.list.length){
     $('sc-claim-row').style.display = 'none';
     $('sc-filter-row').style.display = 'none';
@@ -436,6 +443,7 @@ function scRender(){
     SC.onlyBad = c.dataset.only === '1'; scRender();
   }));
 
+  // 어긋난 줄이 먼저 보여야 한다 — 총계 한 줄 → 어긋난 줄 표 → 파일별 요약 순서로 둔다
   wrap.innerHTML =
     '<div class="card"><div class="meta-bar">' +
       '<span><b>' + esc(claimLabel(claim)) + '</b> 서식으로 봤습니다' +
@@ -446,9 +454,11 @@ function scRender(){
       '<span>구조 오류 <b>' + tot.struct.toLocaleString() + '</b></span>' +
       '<span>판별 못한 줄 <b>' + tot.unknown.toLocaleString() + '</b></span>' +
       '<span class="meta-note">길이는 바이트(EUC-KR, 한글 2byte) 기준</span>' +
-    '</div><div id="sc-sum"></div></div>' +
+    '</div></div>' +
     '<div class="card"><div class="meta-bar"><span><b>' + (SC.onlyBad ? '어긋난 줄' : '모든 줄') +
-      '</b> — 줄을 누르면 필드별로 잘라서 보여 줍니다</span></div><div id="sc-rows"></div></div>';
+      '</b> — 줄을 누르면 필드별로 잘라서 보여 줍니다</span></div><div id="sc-rows"></div></div>' +
+    '<div class="card"><div class="meta-bar"><span><b>파일별 요약</b> — 읽어낸 서식번호 · 레코드 구성 · 길이 분포</span></div>' +
+      '<div id="sc-sum"></div></div>';
 
   scRenderSummary(res, claim);
   scRenderRows(res);
@@ -642,14 +652,23 @@ $('sc-clear').addEventListener('click', () => {
   scRender();
 });
 
+/* 놓는 자리는 화면 전체다 — 결과를 보는 동안 놓는 상자가 얇은 띠로 줄어들기 때문에,
+   표 위에 놓아도 받는다. 이 화면이 열려 있을 때만 가로챈다(다른 화면의 드래그를 건드리지 않는다). */
 const scDropZone = $('sc-drop');
-['dragenter', 'dragover'].forEach(ev => scDropZone.addEventListener(ev, e => {
+function scDropOn(){ return $('page-samcheck').classList.contains('on'); }
+['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => {
+  if (!scDropOn()) return;
   e.preventDefault(); scDropZone.classList.add('over');
 }));
-['dragleave', 'drop'].forEach(ev => scDropZone.addEventListener(ev, e => {
-  e.preventDefault(); scDropZone.classList.remove('over');
-}));
-scDropZone.addEventListener('drop', e => {
+document.addEventListener('dragleave', e => {
+  if (!scDropOn()) return;
+  if (e.relatedTarget) return;               // 창 밖으로 나갈 때만 표시를 끈다
+  scDropZone.classList.remove('over');
+});
+document.addEventListener('drop', e => {
+  if (!scDropOn()) return;
+  e.preventDefault();
+  scDropZone.classList.remove('over');
   if (e.dataTransfer && e.dataTransfer.files.length) scTakeFiles(e.dataTransfer.files);
 });
 
