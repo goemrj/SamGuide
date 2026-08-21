@@ -260,6 +260,65 @@ function dtJoinFrags(rows, lines){
   return {rows: R, lines: L};
 }
 
+/* --- 자동으로 못 가르는 표의 행 경계는 손으로 적어 둔다 ---
+   원문 표의 행 경계는 글자만으로 가를 수 없다. PDF 의 칸 선은 텍스트에 남지 않고,
+   구분코드는 칸 **가운데** 줄에 놓여서 그 위아래 줄이 어느 칸에 딸린 것인지 모른다
+   (MT064 의 "다태아 분만 중" 은 E 칸인데 C 칸으로 붙었고, MT065 는 넉 줄짜리 칸이
+   줄마다 잘렸다). 그런 표만 **원문 PDF 를 보고 확인한 행 경계**를 여기 적는다.
+
+     rows  행마다 원문 줄 번호(머리줄 다음부터 0). 그 줄들이 한 행이 된다.
+     sub   그 행 안에서 값이 여러 개인 열이 있을 때 다시 나누는 줄 묶음
+           (MT064 의 C 행은 유형상세가 코로나…/특별재난 둘이라 두 줄로 나뉜다)
+     probe 글자 확인용 — 이 줄이 이 글자로 시작해야 한다. 고시가 개정돼 줄이 밀리면
+           **이 값이 안 맞아 자동으로 무시**되고 원래(자동) 방식으로 그려진다.        */
+const DT_FIX = {
+  'MT064|0': {
+    n: 9, probe: [[0, '자격변동'], [2, '의료비 지원 등'], [5, '다태아 분만 중'], [6, '질식분만과']],
+    rows: [[0], [1], [2, 3, 4], [5, 6, 7, 8]], sub: {2: [[0, 1], [2]]}
+  },
+  'MT065|0': {
+    n: 14, probe: [[0, '특정기호'], [6, '의료급여 수급권자가'], [10, '「국민건강보험'], [12, '상대가치점수표']],
+    rows: [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9], [10, 11], [12, 13]]
+  }
+};
+/* 손으로 적은 행 경계로 표를 세운다. 맞는 것이 없으면 null (자동 방식으로 그린다). */
+function dtFixTable(key, rows, srcLines, mark, n){
+  const fx = DT_FIX[key];
+  if (!fx || rows.length !== fx.n) return null;
+  /* 칸이 안 나뉜 줄(원문에서 칸을 넘어 이어진 줄)은 첫 칸의 글자로 본다 —
+     MT065 처럼 첫 칸이 길어 코드 칸 자리까지 넘어온 줄이 있다. */
+  const cellAt = (i, j) => rows[i] ? (rows[i][j] || '')
+                                   : (j === 0 ? dtNorm(srcLines[i] || '') : '');
+  for (const [i, s] of fx.probe){
+    if (cellAt(i, 0).indexOf(s) !== 0) return null;           // 글자가 달라졌다 → 손 댄 값을 버린다
+  }
+  // 줄묶음의 한 열을 이어 붙인다 (띄어쓰기는 dtNoGap 규칙)
+  const join = (idx, j) => idx.reduce((acc, i) => {
+    const v = cellAt(i, j);
+    if (!v) return acc;
+    if (!acc) return v;
+    return acc + (dtNoGap(acc, v) ? '' : ' ') + v;
+  }, '');
+
+  let html = '';
+  fx.rows.forEach((grp, gi) => {
+    const subs = (fx.sub && fx.sub[gi]) ? fx.sub[gi].map(s => s.map(k => grp[k])) : [grp];
+    const vals = subs.map(s => Array.from({length: n}, (_, j) => join(s, j)));
+    subs.forEach((s, si) => {
+      let tds = '';
+      for (let j = 0; j < n; j++){
+        // 뒤 줄묶음에서 비어 있는 열은 첫 줄묶음에서 rowspan 으로 묶는다
+        const span = vals.slice(1).every(v => !v[j]) ? subs.length : 1;
+        if (si > 0 && span > 1) continue;
+        tds += '<td' + (j === 0 ? ' class="grp"' : '') + (span > 1 ? ' rowspan="' + span + '"' : '') +
+               '>' + (vals[si][j] ? mark(vals[si][j]) : '') + '</td>';
+      }
+      html += '<tr' + (gi > 0 && si === 0 ? ' class="gstart"' : '') + '>' + tds + '</tr>';
+    });
+  });
+  return html;
+}
+
 /* 줄 묶음(쪽마다 하나) → 표 하나. 첫 줄이 짧은 칸들로만 되어 있으면 머리줄로 본다.
    chunks = [{lines, bs}, …] — 쪽이 넘어가며 갈라진 것을 한 표로 그린다. */
 function dtTableHtml(chunks, mark){
@@ -286,8 +345,20 @@ function dtTableHtml(chunks, mark){
              ? rows[0] : null;
   const headKey = head ? head.map(dtNorm).join('|') : null;
 
+  const raw = head ? rows.slice(1) : rows;
+  const rawLines = head ? lines.slice(1) : lines;
+
+  /* 손으로 적어 둔 행 경계가 있으면 그것으로 그린다 (DT_FIX — MT064 · MT065).
+     이름은 "구분코드|그 코드 안에서 몇 번째 표" — 적용일자는 넣지 않는다(판이 바뀌어도 같다). */
+  const fixed = dtFixTable(String(dtDocKey).split('|')[0] + '|' + dtTblN, raw, rawLines, mark, n);
+  if (fixed){
+    let out = '<table class="dt-tb" data-k="' + esc('dtb|' + dtDocKey + '|' + (dtTblN++)) + '">';
+    if (head) out += '<thead><tr>' + head.map(c => '<th>' + mark(c) + '</th>').join('') + '</tr></thead>';
+    return out + '<tbody>' + fixed + '</tbody></table>';
+  }
+
   // 머리줄을 뺀 본문 줄에서 조각 줄을 합치고, 그 다음에 구분 칸의 병합을 본다
-  const joined = dtJoinFrags(head ? rows.slice(1) : rows, head ? lines.slice(1) : lines);
+  const joined = dtJoinFrags(raw, rawLines);
   const body = joined.rows, bodyLines = joined.lines;
   const spans = dtSpans(body);
   const spanAt = i => spans && spans.find(g => g.start === i);
@@ -404,11 +475,15 @@ function dtRunParts(lines){
   if (solid.filter(l => DT_EXLINE.test(l)).length * 2 > solid.length) return {pre: lines};
 
   /* 표 뒤에 붙은 각주는 표 밖으로 뺀다 — 맨 끝에서 칸이 안 맞는 줄들을 묶어 보고,
-     그 안에 * · ※ · ☞ 로 시작하는 줄이 있으면 각주 덩어리로 본다(둘째 줄부터는
-     글머리표가 없다). 각주가 아니면 원문에서 칸을 넘어 이어진 줄이므로 표 안에 둔다. */
+     그 안에서 * · ※ · ☞ 로 시작하는 **첫 줄부터** 각주로 본다(각주 둘째 줄에는
+     글머리표가 없다). 그 앞의 줄은 표의 마지막 칸이 넘어온 줄이므로 표 안에 둔다
+     (MT065 의 "수가 적용하는 명세서를 …" 이 각주와 함께 밀려나던 것을 막는다). */
   let k = rest.length;
   while (k > 0 && !full(rest[k - 1])) k--;
-  const j = rest.slice(k).some(l => /^\s*[*※☞]/.test(l)) ? k : rest.length;
+  let j = rest.length;
+  for (let q = k; q < rest.length; q++){
+    if (/^\s*[*※☞]/.test(rest[q])){ j = q; break; }
+  }
   const post = rest.slice(j), tbl = rest.slice(0, j);
   if (tbl.length < 2) return {pre: lines};
 

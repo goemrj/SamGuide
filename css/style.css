@@ -324,6 +324,8 @@ table.dt-tb th{
   text-align:left; background:var(--bg); color:var(--text-3);
   font-size:11.5px; font-weight:600; padding:6px 10px;
   border-bottom:1px solid var(--line-strong); border-right:1px solid var(--line);
+  /* 첫 칸이 아주 긴 표(MT065)는 코드 칸이 좁아진다 — 머리글자가 칸을 넘지 않게 쪼갠다 */
+  overflow-wrap:anywhere;
 }
 /* 바깥 표(table.fields)의 칸 규칙이 안쪽 표까지 내려오므로 여기서 다시 못박는다 */
 table.dt-tb td{
