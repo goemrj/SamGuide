@@ -215,7 +215,8 @@ table.fields tr.hit:hover td{background:var(--accent-tint);}
 .c-len{white-space:nowrap; font-variant-numeric:tabular-nums; text-align:right; color:var(--text-2);}
 .c-type{white-space:nowrap;}
 .c-name{font-weight:600; letter-spacing:-.01em;}
-.c-desc{color:var(--text-2);}
+/* 설명은 원본 문서의 줄 나눔(‘-’ 항목·‘*’ 단서)을 그대로 살린다 — 레이아웃 desc 안의 \n 이 줄바꿈이 된다 */
+.c-desc{color:var(--text-2); white-space:pre-line;}
 .tag{display:inline-block; padding:0 6px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:.01em;}
 /* 팔레트에 액센트 외의 색이 없으므로 an/n 구분은 채움과 테두리로만 준다 */
 .tag.an{background:var(--accent-tint); color:var(--accent);}
