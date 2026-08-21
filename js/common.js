@@ -346,9 +346,12 @@ function applyColW(t){
   if (!css && !endW) return;
   t.classList.add('fixed');
   if (endW){
-    // 끝선을 옮겨 둔 표도 칸(부모)보다 넓어지지 않게 자른다 — 같은 이유로 가로 스크롤이 생긴다
-    const room = t.parentElement ? t.parentElement.clientWidth : endW;
-    t.style.width = Math.min(endW, room) + 'px';
+    /* 끝선을 옮겨 둔 표도 칸(부모)보다 넓어지지 않게 자른다 — 같은 이유로 가로 스크롤이 생긴다.
+       단 부모 폭을 못 잰 때(아직 배치가 안 끝났거나 부모가 접혀 있을 때)는 자르지 않는다 —
+       clientWidth 가 0·1 로 나오면 Math.min 이 표를 1px 로 눌러 %로 준 열이 전부 0이 된다
+       (본문 안의 표 table.dt-tb 가 바깥 fixed 표의 칸 안에 있어 실제로 이렇게 눌렸다). */
+    const room = t.parentElement ? t.parentElement.clientWidth : 0;
+    t.style.width = (room > 40 ? Math.min(endW, room) : endW) + 'px';
   } else {
     t.style.width = '100%';
   }
