@@ -195,6 +195,8 @@
         <label class="saved-note">입원일수 <input class="field-input" id="dg-los" inputmode="numeric" style="width:60px;text-align:right;" value="1"></label>
         <label class="saved-note">본인부담률 <select class="field-input" id="dg-rate"></select></label>
         <label class="saved-note"><input type="checkbox" id="dg-night"> 야간·공휴 수술</label>
+        <label class="saved-note" id="dg-mid-wrap"><input type="checkbox" id="dg-mid"> 심야</label>
+        <label class="saved-note" id="dg-rural-wrap"><input type="checkbox" id="dg-rural"> 분만취약지</label>
         <label class="saved-note" id="dg-gyn-wrap"><input type="checkbox" id="dg-gyn"> 부인과 가산</label>
         <span class="spacer" style="flex:1;"></span>
         <button class="btn xs" id="dg-clear">비우기</button>
@@ -211,9 +213,11 @@
         <b class="dg-h">② 별도산정 (행위별)</b>
         <div id="dg-extra" style="margin-top:10px;"></div>
         <div class="saved-note" style="margin-top:8px;">
-          식대 · 외과전문의 가산 · PCA 등 포괄수가 밖에서 따로 산정하는 항목입니다.
-          금액 = 단가 × 1회량 × 일투 × 총투 × 보상률 (원 미만 4사5입).
-          부담률을 비워 두면 위에서 고른 본인부담률을 씁니다 (기본식대 20% · 식대총액 50% · 선별급여 80% 등은 직접 적으세요).
+          식대 · 외과전문의 가산 · PCA 등 포괄수가 밖에서 따로 산정하는 항목입니다. 금액은 직접 적습니다
+          (칸 안에서 <b>+ − × ÷</b> 셈이 됩니다 — 예: <b>6540*4*4</b> → 104,640).
+          맨 아래 빈 줄에 적으면 그 아래에 빈 줄이 하나 더 생기고, <b>Tab</b>·<b>Enter</b> 로 금액 → 부담률 → 다음 줄 금액으로 넘어갑니다.
+          부담률을 비워 두면 위에서 고른 본인부담률을 씁니다(기본식대 20% · 식대총액 50% · 선별급여 80% 등은 직접 적으세요).
+          <b>본인부담 칸을 두 번 누르면</b> 그 줄 금액을 직접 고칠 수 있습니다(비우면 다시 자동 계산).
         </div>
       </div></div>
 

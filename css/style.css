@@ -332,10 +332,6 @@ table.fields.dgt tfoot td{
   border-top:1px solid var(--line); background:var(--group-tint); color:var(--text-2);
 }
 .num-in{text-align:right;}
-/* 일자별 포괄수가 — 줄을 눌러 입원일수를 고른다 */
-tr.dg-day{cursor:pointer;}
-tr.dg-day.hit td{background:var(--accent-tint);}
-tr.dg-day.hit:hover td{background:var(--accent-tint);}
 
 /* MG · 병원 두 벌 비교 — 원장과 같은 규칙 */
 table.fields.cmp td{padding:6px 10px;}
