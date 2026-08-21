@@ -13,8 +13,8 @@ const DT_RECS   = ['일반내역', '진료내역', '처방일반내역', '처방
 /* 열 너비 기본값 — ① 본인부담금 규칙과 같은 방식으로 **% 로** 적는다(합 100).
    px 로 박으면 창이 좁은 PC 에서 표가 창을 넘겨 가로 스크롤이 생긴다(전체 전제 위반).
    머리줄 손잡이로 끌어 바꾼 값이 있으면 그쪽이 이기고, 그 값은 그 브라우저에만 남는다. */
-const DT_COLW = ['7%', '15%', '9%', '13%', '8%', '9%', '39%'];
-const DT_TKEY = 'detail#dt';
+const DT_COLW = ['8%', '17%', '75%'];
+const DT_TKEY = 'detail#dt3';
 
 function dtBase(){
   return dt.showOld ? DETAIL_CODES : DETAIL_CODES.filter(d => d.cur);
@@ -303,7 +303,7 @@ function renderDtTable(){
   }
 
   const mark = t => hilite(t, needle);
-  const head = ['구분코드', '특정내역명', '내역구분', '기재형식', '분야', '적용기간', '작성요령 (통합본)'];
+  const head = ['구분코드', '특정내역명', '작성요령 및 기재형식'];
   const saved = colwOf(DT_TKEY, head.length);     // common.js — 열 개수가 같을 때만 돌려준다
   const colw  = saved ? saved.map(n => n + 'px') : DT_COLW;
   let html = '<table class="fields dt fixed" data-k="' + DT_TKEY + '"><thead><tr>' +
@@ -311,24 +311,25 @@ function renderDtTable(){
     '</tr></thead><tbody>' +
     rows.map(d => {
       const body = dtBody(d);
-      let tr = '<tr' + (d.cur ? '' : ' class="dt-past"') + '>' +
-        '<td class="dt-code">' + mark(d.code) + '</td>' +
-        '<td class="dt-name">' + mark(d.name) + '</td>' +
-        '<td class="dt-rec">' + esc(d.rec) + '</td>' +
-        '<td class="dt-fmt">' + mark(d.format) + '</td>' +
-        '<td class="dt-field">' + fieldTags(d) + '</td>' +
-        '<td class="dt-when">' + esc(ymd(d.from) || '?') + ' ~ ' + esc(ymd(d.to)) +
-          (d.cur ? '' : '<span class="ftag old">지난 판</span>') + '</td>' +
-        '<td class="dt-guide-cell">' + (d.guide ? mark(d.guide) : '<span class="saved-note">—</span>') +
-        '</td></tr>';
-
-      // 세부작성요령은 칸 안에 넣으면 너무 좁다 — 그 줄 아래에 표 전체 폭으로 펼친다
+      /* 작성요령 칸은 세부작성요령 PDF 의 「작성요령」 단을 그대로 옮긴 것이다.
+         PDF 에 없는 코드(통합본에만 있는 것)는 통합본의 작성요령·기재형식을 쓴다. */
+      let doc = '<div class="dt-src">' + (body
+        ? '세부작성요령 (2025.8.1. ' + d.page + '쪽)'
+        : '특정내역코드 통합본 — 세부작성요령에 없는 코드') + '</div>';
       if (body){
-        tr += '<tr class="dt-bodyrow"><td colspan="' + head.length + '">' +
-              '<div class="dt-sec">세부작성요령 (2025.8.1. ' + d.page + '쪽)</div>' +
-              '<div class="dt-doc">' + dtDocHtml(body, mark) + '</div></td></tr>';
+        doc += dtDocHtml(body, mark);
+      } else {
+        doc += (d.guide ? '<div class="dt-item"><div class="dt-ln">' + mark(d.guide) + '</div></div>' : '') +
+               '<div class="dt-item"><div class="dt-dia">기재형식: ' + mark(d.format) + '</div></div>';
       }
-      return tr;
+      // 맨 마지막에 분야 (통합본 값이라 원문 항목과 구분해 둔다)
+      doc += '<div class="dt-fld"><b>분야</b>' + fieldTags(d) + '</div>';
+
+      return '<tr' + (d.cur ? '' : ' class="dt-past"') + '>' +
+        '<td class="dt-code">' + mark(d.code) +
+          (d.cur ? '' : '<span class="ftag old">지난 판 ~' + esc(ymd(d.to)) + '</span>') + '</td>' +
+        '<td class="dt-name">' + mark(d.name) + '</td>' +
+        '<td class="dt-guide-cell"><div class="dt-doc">' + doc + '</div></td></tr>';
     }).join('') + '</tbody></table>';
 
   $('dt-table').innerHTML = html;

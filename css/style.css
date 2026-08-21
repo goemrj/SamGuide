@@ -234,25 +234,8 @@ table.fields tr.hit:hover td{background:var(--accent-tint);}
 }
 .memo-item.on .code-badge{color:var(--accent);}
 
-.dt-head{border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:12px;}
-.dt-head .code{font-size:16px; font-weight:700; color:var(--accent); letter-spacing:-.01em;}
-.dt-head .name{font-size:13px; font-weight:600; margin-left:8px; letter-spacing:-.02em;}
-.dt-meta{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
-.dt-meta .m{
-  display:inline-flex; align-items:baseline; gap:6px; background:var(--group-tint);
-  border:1px solid var(--line); border-radius:4px; padding:2px 7px; font-size:11px;
-}
-.dt-meta .m b{color:var(--text-3); font-weight:600;}
-.dt-meta .m span{color:var(--text);}
-.dt-meta .m.fmt span{font-family:'D2Coding','Consolas','Malgun Gothic',monospace; font-weight:600; color:var(--accent);}
-
-pre.dt-body{
-  margin:0; padding:14px 16px; background:var(--group-tint); border:1px solid var(--line-2); border-radius:10px;
-  font-family:'D2Coding','Consolas','Malgun Gothic',monospace;
-  font-size:11.5px; line-height:1.65; white-space:pre; overflow-x:auto;
-  max-height:calc(100vh - 330px);
-}
-pre.dt-body mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+/* (2026-08-21 — 특정내역의 목록 + 상세 두 칸 화면을 걷어내면서
+   .dt-head · .dt-meta · pre.dt-body 규칙도 함께 지웠다. 지금은 표 한 장이다.) */
 .dt-src{margin-top:10px; color:var(--text-3); font-size:11.5px;}
 
 /* ---------- ② 계산기 ---------- */
@@ -313,26 +296,22 @@ table.fields.res tfoot td{border-top:1px solid var(--line); background:var(--gro
 .ftag.old{background:#fff; color:var(--note-label); box-shadow:inset 0 0 0 1px var(--line);}
 .memo-item span{line-height:1.7;}
 
-/* 특정내역 표 — 열 너비는 page-detail.js 의 DT_COLW(%)가 <th> 인라인으로 넣는다.
+/* 특정내역 표 — 세부작성요령 PDF 와 같은 3단(구분코드 / 특정내역 / 작성요령).
+   열 너비는 page-detail.js 의 DT_COLW(%)가 <th> 인라인으로 넣는다.
    표 자체는 카드 폭을 넘지 않고, 넘치는 글자는 칸 안에서 줄바꿈된다(좌우 스크롤 금지). */
 table.fields.dt{width:100%;}
 .dt-code{white-space:nowrap; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;}
+.dt-code .ftag.old{display:block; margin:4px 0 0; white-space:nowrap;}
 .dt-name{font-weight:600; letter-spacing:-.01em; color:var(--text);}
-.dt-rec{color:var(--text-2); font-size:11.5px;}
-.dt-fmt{font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--accent); line-height:1.6;}
-.dt-field{line-height:1.9;}
-.dt-when{font-size:11.5px; color:var(--text-2); font-variant-numeric:tabular-nums;}
-.dt-when .ftag.old{display:block; margin-top:3px;}
 .dt-guide-cell{color:var(--text-2); line-height:1.6;}
-.dt-note{font-size:12px;}
-.dt-open{
-  margin-top:6px; background:none; border:0; padding:0;
-  color:var(--accent); font-size:11.5px; font-weight:600; text-decoration:underline;
+/* 작성요령 칸 안 — 원문(♦ 항목 · 표 · 예시)을 그대로 세운 덩어리 */
+.dt-doc .dt-src{margin:0 0 8px; color:var(--text-4); font-size:11px;}
+/* 맨 마지막 분야 — 통합본 값이라 원문 항목과 선으로 갈라 둔다 */
+.dt-doc .dt-fld{
+  margin-top:10px; padding-top:8px; border-top:1px solid var(--line);
+  font-size:11.5px; color:var(--text-3);
 }
-/* 세부작성요령 — 코드 줄 아래에 표 전체 폭으로 펼쳐 둔다(접지 않는다) */
-tr.dt-bodyrow td{background:var(--group-tint); padding:2px 16px 16px;}
-tr.dt-bodyrow .dt-sec{margin:9px 0 7px;}
-.dt-doc{max-width:900px;}                        /* 글줄이 너무 길어지지 않게 */
+.dt-doc .dt-fld b{font-weight:600; margin-right:6px; color:var(--text-3);}
 .dt-doc .dt-item + .dt-item{margin-top:9px;}
 /* ♦ 항목 머리줄 — 원문의 ◆ 기호를 앞에 세운다 */
 .dt-doc .dt-dia{
@@ -376,13 +355,6 @@ table.dt-tb mark{background:var(--accent-tint); color:var(--accent); border-radi
 tr.dt-past .dt-code{color:var(--text-4);}
 table.fields.dt mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
-.dt-guide{
-  margin-top:12px; padding:12px 14px; background:var(--accent-tint); border-radius:10px;
-  font-size:12px; color:var(--text); line-height:1.6;
-}
-.dt-guide b{display:block; font-size:10.5px; color:var(--accent); margin-bottom:4px; letter-spacing:0;}
-.dt-guide mark, .dt-body mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
-.dt-sec{margin:14px 0 6px; font-size:11.5px; font-weight:600; color:var(--text-3); letter-spacing:0;}
 
 /* ---------- ④ 항 · 목 ---------- */
 .hm-rec{
