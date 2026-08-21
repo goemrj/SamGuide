@@ -989,10 +989,22 @@ table.fields.sc-fields th{position:relative; top:auto; z-index:auto;}
 .sc-raw .ln.cur{background:var(--accent-tint);}
 .sc-raw .ln.cur .no{background:var(--accent); color:#fff; font-weight:700;}
 .sc-raw .ln.cur .no i{color:#fff; opacity:.85;}
+/* 커서 자리 알림 띠 — 머리와 본문 사이에 늘 같은 자리에 둔다(값이 바뀌어도 안 움직인다) */
+.sc-pos{
+  padding:7px 16px; border-bottom:1px solid var(--line); background:var(--accent-tint);
+  font-size:11.5px; color:var(--text-2); min-height:30px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.sc-pos b{color:var(--accent); font-variant-numeric:tabular-nums;}
+.sc-pos .sc-val{font-size:11px;}
+
 /* 서식에 없는 바이트 — 새 색을 만들지 않는다(:root 토큰이 전부다). 빨강은 --minus 하나뿐이라
    칠하지 않고 테두리로 두르고, 꼬리표만 --minus 를 채운다. */
-.sc-raw .tx mark{background:transparent; color:var(--minus); border-radius:2px;
+.sc-raw .tx .ex{background:transparent; color:var(--minus); border-radius:2px;
   box-shadow:inset 0 0 0 1px var(--minus);}
+/* 방향키로 옮기는 바이트 커서 · 그 바이트가 든 필드 범위 */
+.sc-raw .tx .fld{background:var(--accent-tint); box-shadow:inset 0 -1px 0 var(--accent-2);}
+.sc-raw .tx .car{background:var(--accent); color:var(--card); border-radius:1px;}
 .sc-raw .tx .cut{
   font-style:normal; margin-left:2px; padding:0 5px; border-radius:3px;
   background:var(--minus); color:var(--card); font-size:10.5px; font-weight:700;

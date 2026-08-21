@@ -529,13 +529,15 @@
       <div class="sc-modal-tools">
         <div class="chips chips-rec" id="sc-modal-view"></div>
         <button class="btn" id="sc-wrap">한 줄로</button>
-        <button class="btn" id="sc-mv-prev" title="이전 어긋난 줄 (←)">← 이전</button>
-        <button class="btn" id="sc-mv-next" title="다음 어긋난 줄 (→)">다음 →</button>
+        <button class="btn" id="sc-mv-prev" title="이전 어긋난 줄 (Shift + ←)">← 이전</button>
+        <button class="btn" id="sc-mv-next" title="다음 어긋난 줄 (Shift + →)">다음 →</button>
         <label class="saved-note">줄 <input class="field-input" id="sc-goto" inputmode="numeric"
                 style="width:80px;text-align:right;" placeholder="번호"></label>
         <button class="btn" id="sc-modal-close" title="닫기 (Esc)">닫기</button>
       </div>
     </div>
+    <!-- 커서를 갖다 댄(또는 방향키로 옮긴) 자리가 몇 byte 이고 어느 필드인지 -->
+    <div class="sc-pos" id="sc-pos"></div>
     <div class="sc-modal-body" id="sc-modal-body"></div>
     <div class="sc-modal-foot" id="sc-modal-foot"></div>
   </div>

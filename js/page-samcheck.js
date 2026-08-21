@@ -22,7 +22,7 @@
    ------------------------------------------------------------------------ */
 
 const SC = { list: [], claim: '', why: '', forced: false, onlyBad: true, cands: [],
-             res: [], view: null, vtab: 'raw', vwrap: true };
+             res: [], view: null, caret: 1, vtab: 'raw', vwrap: true };
 
 const SC_DEC = new TextDecoder('euc-kr');
 function scText(bytes){ return SC_DEC.decode(bytes); }
@@ -463,6 +463,7 @@ function scRender(){
       '<div id="sc-sum"></div></div>';
 
   SC.res = res;                     // 팝업이 같은 결과를 그대로 쓴다
+  SC_MAPS = {};                     // 청구분야를 바꾸면 줄 나눔이 달라질 수 있다(줄바꿈 없는 파일)
   scRenderSummary(res, claim);
   scRenderRows(res);
 
@@ -644,10 +645,20 @@ function scBadList(){
   return out;
 }
 
+// 커서를 처음 놓는 자리 — 어긋난 자리(짧으면 끊긴 곳, 길면 서식에 없는 첫 바이트)로 데려간다
+function scCaretStart(row){
+  if (!row || row.blank || !row.len) return 1;
+  const d = row.diag;
+  if (d && d.short) return row.len;
+  if (d && !d.short) return Math.min(row.len, d.near + 1);
+  return 1;
+}
+
 function scOpenView(fi, no){
   const r = (SC.res || [])[fi];
   if (!r) return;
   SC.view = {fi, no, from: Math.max(1, no - SC_WIN), to: Math.min(r.lines.length, no + SC_WIN)};
+  SC.caret = scCaretStart(r.rows.find(x => x.no === no));
   $('sc-modal').classList.add('on');
   scDrawView(true);
 }
@@ -655,24 +666,137 @@ function scCloseView(){ $('sc-modal').classList.remove('on'); }
 function scViewOpen(){ return $('sc-modal').classList.contains('on'); }
 
 // 줄번호를 바꿔 다시 그린다 — 창 밖으로 나가면 그 줄을 가운데 두고 창을 다시 잡는다
-function scGoLine(no){
+function scGoLine(no, keepCaret){
   const v = SC.view, r = SC.res[v.fi];
   no = Math.max(1, Math.min(r.lines.length, no));
+  const was = v.no;
   v.no = no;
+  const len = r.lines[no - 1].length;
+  SC.caret = keepCaret ? Math.max(1, Math.min(len, SC.caret || 1))
+                       : scCaretStart(r.rows.find(x => x.no === no));
   if (no < v.from || no > v.to){
     v.from = Math.max(1, no - SC_WIN);
     v.to = Math.min(r.lines.length, no + SC_WIN);
+    scDrawView(true);
+    return;
   }
-  scDrawView(true);
+  // 창 안이면 두 줄만 다시 그린다 — 줄이 수백 개면 전체를 다시 그릴 이유가 없다
+  scPaintLine(was);
+  scPaintLine(no);
+  $('scln-' + was) && $('scln-' + was).classList.remove('cur');
+  $('scln-' + no) && $('scln-' + no).classList.add('cur');
+  $('sc-goto').value = no;
+  scShowPos(no, SC.caret);
+  scScrollCaret();
 }
 
-function scLineHtml(b, row){
+// 그 줄 하나만 다시 그린다
+function scPaintLine(no){
+  const v = SC.view, r = SC.res[v.fi], el = $('scln-' + no);
+  if (!el || no < 1 || no > r.lines.length) return;
+  const row = r.rows.find(x => x.no === no);
+  el.querySelector('.tx').innerHTML =
+    scLineHtml(r.lines[no - 1], row, v.fi, no, no === v.no ? SC.caret : 0);
+}
+function scScrollCaret(){
+  const el = $('scln-' + SC.view.no);
+  const car = el && el.querySelector('.car');
+  (car || el) && (car || el).scrollIntoView({block: 'nearest', inline: 'nearest'});
+}
+
+// 커서를 바이트 단위로 옮긴다. step 이 'field' 면 필드 경계로 건너뛴다.
+function scMoveCaret(d, step){
+  const v = SC.view, r = SC.res[v.fi];
+  const b = r.lines[v.no - 1], row = r.rows.find(x => x.no === v.no);
+  if (!b || !b.length) return;
+  let next;
+  if (step === 'field' && row && row.rec){
+    const f = scFieldAt(row.rec, SC.caret);
+    if (d < 0){
+      const prev = row.rec.layout.fields.filter(x => x.pos < (f ? f.pos : SC.caret)).pop();
+      next = f && SC.caret > f.pos ? f.pos : prev ? prev.pos : 1;
+    } else {
+      const nxt = row.rec.layout.fields.find(x => x.pos > SC.caret);
+      next = nxt ? nxt.pos : b.length;
+    }
+  } else if (step === 'end'){
+    next = d < 0 ? 1 : b.length;
+  } else {
+    next = SC.caret + d;
+  }
+  SC.caret = Math.max(1, Math.min(b.length, next));
+  scPaintLine(v.no);
+  scShowPos(v.no, SC.caret);
+  scScrollCaret();
+}
+
+/* ---------- 바이트 자리 ↔ 글자 자리 ----------
+   EUC-KR 은 한글이 2byte 라 글자 수와 바이트 수가 다르다. 화면에서 커서가 짚는 것은 글자인데
+   알려 줘야 하는 것은 바이트 자리이므로, 줄마다 "글자 i 의 첫 바이트 자리"를 만들어 둔다.
+   CP949 규칙(0x00~0x7F 는 1byte 한 글자, 0x81~0xFE 로 시작하면 2byte 한 글자)으로 훑고,
+   TextDecoder 가 낸 글자 수와 맞는지 확인한다 — 어긋나면 자리를 셀 수 없다고 알린다. */
+let SC_MAPS = {};
+function scMapOf(fi, no, b){
+  const key = fi + ':' + no;
+  if (SC_MAPS[key]) return SC_MAPS[key];
+  // 줄마다 글자 수만큼 배열을 만든다 — 훑고 지나간 줄이 쌓이면 비운다
+  if (Object.keys(SC_MAPS).length > 400) SC_MAPS = {};
+  const starts = [];
+  for (let i = 0; i < b.length; ){
+    starts.push(i + 1);
+    i += (b[i] >= 0x81 && b[i] <= 0xFE && i + 1 < b.length) ? 2 : 1;
+  }
+  const txt = scText(b);
+  return (SC_MAPS[key] = {starts, txt, ok: starts.length === txt.length});
+}
+// 글자 자리 → 바이트 자리(1부터) / 바이트 자리 → 글자 자리
+function scCharToByte(map, ci){
+  if (!map.starts.length) return 0;
+  return map.starts[Math.max(0, Math.min(map.starts.length - 1, ci))];
+}
+function scByteToChar(map, byte){
+  let lo = 0, hi = map.starts.length - 1, at = 0;
+  while (lo <= hi){
+    const mid = (lo + hi) >> 1;
+    if (map.starts[mid] <= byte){ at = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return at;
+}
+function scFieldAt(rec, byte){
+  if (!rec) return null;
+  return rec.layout.fields.find(f => byte >= f.pos && byte <= f.pos + f.len - 1) || null;
+}
+
+/* 줄 하나를 그린다. 커서가 없고 어긋난 꼬리도 없으면 글자 그대로 내보낸다(빠른 길).
+   커서가 있으면 글자마다 (서식에 없는 자리 · 커서가 든 필드 · 커서) 를 매겨 같은 것끼리 묶어 낸다. */
+function scLineHtml(b, row, fi, no, caret){
   const d = row && row.diag;
-  if (d && !d.short)          // 서식에 없는 꼬리를 테두리로 둘러 보여 준다
-    return esc(scText(b.subarray(0, d.near))) + '<mark>' + esc(scText(b.subarray(d.near))) + '</mark>';
-  const s = esc(scText(b));
-  if (d && d.short) return s + '<i class="cut">여기서 끊김 · ' + d.diff.toLocaleString() + 'byte 모자람</i>';
-  return s;
+  const cutTail = d && d.short
+    ? '<i class="cut">여기서 끊김 · ' + d.diff.toLocaleString() + 'byte 모자람</i>' : '';
+  const exFrom = d && !d.short ? d.near + 1 : 0;
+  const map = (caret || exFrom) ? scMapOf(fi, no, b) : null;
+  if (!map || !map.ok) return esc(scText(b)) + cutTail;
+
+  const fld = caret && row && row.rec ? scFieldAt(row.rec, caret) : null;
+  const st = map.starts;
+  let html = '', run = '', runCls = null;
+  const flush = () => {
+    if (!run) return;
+    html += runCls ? '<span class="' + runCls + '">' + esc(run) + '</span>' : esc(run);
+    run = '';
+  };
+  for (let i = 0; i < st.length; i++){
+    const from = st[i], to = (i + 1 < st.length ? st[i + 1] : b.length + 1) - 1;
+    let cls = '';
+    if (exFrom && to >= exFrom) cls += ' ex';
+    if (fld && to >= fld.pos && from <= fld.pos + fld.len - 1) cls += ' fld';
+    if (caret && from <= caret && to >= caret) cls += ' car';
+    cls = cls.slice(1);
+    if (cls !== runCls){ flush(); runCls = cls; }
+    run += map.txt[i];
+  }
+  flush();
+  return html + cutTail;
 }
 
 function scRawHtml(r){
@@ -688,9 +812,9 @@ function scRawHtml(r){
   for (let n = v.from; n <= v.to; n++){
     const b = r.lines[n - 1], row = byNo[n];
     h += '<div class="ln' + (row && scIsBad(row) ? ' bad' : '') + (n === v.no ? ' cur' : '') +
-        '" id="scln-' + n + '">' +
+        '" id="scln-' + n + '" data-no="' + n + '">' +
       '<span class="no">' + n.toLocaleString() + '<i>' + b.length.toLocaleString() + 'b</i></span>' +
-      '<span class="tx">' + scLineHtml(b, row) + '</span></div>';
+      '<span class="tx">' + scLineHtml(b, row, v.fi, n, n === v.no ? SC.caret : 0) + '</span></div>';
   }
   h += '</div>';
   if (v.to < r.lines.length)
@@ -699,6 +823,109 @@ function scRawHtml(r){
       '<button class="btn" data-more="end">맨 뒤로</button></div>';
   return h;
 }
+
+/* 커서 자리 알림 — 몇 줄 몇 byte 이고, 그 자리가 어느 필드이며 그 필드에 무엇이 들었는지.
+   커서를 갖다 댄 것(hover)과 방향키로 옮긴 것(caret) 둘 다 같은 띠에 적는다. */
+function scShowPos(no, byte, hover){
+  const v = SC.view, r = SC.res[v.fi];
+  const b = r.lines[no - 1];
+  if (!b){ $('sc-pos').innerHTML = ''; return; }
+  const map = scMapOf(v.fi, no, b);
+  if (!map.ok){
+    $('sc-pos').innerHTML = '<b>' + no.toLocaleString() + '줄</b> · ' +
+      '<span class="sc-bad">바이트 자리를 셀 수 없습니다</span> — EUC-KR 로 읽히지 않는 바이트가 있습니다.';
+    return;
+  }
+  const row = r.rows.find(x => x.no === no);
+  const parts = [(hover ? '커서 ' : '방향키 ') + '<b>' + no.toLocaleString() + '줄 ' +
+                 byte.toLocaleString() + ' byte</b> <span class="sc-dim">/ ' + b.length.toLocaleString() + 'byte</span>'];
+  const f = row && row.rec ? scFieldAt(row.rec, byte) : null;
+  if (f){
+    const end = f.pos + f.len - 1;
+    parts.push('<b>' + esc(f.name) + '</b> <span class="sc-dim">' + f.pos + '~' + end +
+      ' · ' + f.len + 'byte · ' + esc(f.mode) + '</span>');
+    parts.push('이 필드의 ' + (byte - f.pos + 1) + '번째 byte');
+    let val = scText(scSlice(b, f));
+    if (val.length > 40) val = val.slice(0, 40) + '…';
+    parts.push('값 <span class="sc-val">' + esc(val) + '</span>');
+    if (end > b.length) parts.push('<span class="sc-bad">이 필드는 줄이 끊겨 다 오지 않았습니다</span>');
+  } else if (row && row.rec){
+    parts.push('<span class="sc-bad">서식에 없는 자리</span>' +
+      ' <span class="sc-dim">(' + esc(row.rec.key) + ' ' + esc(row.rec.name) + ' 은 ' +
+      row.rec.full.toLocaleString() + 'byte 까지입니다)</span>');
+  } else {
+    parts.push('<span class="sc-dim">레코드를 판별하지 못해 필드를 짚을 수 없습니다</span>');
+  }
+  $('sc-pos').innerHTML = parts.join(' · ');
+}
+
+/* 커서가 짚은 글자 자리 — .tx 안의 텍스트 노드를 훑어 앞쪽 글자 수를 더한다.
+   끝에 붙는 「여기서 끊김」 꼬리표(.cut)는 원본 글자가 아니므로 센 것에서 빼야 한다. */
+function scCharUnderPointer(tx, x, y){
+  let node = null, off = 0;
+  if (document.caretPositionFromPoint){
+    const p = document.caretPositionFromPoint(x, y);
+    if (!p) return -1;
+    node = p.offsetNode; off = p.offset;
+  } else if (document.caretRangeFromPoint){
+    const rg = document.caretRangeFromPoint(x, y);
+    if (!rg) return -1;
+    node = rg.startContainer; off = rg.startOffset;
+  }
+  if (!node || !tx.contains(node)) return -1;
+  const walk = document.createTreeWalker(tx, NodeFilter.SHOW_TEXT);
+  let total = 0, n, gi = -1;
+  while ((n = walk.nextNode())){
+    if (n.parentNode && n.parentNode.classList && n.parentNode.classList.contains('cut')) continue;
+    if (n === node){ gi = total + off; break; }
+    total += n.nodeValue.length;
+  }
+  if (gi < 0) return -1;
+  // caretPositionFromPoint 는 "글자 사이" 자리를 준다 — 글자의 오른쪽 절반을 짚으면 다음 글자 번호가 온다.
+  // 앞 글자의 사각형 안에 그 점이 들어 있으면 앞 글자로 되돌린다(그 점이 실제로 덮고 있는 글자).
+  if (off > 0){
+    const rg = document.createRange();
+    rg.setStart(node, off - 1); rg.setEnd(node, off);
+    const rc = rg.getBoundingClientRect();
+    if (x >= rc.left && x <= rc.right && y >= rc.top && y <= rc.bottom) return gi - 1;
+  }
+  return gi;
+}
+
+/* 커서를 갖다 대면 그 자리를 알려 준다. 너무 자주 계산하지 않도록 16ms 로 묶는다 —
+   requestAnimationFrame 은 쓰지 않는다(창이 화면에 없으면 콜백이 오지 않아 값이 멈춘다). */
+let scHoverAt = 0;
+$('sc-modal-body').addEventListener('mousemove', e => {
+  if (SC.vtab !== 'raw') return;
+  const now = performance.now();
+  if (now - scHoverAt < 16) return;
+  scHoverAt = now;
+  const ln = e.target.closest ? e.target.closest('.ln') : null;
+  if (!ln) return;
+  const no = Number(ln.dataset.no);
+  const b = SC.res[SC.view.fi].lines[no - 1];
+  if (!b) return;
+  const ci = scCharUnderPointer(ln.querySelector('.tx'), e.clientX, e.clientY);
+  scShowPos(no, ci < 0 ? 1 : scCharToByte(scMapOf(SC.view.fi, no, b), ci), true);
+});
+// 커서가 빠져나가면 방향키 자리로 되돌린다
+$('sc-modal-body').addEventListener('mouseleave', () => {
+  if (SC.view) scShowPos(SC.view.no, SC.caret);
+});
+// 줄을 누르면 그 자리로 커서를 옮긴다
+$('sc-modal-body').addEventListener('click', e => {
+  if (SC.vtab !== 'raw') return;
+  const ln = e.target.closest && e.target.closest('.ln');
+  if (!ln) return;
+  const no = Number(ln.dataset.no);
+  const b = SC.res[SC.view.fi].lines[no - 1];
+  const ci = scCharUnderPointer(ln.querySelector('.tx'), e.clientX, e.clientY);
+  const byte = ci < 0 ? 1 : scCharToByte(scMapOf(SC.view.fi, no, b), ci);
+  if (no !== SC.view.no) scGoLine(no, true);
+  SC.caret = Math.max(1, Math.min(b.length || 1, byte));
+  scPaintLine(no);
+  scShowPos(no, SC.caret);
+});
 
 function scDrawView(scroll){
   const v = SC.view, r = SC.res[v.fi];
@@ -741,12 +968,17 @@ function scDrawView(scroll){
   $('sc-modal-foot').innerHTML = (at >= 0
       ? '어긋난 줄 <b>' + (at + 1) + '</b> / ' + bad.length + '번째'
       : '이 줄은 어긋난 줄 목록에 없습니다') +
-    ' · ← → 로 앞뒤 어긋난 줄, Esc 로 닫기 · 줄 번호를 적고 Enter 로 그 줄로 갑니다' +
-    ' · 파일은 이 브라우저 안에서만 읽습니다';
+    ' · <b>← →</b> 한 byte씩 · <b>Ctrl+← →</b> 필드 경계로 · <b>Home End</b> 줄 끝으로' +
+    ' · <b>↑ ↓</b> 앞뒤 줄 · <b>Shift+← →</b> 앞뒤 어긋난 줄 · <b>Esc</b> 닫기' +
+    ' · 줄 번호를 적고 Enter 로 그 줄로 갑니다 · 파일은 이 브라우저 안에서만 읽습니다';
+
+  $('sc-pos').style.display = SC.vtab === 'raw' ? '' : 'none';
+  if (SC.vtab === 'raw') scShowPos(v.no, SC.caret);
 
   if (scroll && SC.vtab === 'raw'){
     const el = $('scln-' + v.no);
     if (el) el.scrollIntoView({block: 'center'});
+    scScrollCaret();
   }
 }
 
@@ -760,10 +992,15 @@ $('sc-modal-view').addEventListener('click', e => {
   SC.vtab = b.dataset.tab;
   scDrawView(true);
 });
+/* 앞뒤 어긋난 줄로. 지금 줄이 목록에 없으면(방향키로 옮겨 다니다 보면 그렇게 된다)
+   그 줄을 기준으로 바로 앞/뒤에 있는 어긋난 줄로 간다. */
 function scStepBad(d){
   const bad = scBadList(), v = SC.view;
   const at = bad.findIndex(x => x.fi === v.fi && x.no === v.no);
-  const next = bad[(at < 0 ? 0 : at) + d];
+  let next;
+  if (at >= 0) next = bad[at + d];
+  else if (d > 0) next = bad.find(x => x.fi > v.fi || (x.fi === v.fi && x.no > v.no));
+  else next = bad.filter(x => x.fi < v.fi || (x.fi === v.fi && x.no < v.no)).pop();
   if (next) scOpenView(next.fi, next.no);
 }
 $('sc-mv-prev').addEventListener('click', () => scStepBad(-1));
@@ -783,12 +1020,21 @@ $('sc-modal-body').addEventListener('click', e => {
   if (b.dataset.more === 'end')  v.to = r.lines.length;
   scDrawView(false);
 });
+/* 키 배치 — 방향키는 바이트 커서를 옮긴다(사용자 요청). 앞뒤 어긋난 줄은 Shift 를 같이 누른다. */
 document.addEventListener('keydown', e => {
   if (!scViewOpen()) return;
   if (e.key === 'Escape'){ scCloseView(); return; }
   if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
-  if (e.key === 'ArrowLeft'){ e.preventDefault(); scStepBad(-1); }
-  if (e.key === 'ArrowRight'){ e.preventDefault(); scStepBad(1); }
+  if (SC.vtab !== 'raw') return;
+  const step = (e.ctrlKey || e.altKey || e.metaKey) ? 'field' : '';
+  switch (e.key){
+    case 'ArrowLeft':  e.preventDefault(); e.shiftKey ? scStepBad(-1) : scMoveCaret(-1, step); break;
+    case 'ArrowRight': e.preventDefault(); e.shiftKey ? scStepBad(1)  : scMoveCaret(1, step);  break;
+    case 'ArrowUp':    e.preventDefault(); scGoLine(SC.view.no - 1, true); break;
+    case 'ArrowDown':  e.preventDefault(); scGoLine(SC.view.no + 1, true); break;
+    case 'Home':       e.preventDefault(); scMoveCaret(-1, 'end'); break;
+    case 'End':        e.preventDefault(); scMoveCaret(1, 'end');  break;
+  }
 });
 
 /* ---------- 파일 받기 ---------- */
