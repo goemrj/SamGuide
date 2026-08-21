@@ -171,7 +171,23 @@ function dtSpans(rows){
    chunks = [{lines, bs}, …] — 쪽이 넘어가며 갈라진 것을 한 표로 그린다. */
 function dtTableHtml(chunks, mark){
   const rows = [], lines = [];
-  chunks.forEach(c => c.lines.forEach(l => { lines.push(l); rows.push(dtSplitAt(l, c.bs)); }));
+  chunks.forEach(c => {
+    const cand = c.lines.map(l => dtSplitAt(l, c.bs));
+    /* 첫 칸의 왼쪽 끝 — 칸이 두 개 이상 채워진 줄들이 글자를 시작하는 자리.
+       원문에서 칸 안의 글자가 다음 줄로 넘어간 것을 pdftotext 가 줄 맨 왼쪽에 놓는 일이 있어,
+       그 자리보다 **왼쪽에서 시작하는 줄**이 생긴다(MT018 M013·M014 의 "노숙인 1종").
+       어느 칸에 딸린 글자인지는 글자만 보고 알 수 없으므로 — 앞 줄에 붙이면 M013,
+       뒤 줄에 붙이면 B007 이 맞다 — 첫 칸에 밀어넣지 않고 한 칸으로 통째로 그린다. */
+    let edge = 9999;
+    c.lines.forEach((l, i) => {
+      if (cand[i] && cand[i].filter(x => x).length >= 2) edge = Math.min(edge, l.search(/\S/));
+    });
+    c.lines.forEach((l, i) => {
+      let cc = cand[i];
+      if (cc && cc[0] && cc.filter(x => x).length === 1 && l.search(/\S/) < edge) cc = null;
+      lines.push(l); rows.push(cc);
+    });
+  });
   const n = Math.max.apply(null, chunks.map(c => c.bs.length + 1));
   const head = rows[0] && rows[0].every(c => c.length <= 12) && rows[0].filter(c => c).length >= 2
              ? rows[0] : null;
@@ -293,10 +309,12 @@ function dtRunParts(lines){
   const solid = rest.filter(full);
   if (solid.filter(l => DT_EXLINE.test(l)).length * 2 > solid.length) return {pre: lines};
 
-  /* 표 뒤에 붙은 각주(* · ※ · ☞ 로 시작하는 줄)는 표 밖으로 뺀다.
-     그 밖의 줄은 원문에서 칸을 넘어 이어진 줄이므로 표 안에 그대로 둔다. */
-  let j = rest.length;
-  while (j > 0 && !full(rest[j - 1]) && /^\s*[*※☞]/.test(rest[j - 1])) j--;
+  /* 표 뒤에 붙은 각주는 표 밖으로 뺀다 — 맨 끝에서 칸이 안 맞는 줄들을 묶어 보고,
+     그 안에 * · ※ · ☞ 로 시작하는 줄이 있으면 각주 덩어리로 본다(둘째 줄부터는
+     글머리표가 없다). 각주가 아니면 원문에서 칸을 넘어 이어진 줄이므로 표 안에 둔다. */
+  let k = rest.length;
+  while (k > 0 && !full(rest[k - 1])) k--;
+  const j = rest.slice(k).some(l => /^\s*[*※☞]/.test(l)) ? k : rest.length;
   const post = rest.slice(j), tbl = rest.slice(0, j);
   if (tbl.length < 2) return {pre: lines};
 
