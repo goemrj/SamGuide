@@ -369,6 +369,10 @@ table.fields.hm{margin-bottom:2px;}
 .sp-code{white-space:nowrap; font-weight:600; font-variant-numeric:tabular-nums;}
 .sp-seq{white-space:nowrap; color:var(--text-2); font-variant-numeric:tabular-nums;}
 .sp-name{letter-spacing:-.01em;}
+/* F 기호 명칭 안에서 눈으로 먼저 찾는 문구 — 검색 하이라이트(연파랑 배경)와 헷갈리지 않게
+   배경 없이 파랑 볼드만 준다. 문구 목록은 js/page-special.js 의 SP_F_KEY. */
+.sp-key{color:var(--accent); font-weight:700;}
+.sp-keynote{color:var(--text-4); font-size:11.5px;}
 table.fields.sp mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 .pager{display:flex; gap:10px; align-items:center; justify-content:center; padding:14px; color:var(--text-2); font-size:12.5px;}
 .pager .btn[disabled]{opacity:.4; cursor:default;}

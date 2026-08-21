@@ -52,6 +52,51 @@ const SP_SYM_ROWS = Object.keys(SYMBOLS).filter(k => !SP_IN_SPEC[k]).sort().map(
   SP_SYM_ORDER.indexOf(a.g) - SP_SYM_ORDER.indexOf(b.g) || a.sym.localeCompare(b.sym));
 const SP_ROWS = SPECIAL_CODES.concat(SP_SYM_ROWS);
 
+/* F 기호 명칭에서 **눈으로 먼저 찾는 문구**만 파랑 볼드로 띄운다 (2026-08-21 사용자 지정).
+   문구는 명칭 원문에서 그대로 잘라낸 것이다 — 원문 글자는 고치지 않는다.
+   - F007 은 사용자가 "정신의학과"로 적었으나 원문이 "정신건강의학과"라 원문 글자를 쓴다.
+   - F025·F026 은 떨어진 두 군데("상급종합병원" + "외래 재진/초진 진료")라 문구를 두 개 적는다.
+   - F006(요양병원 입원 본인부담율 40% 적용환자)은 지정하지 않아 하이라이트가 없다.
+   명칭에서 문구를 못 찾으면 콘솔에 경고가 찍힌다(특정기호 목록을 갈아 끼웠을 때를 위해). */
+const SP_F_KEY = {
+  F001: ['자연분만'],
+  F003: ['의약분업 예외환자'],
+  F005: ['신생아 입원진료'],
+  F007: ['정신건강의학과 입원진료'],
+  F009: ['잠복결핵감염 검진비지원대상자'],
+  F011: ['고위험 임신부 입원진료'],
+  F012: ['사람유두종바이러스(HPV) 예방접종'],
+  F013: ['제왕절개 분만 입원진료'],
+  F014: ['16일이상 장기입원'],
+  F015: ['임신부 외래진료'],
+  F016: ['조산아 및 저체중 출생아의 외래진료'],
+  F017: ['장기등 기증자'],
+  F018: ['15세이하 아동의 입원진료'],
+  F019: ['6세미만 아동의 입원진료'],
+  F020: ['6세이상 15세이하 아동의 입원진료'],
+  F021: ['난임진료'],
+  F022: ['본인부담 면제 대상자'],
+  F023: ['연장승인(선택의료급여기관) 미신청자(불승인자)'],
+  F024: ['1세미만 외래진료'],
+  F025: ['상급종합병원', '외래 재진 진료'],
+  F026: ['상급종합병원', '외래 초진 진료'],
+  F027: ['2세 미만 영유아의 입원진료'],
+  F028: ['자립준비청년 의료비'],
+  F029: ['연간 외래진료 횟수가 365회를 초과'],
+  F030: ['만성질환 통합관리 대상자'],
+  F031: ['응급실 진료']
+};
+/* 명칭 뒤에 작은 회색 글씨로 덧붙이는 설명 — 고시 원문이 아니라 화면 설명이라 따로 둔다. */
+const SP_F_NOTE = {
+  F022: '국가건강검진 시 시행한 보건복지부 장관이 정하여 고시하는 확진검사'
+};
+for (const k of Object.keys(SP_F_KEY)){
+  for (const p of SP_F_KEY[k]){
+    if (!SYMBOLS[k] || SYMBOLS[k].n.indexOf(p) < 0)
+      console.warn('F 기호 하이라이트 문구를 명칭에서 못 찾았다:', k, p);
+  }
+}
+
 /* 칩 순서 — 자주 보는 다섯 개를 앞에 못 박고(전체 다음), 나머지는 건수 많은 순이다.
    건수가 같으면 원래 순서(등록기준 엑셀 → 특정기호 목록)를 지킨다. */
 const SP_HEAD_ORDER = ['F코드', '이식·공여자', '가정간호', '희귀질환', '중증난치질환'];
@@ -114,6 +159,27 @@ function renderSpTable(){
   if (!view.length){ $('sp-table').innerHTML = '<div class="empty">검색 결과가 없습니다.</div>'; return; }
 
   const mark = t => hilite(t, needle);
+  /* 질환명 칸 — F 기호는 지정 문구를 <b class="sp-key"> 로 감싼다.
+     검색 하이라이트와 태그가 엉키지 않게, 문구 앞·문구·뒤로 잘라 조각마다 hilite 를 걸고 합친다. */
+  const spName = d => {
+    const keys = SP_F_KEY[d.sym];
+    let html = '';
+    if (!keys) html = mark(d.name);
+    else {
+      const hits = [];
+      for (const k of keys){ const i = d.name.indexOf(k); if (i >= 0) hits.push([i, i + k.length]); }
+      hits.sort((a, b) => a[0] - b[0]);
+      let at = 0;
+      for (const [s, e] of hits){
+        if (s < at) continue;                       // 문구가 겹치면 뒤엣것은 버린다
+        html += mark(d.name.slice(at, s)) + '<b class="sp-key">' + mark(d.name.slice(s, e)) + '</b>';
+        at = e;
+      }
+      html += mark(d.name.slice(at));
+    }
+    return SP_F_NOTE[d.sym]
+      ? html + ' <span class="sp-keynote">' + esc(SP_F_NOTE[d.sym]) + '</span>' : html;
+  };
   let html = '<table class="fields sp"><thead><tr>' +
     '<th>구분</th><th>특정기호</th><th>상병코드</th><th>상병일련번호</th><th>질환명 (국문)</th>' +
     '</tr></thead><tbody>' +
@@ -122,7 +188,7 @@ function renderSpTable(){
       '<td class="sp-sym">' + mark(d.sym) + '</td>' +
       '<td class="sp-code">' + (d.code ? mark(d.code) : '<span class="saved-note">—</span>') + '</td>' +
       '<td class="sp-seq">' + (d.seq ? esc(d.seq) : '<span class="saved-note">—</span>') + '</td>' +
-      '<td class="sp-name">' + mark(d.name) + '</td></tr>'
+      '<td class="sp-name">' + spName(d) + '</td></tr>'
     ).join('') + '</tbody></table>';
 
   const pages = Math.ceil(rows.length / SP_PAGE);
