@@ -83,20 +83,31 @@ function dtRunAt(line, c){
 const dtText = (line, from, to) =>
   line.slice(from, to === Infinity ? undefined : to).trim() !== '';
 
-// (lo, hi) 안에서 가장 많은 줄이 벌어져 있는 컬럼. 3줄 미만이면 경계가 아니다.
+/* (lo, hi) 안에서 가장 많은 줄이 벌어져 있는 컬럼. 3줄 미만이면 경계가 아니다.
+   벌어진 줄 수가 같은 자리가 여럿일 때는 **오른쪽 칸의 글자가 같은 자리에서 시작하는**
+   쪽을 고른다(칸은 왼쪽정렬로 맞아 있다). 그러지 않으면 양끝맞춤으로 벌어진 문장 속 공백이
+   경계로 잡힌다 — MT045 의 "신청 후 심의결과를 통보 받은  경우  1" 에서 "경우" 앞이 그랬다. */
 function dtBoundary(lines, lo, hi, indent){
   const w = Math.max.apply(null, lines.map(l => l.length));
-  let best = -1, bestN = 2;
+  let best = -1, bestN = 2, bestA = 0;
   for (let c = Math.max(lo, indent + 1); c < Math.min(hi, w); c++){
     let n = 0;
+    const starts = {};
     lines.forEach(l => {
       const r = dtRunAt(l, c);
       if (!r || r[0] <= indent) return;                 // 왼쪽 들여쓰기는 경계가 아니다
       if (!dtText(l, lo, r[0])) return;                 // 왼쪽에 글자가 있어야 한다
-      if (!dtText(l, r[1] === Infinity ? l.length : r[1] + 1, hi)) return;
+      const from = r[1] === Infinity ? l.length : r[1] + 1;
+      if (!dtText(l, from, hi)) return;
       n++;
+      const rest = l.slice(from, hi === Infinity ? undefined : hi);
+      const s = rest.search(/\S/);
+      if (s >= 0){ const at = from + s; starts[at] = (starts[at] || 0) + 1; }
     });
-    if (n > bestN){ bestN = n; best = c; }
+    if (n <= 2) continue;
+    let a = 0;
+    for (const k in starts) if (starts[k] > a) a = starts[k];
+    if (n > bestN || (n === bestN && a >= bestA)){ bestN = n; bestA = a; best = c; }
   }
   return best;
 }
@@ -122,11 +133,57 @@ function dtSplitAt(line, bs){
     } else if (line.slice(from).search(/\S/) + from > c){
       cells.push('');                                   // 이 칸은 비었고 글자는 뒤 칸부터
     } else {
-      return null;
+      return null;                                        // 칸을 가로지르는 줄
     }
   }
   cells.push(dtNorm(line.slice(from)));
   return cells;
+}
+/* 칸 경계를 넘어간 줄을 나눈다 — 원문 칸보다 글자가 길어 옆 칸 자리까지 넘어온 줄이 있다
+   (MT043 "코로나바이러스감염증-19  02" · JT039 "폐암 외 고형암  04").
+   **표를 어디서부터 세울지 정할 때는 쓰지 않는다**(dtSplitAt 은 그대로 null 을 준다) —
+   이 방식으로는 표 앞 글줄·표 이름도 "칸이 맞은 줄"로 보여 표가 위로 번진다.
+   이미 표 안에 있는 줄을 그릴 때만 쓴다(dtTableHtml).
+   **조각이 시작하는 자리**로 칸을 정한다. 조각이 하나뿐인데 경계를 가로지르면
+   경계에서 네 칸 안쪽의 공백에서 한 번 더 나눈다(MS001 "… 청구시 투약일수 미기재").
+   그래도 안 되면 null — 표 안에서 한 줄을 통째로 쓴다. */
+function dtSplitLoose(line, bs){
+  // 조각이 걸친 칸 중 **가운데가 놓인** 칸으로 본다 — 칸보다 긴 글자는 양쪽으로 삐져나온다
+  const colOf = p => {
+    const mid = p.at + (p.s.length - 1) / 2;
+    let j = 0; while (j < bs.length && mid > bs[j]) j++;
+    return j;
+  };
+  let parts = [];
+  const re = /\S(?:.*?\S)?(?=\s{2,}|$)/g;                 // 공백 두 칸 이상으로 끊긴 조각
+  let m;
+  while ((m = re.exec(line))) parts.push({at: m.index, s: m[0]});
+  parts = parts.filter(p => p.s.trim() !== '');
+  if (!parts.length) return null;
+
+  if (parts.length === 1){
+    // 조각이 하나 — 경계를 가로지르는지 보고, 가로지르면 가까운 공백에서 나눈다
+    const p = parts[0], end = p.at + p.s.length - 1;
+    const cross = bs.find(c => p.at < c && end > c);
+    if (cross === undefined) return null;
+    /* 경계 **왼쪽**의 공백을 먼저 본다 — 앞 칸의 글자가 칸보다 길어 오른쪽으로
+       삐져나온 것이므로 자를 자리는 경계 왼쪽에 있다. 없으면 오른쪽에서 가장 가까운 것. */
+    let cut = -1;
+    for (let k = cross; k >= cross - 4; k--)
+      if (k > p.at && k < end && line.charAt(k) === ' '){ cut = k; break; }
+    if (cut < 0)
+      for (let k = cross + 1; k <= cross + 4; k++)
+        if (k > p.at && k < end && line.charAt(k) === ' '){ cut = k; break; }
+    if (cut < 0) return null;
+    parts = [{at: p.at, s: line.slice(p.at, cut).trim()}, {at: cut + 1, s: line.slice(cut + 1).trim()}];
+  }
+
+  const cells = new Array(bs.length + 1).fill('');
+  parts.forEach(p => {
+    const j = colOf(p);
+    cells[j] = cells[j] ? cells[j] + ' ' + dtNorm(p.s) : dtNorm(p.s);
+  });
+  return cells.filter(c => c).length ? cells : null;
 }
 const dtNorm = s => s.replace(/\s+/g, ' ').trim();
 
@@ -156,6 +213,11 @@ function dtSpans(rows){
   // 병합 셀의 글자는 짧다(구분 이름). 길거나 여러 줄이면 그냥 값이 든 칸으로 본다.
   const text = b => rows.slice(b.from, b.to + 1).map(r => r[0]).join('');
   if (!blk.every(b => b.to - b.from < 3 && text(b).length <= 12)) return null;
+  /* 병합 셀이 여러 줄이면 **모든 묶음이 같은 줄 수**여야 한다. 한 줄짜리와 여러 줄짜리가
+     섞여 있으면 그건 줄마다 다른 값이라는 뜻이다 — MT043 의 전상자 · 기타(각각 다른 행)를
+     "전상자기타" 한 칸으로 묶던 것을 막는다. (MT015 는 네 묶음이 모두 두 줄이다.) */
+  const span0 = blk[0].to - blk[0].from;
+  if (!blk.every(b => b.to - b.from === span0)) return null;
 
   const out = [];
   blk.forEach((b, i) => {
@@ -225,35 +287,45 @@ function dtNoGap(prev, frag){
   }
   return false;                                    // 판가름이 안 나면 띄어 쓴다(흔한 쪽)
 }
-/* 조각 줄을 앞뒤 행의 마지막 칸에 이어 붙인다. rows·lines 를 줄인 새 배열을 돌려준다. */
+/* 조각 줄을 앞뒤 행의 **같은 칸**에 이어 붙인다. rows·lines 를 줄인 새 배열을 돌려준다.
+   조각 줄 = 칸 하나만 채워진 줄. 마지막 칸일 때(MT018 의 "노숙인 1종")도,
+   첫 칸일 때(JT018 의 "제3부 행위 비급여 목록에 …", MS001 의 "(의약분업예외구분코드 …")도
+   같은 방식으로 그 칸에 이어 붙인다. 칸이 둘 이상 채워진 줄은 손대지 않는다 —
+   그런 줄은 원문에서 여러 칸이 함께 넘어간 것이라 어디까지가 한 칸인지 가를 수 없다. */
 function dtJoinFrags(rows, lines){
   const n = rows.reduce((m, r) => Math.max(m, r ? r.length : 0), 0);
   if (n < 2) return {rows: rows, lines: lines};
   const R = rows.slice(), L = lines.slice();
-  const isFrag = i => {
+  // 칸 하나만 채워진 줄이면 그 칸 번호, 아니면 -1
+  const fragCol = i => {
     const r = R[i];
-    return !!r && r.length === n && !!r[n - 1] && r.slice(0, n - 1).every(c => !c);
+    if (!r || r.length !== n) return -1;
+    let at = -1;
+    for (let j = 0; j < n; j++) if (r[j]){ if (at >= 0) return -1; at = j; }
+    return at;
   };
-  const lastOf = i => (R[i] ? R[i][n - 1] : '');
+  const cellOf = (i, j) => (R[i] && R[i][j]) || '';
+  const isFull = i => !!R[i] && R[i].filter(c => c).length >= 2;
 
   for (let i = R.length - 1; i > 0; i--){          // 뒤에서부터 — 여러 줄이 이어져도 한 번에 접힌다
-    if (!isFrag(i)) continue;
-    const frag = R[i][n - 1];
-    const prev = R[i - 1], next = R[i + 1];
+    const j = fragCol(i);
+    if (j < 0) continue;
+    const frag = R[i][j];
     const bullet = DT_BULLET.test(frag);
     let to = -1;
     if (!bullet && !/^[)\]」｣.,]/.test(frag) && !DT_PARTICLE.test(frag) &&
-        prev && lastOf(i - 1) && /\)$/.test(lastOf(i - 1)) && next && next[0])
-      to = i + 1;                                   // 뒤 행으로
-    else if (prev && lastOf(i - 1)) to = i - 1;      // 앞 행으로
+        cellOf(i - 1, j) && /\)$/.test(cellOf(i - 1, j)) && isFull(i + 1))
+      to = i + 1;                                   // 뒤 행으로 (앞 칸이 이미 닫혔다)
+    else if (cellOf(i - 1, j)) to = i - 1;           // 앞 행으로
     if (to < 0) continue;
 
+    R[to] = R[to].slice();
     if (to === i - 1){
-      const sep = bullet ? '\n' : (dtNoGap(lastOf(to), frag) ? '' : ' ');
-      R[to] = R[to].slice(); R[to][n - 1] = lastOf(to) + sep + frag;
+      const sep = bullet ? '\n' : (dtNoGap(cellOf(to, j), frag) ? '' : ' ');
+      R[to][j] = cellOf(to, j) + sep + frag;
     } else {
-      const sep = DT_BULLET.test(lastOf(to)) ? '\n' : (dtNoGap(frag, lastOf(to)) ? '' : ' ');
-      R[to] = R[to].slice(); R[to][n - 1] = frag + sep + lastOf(to);
+      const sep = DT_BULLET.test(cellOf(to, j)) ? '\n' : (dtNoGap(frag, cellOf(to, j)) ? '' : ' ');
+      R[to][j] = frag + sep + cellOf(to, j);
     }
     R.splice(i, 1); L.splice(i, 1);
   }
@@ -337,6 +409,8 @@ function dtTableHtml(chunks, mark){
     c.lines.forEach((l, i) => {
       let cc = cand[i];
       if (cc && cc[0] && cc.filter(x => x).length === 1 && l.search(/\S/) < edge) cc = null;
+      // 칸을 넘어간 줄은 조각의 시작 자리로 칸을 정해 본다 (표 안에서만 쓰는 느슨한 방식)
+      else if (!cc) cc = dtSplitLoose(l, c.bs);
       lines.push(l); rows.push(cc);
     });
   });
