@@ -330,8 +330,6 @@ table.fields.cmp tfoot td{
    이름에 cmp- 를 붙인 이유 — `.more` 는 이미 「더보기」 단추(밑줄)가 쓰고 있다. */
 table.fields.cmp .num.cmp-less{color:var(--minus);}
 table.fields.cmp .num.cmp-more{color:var(--accent);}
-/* 절사 단위는 절사 줄 안에서 고른다 (진료형태 칸을 없앤 자리) */
-.cutsel{width:auto; display:inline-block; margin-left:4px; padding:3px 6px;}
 .rate-cell{display:flex; gap:4px; align-items:center;}
 .rate-cell .field-input{text-align:right;}
 .rate-cell .btn.xs{flex:0 0 auto; min-width:28px; text-align:center;}

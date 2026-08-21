@@ -483,6 +483,12 @@ function commitFix(inp, keep){
   paint();
 }
 $('c-led').addEventListener('dblclick', e => {
+  // 열 너비 손잡이를 두 번 누르면 common.js 가 저장값만 지운다(칸 너비는 빈 값이 된다)
+  // — 표를 다시 그려 소스 기본 너비(150·118·150·40)로 돌려놓는다.
+  if (e.target.classList && e.target.classList.contains('rz')){
+    setTimeout(() => { renderLed(); paint(); }, 0);
+    return;
+  }
   const cell = e.target.closest('[data-fixkey]');
   if (!cell || cell.querySelector('[data-fix]')) return;
   const key = cell.dataset.fixkey;

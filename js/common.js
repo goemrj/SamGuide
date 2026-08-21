@@ -301,10 +301,7 @@ function colwEndOf(key){
    끝선을 옮기는 손잡이(.rz-end)를 넣는다.
    화면을 다시 그릴 때마다 없어지므로 아래 MutationObserver 가 다시 넣는다. */
 function addGrips(root){
-  /* 계산기의 입력 표(table.fields.items — 원장 · MG·병원 비교)는 뺀다.
-     자료 표가 아니라 입력 UI 라 열을 끌 일이 없고, 예전에 저장해 둔 픽셀 너비가
-     되살아나면 카드보다 넓어져 옆 카드와 겹친다 (2026-08-21). */
-  const sel = 'table.b2, table.fields:not(.items), table.dt-tb:not(.dt-ex)';
+  const sel = 'table.b2, table.fields, table.dt-tb:not(.dt-ex)';
   (root || document).querySelectorAll(sel).forEach(t => {
     const ths = headCells(t);
     if (!ths) return;
