@@ -895,7 +895,7 @@ table.fields.emg td.emg-ch:empty::after,
 table.fields.emg td.emg-code:empty::after{content:"–"; color:var(--text-4);}
 table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
-/* ---------- SAM 파일 점검 ---------- */
+/* ---------- SAM 변환오류 ---------- */
 /* 파일 놓는 자리 — 파일을 놓기 전에는 크게 열어 두고, 결과를 보는 동안에는 얇은 띠(.slim)로 줄인다.
    상단 바가 통째로 고정되므로(--stick) 큰 상자를 계속 띄워 두면 화면을 그만큼 잡아먹는다.
    대신 점검 중에도 화면 아무 곳에나 파일을 놓을 수 있다(page-samcheck.js 의 문서 단위 drop). */
@@ -941,7 +941,7 @@ table.fields tr.sc-detail td{background:var(--note-bg); padding:12px 14px;}
 table.fields.sc-fields{width:100%; margin:0;}
 table.fields.sc-fields th{position:relative; top:auto; z-index:auto;}
 
-/* ---------- SAM 파일 점검 — 파일 그대로 보기 팝업 ----------
+/* ---------- SAM 변환오류 — 파일 그대로 보기 팝업 ----------
    어긋난 줄을 누르면 뜬다. 창 안에서만 스크롤하고(.sc-modal-body) 페이지에는 스크롤을 만들지 않는다. */
 .sc-modal{position:fixed; inset:0; z-index:80; display:none;}
 .sc-modal.on{display:block;}
