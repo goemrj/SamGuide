@@ -341,8 +341,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/drg-scores.ps1 "<붙�
 **메모**(`#dg-memo` — 계산과 함께 `localStorage` 에 남고 「비우기」로도 지워지지 않는다).
 큰 숫자 카드의 세 줄은 `grid-template-columns:1fr auto 16px` 로 **숫자 오른쪽 끝을 한 선에 맞춘다**
 (`원` 칸 폭을 고정해서 자리가 흔들리지 않는다). 창이 **1180px 이하면** 위아래로 접힌다.
-`.dg-wrap` 은 `max-width:calc(var(--dgw) + 348px); margin:0 auto` 로 **가운데** 놓는다 —
-칸 폭을 줄였을 때 왼쪽으로 쏠려 보이지 않게 좌우 여백을 같게 둔다.
+`.dg-wrap` 은 `max-width:calc(var(--dgw) + 348px)` 이고 왼쪽 여백은
+`min(120px, 남는폭/4)` 만 준다 — 가운데까지 밀면 너무 멀다는 요청(2026-08-21)에 맞춘 값이다.
+1920px · 칸 폭 800 이면 왼쪽 120px · 오른쪽 363px 쯤 남는다. 칸 폭이 크면 여백은 0 이 된다.
 
 **폭은 사용자가 맞춘다**(2026-08-21 요청 — 좌우로 길면 읽기 힘들다). 조건 줄 오른쪽의 슬라이더 두 개:
 
