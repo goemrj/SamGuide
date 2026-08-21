@@ -856,15 +856,15 @@ table.fields.emg td.emg-code:empty::after{content:"–"; color:var(--text-4);}
 table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
 /* ---------- SAM 파일 점검 ---------- */
+/* 파일 놓는 자리 — 상단 바가 통째로 고정되므로(--stick) 한 줄로 낮게 둔다 */
 .sc-drop{
   width:100%; border:1px dashed var(--line-strong); border-radius:8px;
-  background:var(--group-tint); padding:18px 16px; text-align:center;
-  display:flex; flex-direction:column; align-items:center; gap:7px;
+  background:var(--group-tint); padding:9px 12px;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
 }
 .sc-drop.over{border-color:var(--accent); background:var(--accent-tint);}
 .sc-drop b{font-size:13px; color:var(--text);}
-.sc-drop span{font-size:11.5px; color:var(--text-3);}
-.sc-drop .btn{margin:0 3px;}
+.sc-drop .sc-hint{font-size:11.5px; color:var(--text-3); flex:1; min-width:180px;}
 
 .sc-dim{color:var(--text-3); font-size:11.5px; margin-top:2px;}
 .sc-ok{color:var(--accent); font-weight:600;}
@@ -876,6 +876,8 @@ table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border
 table.fields tr.sc-row{cursor:pointer;}
 table.fields tr.sc-hit td{background:var(--accent-tint);}
 table.fields tr.sc-detail td{background:var(--note-bg); padding:12px 14px;}
-/* 펼친 필드 분해표 — 표 안의 표라 머리줄을 고정하지 않는다 */
+/* 펼친 필드 분해표 — 표 안의 표라 머리줄을 고정하지 않는다.
+   position 은 relative 로 남겨 둔다 — static 으로 두면 열 너비 손잡이(.rz, absolute)가
+   기준을 잃고 창 오른쪽 밖으로 나가 페이지에 가로 스크롤이 생긴다(가로 스크롤 금지 전제). */
 table.fields.sc-fields{width:100%; margin:0;}
-table.fields.sc-fields th{position:static; top:auto;}
+table.fields.sc-fields th{position:relative; top:auto; z-index:auto;}

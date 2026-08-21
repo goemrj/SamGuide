@@ -1,0 +1,534 @@
+/* ---------- SAM 파일 점검 — 서식번호를 읽어 레코드 길이가 맞는지 확인한다 ----------
+
+   파일은 이 브라우저 안에서만 읽는다(File.arrayBuffer). 어디로도 보내지 않는다.
+
+   하는 일
+     1. 파일명 · 서식번호 · 진료형태로 청구분야를 고른다 (칩으로 바꿀 수 있다)
+     2. 줄마다 레코드(H · A~F)를 판별한다 — 서식번호 → 내역구분 → 파일명 → 길이 순
+     3. 줄의 바이트 길이를 그 레코드의 허용 길이와 견준다
+     4. 어긋난 줄은 "몇 byte 모자란지/남는지 · 어느 필드에서 끊겼는지"를 적고,
+        줄을 누르면 필드별로 잘라서 보여 준다
+
+   허용 길이는 레이아웃(js/layout-*.js)에서 그대로 뽑는다 — 여기에 숫자를 적어 두지 않는다.
+     · 전체 길이 = 필드 끝 위치의 최대값
+     · 맨 뒤 필드의 설명에 "생략 허용" · "기재 허용" · "(옵션)" 이 적혀 있으면 그 앞까지도 허용
+       (청구서의 참조란 1,750byte · 진료내역의 치식 4칸)
+     · SamEditor 가 빈 줄을 만들 때 쓰는 길이(blankRowLen)도 허용
+
+   길이는 모두 바이트(EUC-KR, 한글 2byte)다. 파일을 바이트로 읽어 세므로 글자수와 섞이지 않는다.
+   ------------------------------------------------------------------------ */
+
+const SC = { list: [], claim: '', why: '', forced: false, onlyBad: true, open: new Set(), cands: [] };
+
+const SC_DEC = new TextDecoder('euc-kr');
+function scText(bytes){ return SC_DEC.decode(bytes); }
+function scHas(o, k){ return Object.prototype.hasOwnProperty.call(o, k); }
+
+/* 그 위치의 바이트를 ASCII 로 읽는다. 줄이 그 위치까지 오지 않으면 null. */
+function scAscii(bytes, pos, len){
+  if (pos - 1 + len > bytes.length) return null;
+  let s = '';
+  for (let i = pos - 1; i < pos - 1 + len; i++) s += String.fromCharCode(bytes[i]);
+  return s;
+}
+function scSlice(bytes, f){ return bytes.subarray(f.pos - 1, Math.min(f.pos - 1 + f.len, bytes.length)); }
+
+/* ---------- 레코드 규격 ---------- */
+const SC_OPT_RE = /생략 허용|기재 허용|\(옵션\)/;
+
+function scFull(L){ return L.fields.reduce((m, f) => Math.max(m, f.pos + f.len - 1), 0); }
+
+// 허용 길이 — 전체 길이 + 뒤에서부터 생략이 허용된 필드를 떼어낸 길이들
+function scAllowed(claim, rk){
+  const L = layoutsOf(claim)[rk];
+  const set = new Set([scFull(L)]);
+  for (let i = L.fields.length - 1; i >= 0; i--){
+    const f = L.fields[i];
+    if (!SC_OPT_RE.test(f.desc || '')) break;
+    set.add(f.pos - 1);
+  }
+  const blank = (CLAIM_TYPES[claim].blankRowLen || {})[rk];
+  if (blank) set.add(blank);
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+function scFieldNamed(L, name){ return L.fields.find(f => f.name === name); }
+
+// 청구분야 하나의 점검 규격 — 레코드마다 서식번호 · 내역구분 위치와 허용 길이
+function scSpec(claim){
+  const L = layoutsOf(claim);
+  const recs = {};
+  for (const rk of Object.keys(L)){
+    const form = scFieldNamed(L[rk], '서식번호');
+    const kind = scFieldNamed(L[rk], '내역구분');
+    recs[rk] = {
+      key: rk, name: L[rk].name, layout: L[rk],
+      form: form && form.codes ? form : null,
+      kind: kind && kind.codes ? kind : null,
+      ftype: scFieldNamed(L[rk], '진료형태') || null,
+      allowed: scAllowed(claim, rk),
+      full: scFull(L[rk]),
+    };
+  }
+  // 내역구분을 쓰는 청구분야는 한 파일에 여러 레코드가 섞여 들어온다(GEN · DRG · NDRG · JABO · WANHWA).
+  // 내역구분이 없는 쪽(MG · CHUB · HANBANG · SANJAE · SANJAE_HAN · JABO_HAN)은 파일 하나가 레코드 하나다.
+  const multiFile = !Object.keys(recs).some(k => recs[k].kind);
+  return { claim, recs, multiFile, ftc: CLAIM_TYPES[claim].formTypeChars || null };
+}
+
+const SC_SPECS = {};
+availableClaims().forEach(([k]) => { SC_SPECS[k] = scSpec(k); });
+
+/* ---------- 파일명 → 레코드 ----------
+   레이아웃 파일이 들고 있는 판별 함수를 그대로 쓴다(여기에 파일명 규칙을 다시 적지 않는다).
+   *Unique* 는 그 청구분야만 쓰는 이름(D020.1 등), 아닌 쪽은 여러 분야가 나눠 쓰는 이름(H010 · C010 · M010.1). */
+const SC_ROLE_FNS = [
+  ['DRG',        'drgUniqueRoleForFilename',        'drgRoleForFilename'],
+  ['MG',         'mgUniqueRoleForFilename',         'mgRoleForFilename'],
+  ['CHUB',       'chubUniqueRoleForFilename',       'chubRoleForFilename'],
+  ['HANBANG',    'hanbangUniqueRoleForFilename',    'hanbangRoleForFilename'],
+  ['SANJAE',     'sanjaeUniqueRoleForFilename',     'sanjaeRoleForFilename'],
+  ['SANJAE_HAN', 'sanjaeHanUniqueRoleForFilename',  'sanjaeHanRoleForFilename'],
+  ['JABO_HAN',   'jaboHanUniqueRoleForFilename',    'jaboHanRoleForFilename'],
+];
+function scRoleHits(name){
+  const hits = [];
+  for (const [claim, uniq, any] of SC_ROLE_FNS){
+    if (!SC_SPECS[claim]) continue;
+    const fu = window[uniq], fa = window[any];
+    const ru = typeof fu === 'function' ? fu(name) : null;
+    if (ru){ hits.push({claim, role: ru, unique: true}); continue; }
+    const ra = typeof fa === 'function' ? fa(name) : null;
+    if (ra) hits.push({claim, role: ra, unique: false});
+  }
+  return hits;
+}
+
+/* ---------- 줄 나누기 ---------- */
+function scSplitLines(bytes){
+  const lines = [];
+  let start = 0, crlf = 0, lf = 0;
+  for (let i = 0; i < bytes.length; i++){
+    if (bytes[i] !== 0x0A) continue;
+    let end = i;
+    if (end > start && bytes[end - 1] === 0x0D){ end--; crlf++; } else { lf++; }
+    lines.push(bytes.subarray(start, end));
+    start = i + 1;
+  }
+  if (start < bytes.length) lines.push(bytes.subarray(start, bytes.length));  // 마지막 줄에 개행이 없는 경우
+  const nl = crlf && lf ? '섞임(CRLF+LF)' : crlf ? 'CRLF' : lf ? 'LF' : '없음';
+  return { lines, nl };
+}
+
+/* ---------- 인코딩 확인 ---------- */
+function scEncNote(bytes){
+  const head = bytes.subarray(0, Math.min(bytes.length, 400000));
+  if (!scText(head).includes('�')) return '';
+  let u8 = null;
+  try { u8 = new TextDecoder('utf-8', {fatal: true}).decode(head); } catch (e) { u8 = null; }
+  if (u8 && /[가-힣]/.test(u8))
+    return 'UTF-8 로 저장된 것 같습니다 — 한글이 2byte 가 아니라 3byte 로 들어가 길이가 어긋납니다. EUC-KR(CP949) 로 다시 저장해 주세요.';
+  return 'EUC-KR 로 읽히지 않는 바이트가 있습니다.';
+}
+
+/* ---------- 청구분야 판별 ---------- */
+function scDetectClaim(list){
+  const score = {}, why = {};
+  const add = (c, n, reason) => {
+    if (!SC_SPECS[c] || !n) return;
+    score[c] = (score[c] || 0) + n;
+    (why[c] = why[c] || new Set()).add(reason);
+  };
+
+  for (const f of list){
+    // 파일명
+    for (const h of scRoleHits(f.name)) add(h.claim, h.unique ? 6 : 1, '파일명');
+
+    const sample = f.lines.slice(0, 40).filter(b => b.length);
+    for (const claim of Object.keys(SC_SPECS)){
+      const spec = SC_SPECS[claim];
+      let formHits = 0, kindHits = 0, lenHits = 0;
+      for (const line of sample){
+        for (const rk of Object.keys(spec.recs)){
+          const r = spec.recs[rk];
+          if (r.kind){
+            const v = scAscii(line, r.kind.pos, r.kind.len);
+            if (v && scHas(r.kind.codes, v)) kindHits++;
+          }
+          if (r.form){
+            const v = scAscii(line, r.form.pos, r.form.len);
+            if (v && scHas(r.form.codes, v)){
+              formHits++;
+              // 청구서의 진료형태로만 갈리는 분야(완화 · 신포괄)를 여기서 가른다
+              if (r.ftype && spec.ftc){
+                const t = scAscii(line, r.ftype.pos, r.ftype.len);
+                if (t && spec.ftc.indexOf(t) >= 0) add(claim, 8, '청구서 진료형태 ' + t);
+              }
+            }
+          }
+          if (r.allowed.indexOf(line.length) >= 0) lenHits++;
+        }
+      }
+      if (formHits) add(claim, Math.min(formHits, 3) * 3, '서식번호');
+      if (kindHits) add(claim, Math.min(kindHits, 3) * 2, '내역구분');
+      if (sample.length) add(claim, Math.round(4 * Math.min(1, lenHits / sample.length)), '레코드 길이');
+    }
+  }
+
+  const cands = Object.keys(score).sort((a, b) => score[b] - score[a]);
+  return {
+    cands,
+    best: cands[0] || '',
+    why: cands[0] ? Array.from(why[cands[0]]).join(' · ') : '',
+  };
+}
+
+/* ---------- 줄 하나의 레코드 판별 ---------- */
+function scPickRec(spec, bytes, fileRole){
+  for (const rk of Object.keys(spec.recs)){          // 1. 서식번호
+    const r = spec.recs[rk];
+    if (!r.form) continue;
+    const v = scAscii(bytes, r.form.pos, r.form.len);
+    if (v && scHas(r.form.codes, v)) return {rec: r, by: '서식번호로', form: v};
+  }
+  for (const rk of Object.keys(spec.recs)){          // 2. 내역구분
+    const r = spec.recs[rk];
+    if (!r.kind) continue;
+    const v = scAscii(bytes, r.kind.pos, r.kind.len);
+    if (v && scHas(r.kind.codes, v)) return {rec: r, by: '내역구분으로', form: null};
+  }
+  if (spec.multiFile && fileRole && spec.recs[fileRole])   // 3. 파일명 (파일 하나 = 레코드 하나인 분야만)
+    return {rec: spec.recs[fileRole], by: '파일명으로', form: null};
+  const fit = Object.keys(spec.recs).filter(rk => spec.recs[rk].allowed.indexOf(bytes.length) >= 0);
+  if (fit.length === 1) return {rec: spec.recs[fit[0]], by: '길이로', form: null};   // 4. 길이
+  return null;
+}
+
+/* ---------- 길이 진단 ---------- */
+function scDiag(rec, bytes){
+  const len = bytes.length, allowed = rec.allowed;
+  if (allowed.indexOf(len) >= 0) return null;
+  let near = allowed[0];
+  for (const a of allowed) if (Math.abs(a - len) < Math.abs(near - len)) near = a;
+  const fields = rec.layout.fields;
+
+  if (len < near){
+    const at = len + 1;                                     // 있어야 하는데 없는 첫 바이트
+    const cut = fields.find(f => at >= f.pos && at <= f.pos + f.len - 1);
+    const lost = fields.filter(f => f.pos > len).map(f => f.name);
+    return {
+      short: true, diff: near - len, near, lost,
+      head: (near - len).toLocaleString() + 'byte 모자랍니다',
+      where: cut ? cut.name + '(위치 ' + cut.pos + '~' + (cut.pos + cut.len - 1) + ') 에서 끊겼습니다'
+                 : '레코드 끝에서 끊겼습니다',
+    };
+  }
+  const extra = scText(bytes.subarray(near));
+  return {
+    short: false, diff: len - near, near, lost: [],
+    head: (len - near).toLocaleString() + 'byte 더 붙어 있습니다',
+    where: near + 'byte 뒤에 남은 값이 있습니다',
+    extra: /^ +$/.test(extra) ? '공백 ' + (len - near) + 'byte'
+         : extra.length > 60 ? extra.slice(0, 60) + '…' : extra,
+  };
+}
+
+/* 숫자 칸에 숫자가 아닌 값이 들어간 곳 — 줄이 밀린 자리를 짚는 데 쓴다(확정이 아니라 짐작) */
+function scNumBad(rec, bytes){
+  const out = [];
+  for (const f of rec.layout.fields){
+    if (f.mode !== 'n') continue;
+    if (f.pos - 1 + f.len > bytes.length) break;
+    const s = scText(scSlice(bytes, f));
+    if (/^[0-9 ]*$/.test(s)) continue;
+    out.push({name: f.name, pos: f.pos, len: f.len, val: s});
+  }
+  return out;
+}
+
+/* ---------- 파일 한 개 점검 ---------- */
+function scCheckFile(file, claim){
+  const spec = SC_SPECS[claim];
+  const roleHit = scRoleHits(file.name).find(h => h.claim === claim);
+  const fileRole = roleHit ? roleHit.role : null;
+
+  let lines = file.lines, mode = '줄바꿈';
+  // 줄바꿈이 없는 파일 — 첫 덩어리로 레코드를 알아내고 그 길이로 잘라 본다
+  if (file.nl === '없음' && file.bytes.length){
+    const guess = scPickRec(spec, file.bytes.subarray(0, Math.min(file.bytes.length, 4096)), fileRole);
+    const cut = guess && guess.rec.allowed.find(a => a > 0 && file.bytes.length % a === 0);
+    if (cut){
+      lines = [];
+      for (let i = 0; i < file.bytes.length; i += cut) lines.push(file.bytes.subarray(i, i + cut));
+      mode = '고정길이 ' + cut + 'byte';
+    }
+  }
+
+  const rows = [], counts = {}, forms = {}, dist = {};
+  let bad = 0, unknown = 0, blankLines = 0;
+
+  lines.forEach((b, i) => {
+    const no = i + 1;
+    if (!b.length){ blankLines++; rows.push({no, len: 0, blank: true}); return; }
+    dist[b.length] = (dist[b.length] || 0) + 1;
+    const pick = scPickRec(spec, b, fileRole);
+    if (!pick){
+      unknown++;
+      rows.push({no, len: b.length, bytes: b, rec: null, head: scText(b.subarray(0, 24))});
+      return;
+    }
+    counts[pick.rec.key] = (counts[pick.rec.key] || 0) + 1;
+    if (pick.form){
+      const prev = forms[pick.form];
+      forms[pick.form] = {mean: pick.rec.form.codes[pick.form] || '', rec: pick.rec.key, n: (prev ? prev.n : 0) + 1};
+    }
+    const diag = scDiag(pick.rec, b);
+    if (diag) bad++;
+    rows.push({no, len: b.length, bytes: b, rec: pick.rec, by: pick.by, form: pick.form, diag});
+  });
+
+  return {
+    name: file.name, size: file.bytes.length, nl: file.nl, bom: file.bom, enc: file.enc,
+    mode, fileRole, rows, counts, forms, dist, bad, unknown, blankLines, lineCount: lines.length,
+  };
+}
+
+/* ---------- 그리기 ---------- */
+function scRender(){
+  const wrap = $('sc-out');
+  $('sc-clear').style.display = SC.list.length ? '' : 'none';
+  if (!SC.list.length){
+    $('sc-claim-row').style.display = 'none';
+    $('sc-filter-row').style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+  const claim = SC.claim;
+
+  // 대분류 — 청구분야 (짐작한 순서대로, 나머지는 뒤에). 못 알아냈을 때도 직접 고를 수 있게 늘 보여 준다.
+  const order = SC.cands.concat(availableClaims().map(r => r[0]).filter(k => SC.cands.indexOf(k) < 0));
+  $('sc-claim-row').style.display = '';
+  $('sc-claims').innerHTML = order.map(k =>
+    '<button class="chip' + (k === claim ? ' on' : '') + '" data-claim="' + esc(k) + '">' + esc(claimLabel(k)) +
+    (SC.cands[0] === k ? '<small>짐작</small>' : '') + '</button>').join('');
+  $('sc-claims').querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    SC.claim = c.dataset.claim; SC.forced = true; SC.open.clear(); scRender();
+  }));
+
+  if (!claim){
+    $('sc-filter-row').style.display = 'none';
+    wrap.innerHTML = '<div class="card"><div class="card-pad"><div class="empty">' +
+      '서식번호 · 파일명으로 청구분야를 알아내지 못했습니다. 위에서 직접 골라 주세요.</div></div></div>';
+    return;
+  }
+
+  const res = SC.list.map(f => scCheckFile(f, claim));
+  const tot = res.reduce((a, r) => ({
+    lines: a.lines + r.lineCount, bad: a.bad + r.bad, unknown: a.unknown + r.unknown,
+  }), {lines: 0, bad: 0, unknown: 0});
+
+  $('sc-filter-row').style.display = '';
+  $('sc-only').innerHTML =
+    '<button class="chip' + (SC.onlyBad ? ' on' : '') + '" data-only="1">어긋난 줄만<small>' + (tot.bad + tot.unknown) + '</small></button>' +
+    '<button class="chip' + (SC.onlyBad ? '' : ' on') + '" data-only="0">모든 줄<small>' + tot.lines + '</small></button>';
+  $('sc-only').querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    SC.onlyBad = c.dataset.only === '1'; scRender();
+  }));
+
+  wrap.innerHTML =
+    '<div class="card"><div class="meta-bar">' +
+      '<span><b>' + esc(claimLabel(claim)) + '</b> 서식으로 봤습니다' +
+        (SC.forced ? ' (직접 고름)' : SC.why ? ' — 짐작한 근거: ' + esc(SC.why) : '') + '</span>' +
+      '<span>파일 <b>' + res.length + '</b>개</span>' +
+      '<span>줄 <b>' + tot.lines.toLocaleString() + '</b></span>' +
+      '<span>길이 어긋남 <b>' + tot.bad.toLocaleString() + '</b></span>' +
+      '<span>판별 못한 줄 <b>' + tot.unknown.toLocaleString() + '</b></span>' +
+      '<span class="meta-note">길이는 바이트(EUC-KR, 한글 2byte) 기준</span>' +
+    '</div><div id="sc-sum"></div></div>' +
+    '<div class="card"><div class="meta-bar"><span><b>' + (SC.onlyBad ? '어긋난 줄' : '모든 줄') +
+      '</b> — 줄을 누르면 필드별로 잘라서 보여 줍니다</span></div><div id="sc-rows"></div></div>';
+
+  scRenderSummary(res, claim);
+  scRenderRows(res);
+
+  $('sc-rows').querySelectorAll('.sc-row').forEach(tr => tr.addEventListener('click', () => {
+    const k = tr.dataset.key;
+    if (!k) return;
+    if (SC.open.has(k)) SC.open.delete(k); else SC.open.add(k);
+    scRender();
+  }));
+}
+
+// 파일마다 한 줄 — 읽어낸 서식번호 · 레코드 구성 · 길이 분포
+function scRenderSummary(res, claim){
+  let s = '<table class="fields"><thead><tr><th>파일</th><th>크기</th><th>줄</th><th>줄바꿈</th>' +
+    '<th>읽어낸 서식번호</th><th>레코드 구성</th><th>결과</th></tr></thead><tbody>';
+  res.forEach(r => {
+    const fkeys = Object.keys(r.forms);
+    const fhtml = fkeys.length
+      ? fkeys.map(k => '<span class="code"><b>' + esc(k) + '</b><span>' + esc(r.forms[k].mean) + '</span></span>').join('')
+      : '<span class="sc-dim">이 파일에는 서식번호 칸이 없습니다<br>(청구서 · 일반내역에만 있습니다)</span>';
+    const ckeys = Object.keys(r.counts);
+    const chtml = ckeys.length
+      ? ckeys.map(k => esc(k) + ' ' + esc(SC_SPECS[claim].recs[k].name) + ' ' + r.counts[k].toLocaleString() + '줄').join('<br>')
+      : '<span class="sc-dim">—</span>';
+    const notes = [];
+    if (r.bom) notes.push('파일 앞에 BOM(EF BB BF) 3byte 가 붙어 있습니다 — 첫 줄이 3byte 길어집니다.');
+    if (r.enc) notes.push(r.enc);
+    if (r.nl === '섞임(CRLF+LF)') notes.push('줄바꿈이 CRLF 와 LF 로 섞여 있습니다.');
+    if (r.mode !== '줄바꿈') notes.push('줄바꿈이 없어 ' + r.mode + ' 로 잘라서 봤습니다.');
+    if (r.nl === '없음' && r.mode === '줄바꿈') notes.push('줄바꿈이 없습니다 — 파일 전체를 한 줄로 봤습니다.');
+    if (r.blankLines) notes.push('빈 줄 ' + r.blankLines + '개');
+    const okLines = r.lineCount - r.bad - r.unknown - r.blankLines;
+    const verdict = (r.bad || r.unknown || r.blankLines)
+      ? '<b class="sc-bad">' + [
+          r.bad ? '길이 어긋남 ' + r.bad + '줄' : '',
+          r.unknown ? '판별 불가 ' + r.unknown + '줄' : '',
+          r.blankLines ? '빈 줄 ' + r.blankLines + '개' : '',
+        ].filter(Boolean).join(' · ') + '</b>'
+      : '<b class="sc-ok">모두 맞습니다</b>';
+    const distHtml = Object.keys(r.dist).map(Number).sort((a, b) => b - a)
+      .map(len => len.toLocaleString() + 'byte ' + r.dist[len].toLocaleString() + '줄').join(' · ');
+    s += '<tr><td>' + esc(r.name) +
+        (r.fileRole ? '<br><span class="sc-dim">파일명 → ' + esc(r.fileRole) + '</span>' : '') + '</td>' +
+      '<td class="sc-num">' + r.size.toLocaleString() + '</td>' +
+      '<td class="sc-num">' + r.lineCount.toLocaleString() + '</td>' +
+      '<td>' + esc(r.nl) + '</td>' +
+      '<td>' + fhtml + '</td>' +
+      '<td>' + chtml + '</td>' +
+      '<td>' + verdict +
+        '<div class="sc-dim">맞는 줄 ' + okLines.toLocaleString() + '</div>' +
+        '<div class="sc-dim">길이 분포 ' + esc(distHtml) + '</div>' +
+        notes.map(n => '<div class="sc-warn">' + esc(n) + '</div>').join('') +
+      '</td></tr>';
+  });
+  $('sc-sum').innerHTML = s + '</tbody></table>';
+}
+
+// 줄 표 — 어긋난 줄(또는 모든 줄)
+function scRenderRows(res){
+  let t = '<table class="fields"><thead><tr><th>파일 · 줄</th><th>레코드</th><th>서식번호</th>' +
+    '<th>길이</th><th>허용 길이</th><th>어디서 어긋났나</th></tr></thead><tbody>';
+  let shown = 0, hidden = 0;
+  res.forEach((r, fi) => {
+    r.rows.forEach(row => {
+      const isBad = row.blank || !row.rec || !!row.diag;
+      if (SC.onlyBad && !isBad) return;
+      if (shown >= 500){ hidden++; return; }
+      shown++;
+      if (row.blank){
+        t += '<tr><td>' + esc(r.name) + '<br><span class="sc-dim">' + row.no + '줄</span></td>' +
+          '<td colspan="5"><b class="sc-bad">빈 줄</b> — 레코드가 없습니다.</td></tr>';
+        return;
+      }
+      const key = fi + ':' + row.no;
+      const rec = row.rec;
+      const why = !rec
+        ? '<b class="sc-bad">레코드를 판별하지 못했습니다</b>' +
+          '<div class="sc-dim">서식번호 · 내역구분이 있어야 할 자리의 값이 코드표에 없습니다.</div>' +
+          '<div class="sc-dim">앞 24byte: <span class="sc-val">' + esc(row.head) + '</span></div>'
+        : row.diag
+          ? '<b class="sc-bad">' + esc(row.diag.head) + '</b> — ' + esc(row.diag.where) +
+            (row.diag.extra ? '<div class="sc-dim">남은 값: <span class="sc-val">' + esc(row.diag.extra) + '</span></div>' : '') +
+            (row.diag.lost.length
+              ? '<div class="sc-dim">빠진 필드 ' + row.diag.lost.length + '개: ' +
+                esc(row.diag.lost.slice(0, 6).join(' · ')) + (row.diag.lost.length > 6 ? ' …' : '') + '</div>'
+              : '')
+          : '<span class="sc-ok">맞습니다</span>';
+      t += '<tr class="sc-row' + (isBad ? ' sc-hit' : '') + '" data-key="' + key + '">' +
+        '<td>' + esc(r.name) + '<br><span class="sc-dim">' + row.no + '줄</span></td>' +
+        '<td>' + (rec
+            ? '<span class="tag an">' + esc(rec.key) + '</span> ' + esc(rec.name) +
+              '<div class="sc-dim">' + esc(row.by) + ' 판별</div>'
+            : '<span class="sc-dim">—</span>') + '</td>' +
+        '<td>' + (row.form ? '<span class="code"><b>' + esc(row.form) + '</b></span>' : '<span class="sc-dim">—</span>') + '</td>' +
+        '<td class="sc-num">' + row.len.toLocaleString() + '</td>' +
+        '<td class="sc-num">' + (rec ? rec.allowed.join(' / ') : '—') + '</td>' +
+        '<td>' + why + '</td></tr>';
+      if (SC.open.has(key) && rec)
+        t += '<tr class="sc-detail"><td colspan="6">' + scBreak(rec, row) + '</td></tr>';
+    });
+  });
+  if (hidden) t += '<tr><td colspan="6" class="sc-dim">줄이 너무 많아 500줄까지만 보여 줍니다 (' + hidden.toLocaleString() + '줄 생략).</td></tr>';
+  if (!shown) t += '<tr><td colspan="6" style="text-align:center;padding:22px;">' +
+    '<span class="sc-ok">모든 줄의 길이가 서식과 맞습니다.</span></td></tr>';
+  $('sc-rows').innerHTML = t + '</tbody></table>';
+}
+
+/* 필드별로 잘라 보여 준다 — 어디서 끊겼는지 · 숫자 칸에 숫자가 아닌 값이 있는지 */
+function scBreak(rec, row){
+  const b = row.bytes;
+  const numBad = scNumBad(rec, b);
+  const badPos = {};
+  numBad.forEach(x => { badPos[x.pos] = 1; });
+
+  let h = '';
+  if (numBad.length)
+    h += '<div class="sc-warn">숫자 칸에 숫자가 아닌 값이 있습니다 — <b>' + esc(numBad[0].name) +
+      '(위치 ' + numBad[0].pos + ')</b> 부터 밀린 것으로 보입니다. 짐작이니 아래 표에서 확인해 주세요.</div>';
+
+  h += '<table class="fields sc-fields"><thead><tr><th>위치</th><th>길이</th><th>형식</th>' +
+    '<th>항목명</th><th>값</th></tr></thead><tbody>';
+  rec.layout.fields.forEach(f => {
+    const end = f.pos + f.len - 1;
+    const cut = f.pos > b.length ? 'gone' : end > b.length ? 'cut' : '';
+    let v = cut === 'gone' ? '' : scText(scSlice(b, f));
+    if (v.length > 90) v = v.slice(0, 90) + '…';
+    h += '<tr' + (cut || badPos[f.pos] ? ' class="sc-hit"' : '') + '>' +
+      '<td class="sc-num">' + f.pos + ' ~ ' + end + '</td>' +
+      '<td class="sc-num">' + f.len + '</td>' +
+      '<td><span class="tag ' + esc(f.mode) + '">' + esc(f.mode) + '</span></td>' +
+      '<td>' + esc(f.name) + '</td>' +
+      '<td><span class="sc-val">' + esc(v) + '</span>' +
+        (cut === 'gone' ? '<span class="sc-bad"> 줄이 여기까지 오지 않았습니다</span>'
+         : cut === 'cut' ? '<span class="sc-bad"> 이 칸 안에서 끊겼습니다 (' + (b.length - f.pos + 1) + '/' + f.len + 'byte)</span>'
+         : badPos[f.pos] ? '<span class="sc-bad"> 숫자 칸에 맞지 않는 값</span>' : '') +
+      '</td></tr>';
+  });
+  if (row.diag && !row.diag.short)
+    h += '<tr class="sc-hit"><td class="sc-num">' + (row.diag.near + 1) + ' ~ ' + b.length + '</td>' +
+      '<td class="sc-num">' + row.diag.diff + '</td><td></td>' +
+      '<td><b class="sc-bad">서식에 없는 부분</b></td>' +
+      '<td><span class="sc-val">' + esc(scText(b.subarray(row.diag.near))) + '</span></td></tr>';
+  return h + '</tbody></table>';
+}
+
+/* ---------- 파일 받기 ---------- */
+async function scTakeFiles(fileList){
+  const list = [];
+  for (const file of Array.from(fileList)){
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const bom = bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF;
+    const split = scSplitLines(bytes);
+    list.push({name: file.name, bytes, bom, enc: scEncNote(bytes), lines: split.lines, nl: split.nl});
+  }
+  SC.list = list;
+  SC.open.clear();
+  SC.forced = false;
+  const det = scDetectClaim(list);
+  SC.cands = det.cands;
+  SC.claim = det.best;
+  SC.why = det.why;
+  scRender();
+}
+
+$('sc-pick').addEventListener('click', () => $('sc-file').click());
+$('sc-file').addEventListener('change', e => { if (e.target.files.length) scTakeFiles(e.target.files); });
+$('sc-clear').addEventListener('click', () => {
+  SC.list = []; SC.claim = ''; SC.why = ''; SC.cands = []; SC.open.clear();
+  $('sc-file').value = '';
+  scRender();
+});
+
+const scDropZone = $('sc-drop');
+['dragenter', 'dragover'].forEach(ev => scDropZone.addEventListener(ev, e => {
+  e.preventDefault(); scDropZone.classList.add('over');
+}));
+['dragleave', 'drop'].forEach(ev => scDropZone.addEventListener(ev, e => {
+  e.preventDefault(); scDropZone.classList.remove('over');
+}));
+scDropZone.addEventListener('drop', e => {
+  if (e.dataTransfer && e.dataTransfer.files.length) scTakeFiles(e.dataTransfer.files);
+});
+
+scRender();

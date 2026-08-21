@@ -200,13 +200,17 @@
         <label class="saved-note" id="dg-rural-wrap"><input type="checkbox" id="dg-rural"> 분만취약지</label>
         <label class="saved-note" id="dg-gyn-wrap"><input type="checkbox" id="dg-gyn"> 부인과 가산</label>
         <span class="spacer" style="flex:1;"></span>
+        <label class="saved-note" title="계산 칸의 가로 폭을 줄이거나 늘립니다. 표는 머리줄 맨 오른쪽 끝을 끌어서 따로 줄일 수 있습니다(두 번 누르면 원래대로).">
+          칸 폭 <input type="range" id="dg-w" min="560" max="1600" step="20" style="width:130px;vertical-align:middle;">
+          <b id="dg-w-val" style="font-variant-numeric:tabular-nums;"></b>
+        </label>
         <button class="btn xs" id="dg-clear">비우기</button>
       </div>
 
       <!-- 표가 가로로 길어 카드를 두 칸씩 나란히 놓는다 (창이 좁으면 한 줄로 접힌다) -->
       <!-- 왼쪽에 계산 카드들, 오른쪽에 합계 — 오른쪽은 스크롤을 내려도 따라온다 -->
       <div class="dg-wrap">
-      <div class="dg-main">
+      <div class="dg-main" id="dg-main">
 
       <div class="card"><div class="card-pad">
         <b class="dg-h">① 포괄수가</b>
@@ -287,11 +291,9 @@
       <div class="toolbar">
         <div class="sc-drop" id="sc-drop">
           <b>여기로 SAM 파일을 끌어다 놓으세요</b>
-          <span>H010 · H020.1 처럼 한 청구의 파일 여러 개를 한꺼번에 놓아도 됩니다</span>
-          <span>
-            <button class="btn" id="sc-pick">파일 고르기</button>
-            <button class="btn" id="sc-clear" style="display:none;">비우기</button>
-          </span>
+          <span class="sc-hint">H010 · H020.1 처럼 한 청구의 파일 여러 개를 한꺼번에 놓아도 됩니다</span>
+          <button class="btn" id="sc-pick">파일 고르기</button>
+          <button class="btn" id="sc-clear" style="display:none;">비우기</button>
           <input type="file" id="sc-file" multiple hidden>
         </div>
       </div>
