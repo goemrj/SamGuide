@@ -702,6 +702,9 @@ a.b2-ref:hover{text-decoration:underline;}
   pointer-events:none;
 }
 .symb:hover::after{opacity:1; visibility:visible;}
+/* 검색어가 기호 자체에 걸린 배지 — 표의 다른 강조(mark)와 달리 색을 뒤집는다.
+   배지 바탕이 이미 연한 파랑이라 그 위에 mark 를 얹으면 표시가 나지 않는다. */
+.symb.hit{background:var(--accent); color:#fff;}
 
 
 /* 부담률·금액 칸의 숫자 강조 */

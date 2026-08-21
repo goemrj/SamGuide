@@ -218,6 +218,15 @@ const B2_CODE   = '[FV][0-9]{3}';
 const B2_CODES  = B2_CODE + '(?:\\s*[,·]\\s*' + B2_CODE + ')*';
 const B2_CODERE = new RegExp('\\(\\s*(' + B2_CODES + ')\\s*\\)|(' + B2_CODES + ')', 'g');
 
+/* 검색어가 기호 글자에 걸리면 배지를 뒤집어(파란 바탕 · 흰 글씨) 눈에 띄게 한다.
+   배지 안에 <mark> 를 넣는 방법은 못 쓴다 — 배지 바탕과 <mark> 바탕이 같은 연한 파랑이라
+   글자가 묻힌다. */
+function b2SymbHit(code, needle){
+  const html = b2Symb(code);
+  const hit = needle && sgQueries(needle).some(q => code.toLowerCase().includes(q));
+  return hit ? html.replace('class="symb"', 'class="symb hit"') : html;
+}
+
 /* 아직 이스케이프하지 않은 **원문 글자**를 받는다 (hilite 앞에서 부른다는 뜻).
    기호가 아닌 부분만 hilite 에 태우므로 검색 강조는 그대로 남는다. */
 function b2Coded(text, needle){
@@ -226,7 +235,7 @@ function b2Coded(text, needle){
   B2_CODERE.lastIndex = 0;
   while ((m = B2_CODERE.exec(s)) !== null){
     out += hilite(s.slice(last, m.index), needle) +
-           (m[1] || m[2]).split(/[,·]/).map(c => b2Symb(c.trim())).join(' ');
+           (m[1] || m[2]).split(/[,·]/).map(c => b2SymbHit(c.trim(), needle)).join(' ');
     last = m.index + m[0].length;
   }
   return out + hilite(s.slice(last), needle);
