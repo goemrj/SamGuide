@@ -9,9 +9,10 @@
    ① 포괄수가   점수 총합 × 점수당 단가 → 10원 미만 4사5입
                 본인부담 = 【기준점수 + (입원일수 − 평균입원일수) × 일당점수】(+야간공휴점수)
                            × 점수당 단가 × 본인부담률 → 10원 미만 4사5입
-   ② 별도산정   줄마다 단가 × 1회투약량 × 일투 × 총투 × 보상률 → 원 미만 4사5입
-                (식대 · 외과전문의 가산 · PCA 등) · 제외금액(1인실 · 인공수정체)은 뺀다
-   ③ 상급병실   (별표 2의3) 2인실~5인실 추가비용과 본인부담액
+   ② 별도산정   별도보상총액에서 부담률이 다른 항목(식대 · 2인실 차액 · 정책수가 …)을 빼고
+                나머지에 부담률을 곱한다 — ② 본인부담금 계산기의 원장과 같은 방식.
+                제외금액(1인실 · 인공수정체)은 총액에서 뺀다
+   ③ 상급병실   (별표 2의3) 2인실~5인실 **본인부담액만** — 추가비용(차액)은 ② 에 적어 총액에 넣는다
    ④ 열외군     행위별 진료비총액 − 질병군 요양급여비용총액 − 100만원 (양수일 때만)
    ⑤ 합계       ①+②+③+④ → 10원 미만 **절사**
    ─────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ function dgNewItem(){ return { name:'', amount:0, rate:null, burdenFix:null }; }
 function dgNewState(){
   return { code:'', q:'', inst:'상급종합병원', los:1, rate:.20,
            night:false, mid:false, rural:false, gyn:false,   // 야간·공휴 / 심야 / 분만취약지 / 부인과
+           exTotal:0, exRate:null, exFix:null,  // 별도보상총액 · 그 줄 부담률 · 본인부담 수기
            items:[],
            solo:0,                              // 1인실 이용일수 → 6인실이상 기본점수입원료 × 일수를 뺀다
            lens:0,                              // 인공수정체 제외유형 (별표 9) — 0 이면 없음
@@ -136,6 +138,9 @@ function dgLoad(){
   o.los = Math.max(1, Number(s.los) || 1);
   if (DG_RATES.some(r => r.v === s.rate)) o.rate = s.rate;
   o.night = !!s.night; o.mid = !!s.mid; o.rural = !!s.rural; o.gyn = !!s.gyn;
+  o.exTotal = Number(s.exTotal) || 0;
+  o.exRate = typeof s.exRate === 'number' ? s.exRate : null;
+  o.exFix  = typeof s.exFix === 'number' ? s.exFix : null;
   o.solo = Math.max(0, Number(s.solo) || 0);
   o.lens = Number(s.lens) || 0;
   o.fee = Number(s.fee) || 0;
@@ -237,45 +242,56 @@ function dgCompute(){
   const o = Object.assign({ S, unit, los, band:'', score:0, hitScore:0, pack:0, packOwn:0 },
                           dgPackAt(los) || {});
 
-  // ② 별도산정 — 금액과 부담률을 손으로 적는다(② 본인부담금 계산기와 같은 모양)
+  /* ② 별도산정 — ② 본인부담금 계산기의 원장과 같다.
+     맨 위 **별도보상총액** 이 총진료비 자리이고, 그 아래 줄은 그 안에서
+     부담률이 다른 항목(식대 50% · 2인실 0% · 정책수가 0% …)이다.
+       산정대상 = 별도보상총액 − Σ(항목 금액)
+       본인부담 = 산정대상 × 부담률 + Σ(항목 금액 × 그 항목 부담률)
+     총액에 더해지는 금액은 **별도보상총액**이다(항목은 그 안에 든 것이라 따로 더하지 않는다). */
   o.items = dg.items.map(it => {
     const amt = it.amount || 0;
     const rate = dgHas(it.rate) ? it.rate : dg.rate;
     return { amt, rate, own: dgHas(it.burdenFix) ? it.burdenFix : amt * rate };
   });
-  o.extra    = o.items.reduce((a, x) => a + x.amt, 0);
-  o.extraOwn = o.items.reduce((a, x) => a + x.own, 0);
+  o.exItems  = o.items.reduce((a, x) => a + x.amt, 0);
+  o.exBase   = (dg.exTotal || 0) - o.exItems;              // 산정대상
+  o.exRate   = dgHas(dg.exRate) ? dg.exRate : dg.rate;
+  o.exBaseOwn = dgHas(dg.exFix) ? dg.exFix : o.exBase * o.exRate;
+  o.extra    = dg.exTotal || 0;
+  o.extraOwn = o.exBaseOwn + o.items.reduce((a, x) => a + x.own, 0);
   // 제외금액 — 1인실(6인실이상 기본점수입원료 × 이용일수)과 인공수정체(별표 9)를 따로 센다
   o.exclSolo = dgBase6() * (dg.solo || 0);
   o.exclLens = dgLensAmt();
   o.excl     = o.exclSolo + o.exclLens;
   o.exclOwn  = o.excl * dg.rate;
 
-  // ③ 2인실~5인실 (별표 2의3)
+  /* ③ 2인실~5인실 (별표 2의3) — **본인부담액만** 센다.
+     추가비용(차액)은 명세서 진료내역(02항 01목)에 적어 청구하는 별도보상이라
+     ② 별도산정에 적은 금액으로 총액에 들어간다. 여기서 또 더하면 두 번 세는 셈이다
+     (2026-08-21 요청으로 추가비용 계산·표시를 걷어냈다). */
   const base6 = dgBase6();
-  let addRoom = 0, ownRoom = 0, days6 = 0;
+  let ownRoom = 0, days6 = 0;
   o.rooms = DG_ROOMS.map(({ k, label }) => {
     const r = dg.rooms[k], d = r.d || 0, p = dgRoomP(k), rate = dgRoomRateOf(k);
-    const add = Math.max(0, p - base6) * d;         // 추가비용 = (그 인실 − 6인실이상) × 일수
     const own = p * d * rate;                       // 본인부담 = 인실 단가 × 일수 × 인실 부담률
-    addRoom += add; ownRoom += own; days6 += d;
-    return { k, label, d, p, rate, add, own };
+    ownRoom += own; days6 += d;
+    return { k, label, d, p, rate, own };
   });
   o.base6 = base6;
   o.days6 = days6;
   o.room6Own = base6 * days6 * dg.rate;             // 6인실이상 × 이용일수 × 자격 부담률 (차감)
-  o.roomAdd = addRoom;
   o.roomOwn = ownRoom - o.room6Own;
 
   // ④ 열외군 — 질병군 요양급여비용총액(10원 미만 절사)과 견준다
-  o.drgTotal = cut10(o.pack + o.extra + o.roomAdd - o.excl);
+  o.drgTotal = cut10(o.pack + o.extra - o.excl);
   o.gap = dg.fee > 0 ? dg.fee - o.drgTotal - 1000000 : 0;
   o.isOut = o.gap > 0;
   o.outAdd = o.isOut ? o.gap : 0;
   o.outOwn = o.isOut ? o.gap * dg.rate : 0;
 
   // ⑤ 합계 — 마지막에 10원 미만 절사
-  o.total = cut10(o.pack + o.extra + o.roomAdd - o.excl + o.outAdd);
+  o.totalRaw = o.pack + o.extra - o.excl + o.outAdd;   // 절사 전 (원장에서 빼 나가는 값)
+  o.total = cut10(o.totalRaw);
   o.own   = cut10(o.packOwn + o.extraOwn + o.roomOwn - o.exclOwn + o.outOwn);
   o.claim = o.total - o.own;
   return o;
@@ -421,6 +437,20 @@ function dgRenderItems(){
       '<th>구분</th><th style="width:15.5%;">금액</th><th style="width:12%;">부담률</th>' +
       '<th style="width:15.5%;">본인부담</th><th style="width:4.5%;"></th>' +
     '</tr></thead><tbody>' +
+      // 첫 줄 = 별도보상총액 (계산기의 총진료비 자리)
+      '<tr><td><span class="c-name">별도보상총액</span>' +
+        '<div class="saved-note">아래 줄들을 뺀 나머지에 이 부담률을 곱합니다</div></td>' +
+        '<td><input class="field-input money mini" data-dx="total" data-df="amount" type="text" ' +
+          'inputmode="numeric" title="+ − × ÷ 로 셈도 됩니다" placeholder="0" value="' +
+          (dg.exTotal ? dg.exTotal.toLocaleString() : '') + '"></td>' +
+        '<td><input class="field-input mini pctin" data-dx="rate" data-df="rate" inputmode="decimal" ' +
+          'value="' + (dgHas(dg.exRate) ? Math.round(dg.exRate * 1000) / 10 : '') +
+          '" placeholder="' + Math.round(dg.rate * 1000) / 10 + '"><span class="pctsign">%</span></td>' +
+        '<td class="num fixable" data-dfix="base" ' +
+          'title="두 번 누르면 이 줄 본인부담을 직접 적을 수 있습니다">' +
+          '<span data-dout="ex-base-own">0</span>' +
+          '<div class="saved-note" data-dout="ex-base-note"></div></td>' +
+        '<td></td></tr>' +
       dg.items.map((it, i) => dgItemRow(it, i)).join('') +
     '</tbody><tfoot>' +
       // 제외금액 두 줄 — 1인실(일수 × 6인실이상 기본점수입원료)과 인공수정체(별표 9)
@@ -435,10 +465,13 @@ function dgRenderItems(){
         '<td class="num" data-dout="excl-lens">0</td>' +
         '<td class="num">' + pct(dg.rate) + '</td>' +
         '<td class="num" data-dout="excl-lens-own">0</td><td></td></tr>' +
-      '<tr><td><span class="c-name">별도산정 합계</span> ' +
-        '<span class="saved-note">제외금액은 맨 위 합계 카드에서 뺍니다</span></td>' +
-        '<td class="num b" data-dout="extra">0</td><td></td>' +
+      '<tr><td><span class="c-name">산정대상 금액 · 별도산정 본인부담</span>' +
+        '<div class="saved-note">왼쪽 = 별도보상총액 − 위 항목 금액 · 오른쪽 = 위 본인부담을 다 더한 값</div></td>' +
+        '<td class="num b" data-dout="ex-base">0</td><td></td>' +
         '<td class="num b" data-dout="extra-own">0</td><td></td></tr>' +
+      '<tr><td>총액에 더하는 금액 <span class="saved-note">별도보상총액 그대로</span>' +
+        '<span class="dg-err" data-dout="ex-warn"></span></td>' +
+        '<td class="num b" data-dout="extra">0</td><td></td><td class="num"></td><td></td></tr>' +
     '</tfoot></table>';
 }
 
@@ -447,8 +480,8 @@ function dgRenderRooms(){
   $('dg-room').innerHTML =
     '<table class="fields items dgt fixed" data-k="drg-room"><thead><tr>' +
       '<th>인실</th><th style="width:15.5%;">기본점수입원료</th><th style="width:9.5%;">이용일수</th>' +
-      '<th style="width:9.5%;">부담률</th><th style="width:15.5%;">추가비용</th>' +
-      '<th style="width:15.5%;">본인부담</th>' +
+      '<th style="width:11%;">부담률</th>' +
+      '<th style="width:19%;">본인부담</th>' +
     '</tr></thead><tbody>' +
       DG_ROOMS.map(({ k, label }) => {
         const r = dg.rooms[k], def = dgFee(k);
@@ -461,7 +494,6 @@ function dgRenderRooms(){
           '<td><input class="field-input mini pctin" data-dr="' + k + '" data-df="rate" ' +
             'inputmode="decimal" value="' + (dgHas(r.rate) ? Math.round(r.rate * 1000) / 10 : '') +
             '" placeholder="' + Math.round(dgRoomRate(k) * 1000) / 10 + '"><span class="pctsign">%</span></td>' +
-          '<td class="num" data-dout="room-add-' + k + '">0</td>' +
           '<td class="num" data-dout="room-own-' + k + '">0</td></tr>';
       }).join('') +
       '<tr><td><span class="c-name">6인실 이상</span>' +
@@ -473,10 +505,9 @@ function dgRenderRooms(){
           (dg.base6 ? dg.base6.toLocaleString() : '') + '"></td>' +
         '<td class="num" data-dout="room-days">0일</td>' +
         '<td class="num">' + pct(dg.rate) + '</td>' +
-        '<td class="num"></td>' +
         '<td class="num" data-dout="room6-own">0</td></tr>' +
-    '</tbody><tfoot><tr><td colspan="4">2인실~5인실 합계</td>' +
-      '<td class="num b" data-dout="room-add">0</td>' +
+    '</tbody><tfoot><tr><td colspan="4">2인실~5인실 <b>본인부담 합계</b>' +
+      '<div class="saved-note">추가비용(차액)은 별도산정에 적어 총액에 넣습니다 — 여기서는 본인부담만 셉니다</div></td>' +
       '<td class="num b" data-dout="room-own">0</td></tr></tfoot></table>';
 }
 
@@ -516,16 +547,17 @@ function dgRenderSum(o){
       '<th>구분</th><th style="width:31%;">금액</th><th style="width:31%;">본인부담</th>' +
     '</tr></thead><tbody>' +
       line('<span class="c-name">요양급여비용총액 1</span>' +
-        (o.S ? '<div class="saved-note">산정대상 ' + won(o.pack) + ' × ' + pct(dg.rate) +
-               ' · ' + esc(o.band) + '</div>' : ''),
-        o.total, o.packOwn) +
-      line('② 별도산정<div class="saved-note">' + pct(dg.rate) + ' 또는 줄마다 적은 부담률</div>', o.extra, o.extraOwn) +
-      line('③ 2인실~5인실<div class="saved-note">(별표 2의3)</div>', o.roomAdd, o.roomOwn) +
-      line('④ 열외군 차액<div class="saved-note">' + pct(dg.rate) + '</div>', o.outAdd, o.outOwn) +
+        '<div class="saved-note">' +
+          (o.totalRaw !== o.total ? '10원 미만 절사 전 · 절사하면 ' + won(o.total) + '원' : '10원 미만 절사') +
+          (o.S ? ' · 산정대상 ' + won(o.pack) + ' × ' + pct(dg.rate) : '') + '</div>',
+        o.totalRaw, o.packOwn) +
+      line('별도산정<div class="saved-note">' + pct(dg.rate) + ' 또는 줄마다 적은 부담률</div>', o.extra, o.extraOwn) +
+      line('2인실~5인실<div class="saved-note">(별표 2의3) · 금액은 별도산정에 있음</div>', 0, o.roomOwn) +
+      line('열외군 차액<div class="saved-note">' + pct(dg.rate) + '</div>', o.outAdd, o.outOwn) +
       line('제외금액<div class="saved-note">1인실 · 인공수정체 — 빼는 금액</div>', -o.excl, -o.exclOwn) +
     '</tbody><tfoot>' +
       '<tr><td><span class="c-name">산정대상 금액 · 본인부담금</span>' +
-        '<div class="saved-note">왼쪽 = 총액 − 위 항목 (=① 포괄수가) · 오른쪽 = 위 본인부담을 다 더한 값 (10원 미만 절사)</div></td>' +
+        '<div class="saved-note">왼쪽 = 총액 − 위 항목 (= 포괄수가) · 오른쪽 = 위 본인부담을 다 더한 값 (10원 미만 절사)</div></td>' +
       '<td class="num b">' + won(o.pack) + '</td>' +
       '<td class="num strong">' + won(o.own) + '</td></tr>' +
       '<tr><td>청구액</td><td class="num"></td><td class="num">' + won(o.claim) + '</td></tr>' +
@@ -539,16 +571,20 @@ function dgPaint(){
                                 .forEach(el => { if (!el.querySelector('[data-dfixin]')) el.innerHTML = v; });
   o.items.forEach((x, i) => set('item-own-' + i, won2(x.own) +
     (dgHas(dg.items[i] && dg.items[i].burdenFix) ? '<div class="saved-note">수기</div>' : '')));
+  set('ex-base-own', won2(o.exBaseOwn));
+  set('ex-base-note', dgHas(dg.exFix) ? '수기로 적은 값'
+        : (dg.exTotal ? esc(won(o.exBase) + ' × ' + pct(o.exRate)) : ''));
+  set('ex-base', won(o.exBase));
+  set('ex-warn', o.exBase < 0 ? ' · 항목 금액의 합이 별도보상총액보다 큽니다' : '');
   set('extra', won(o.extra));
   set('extra-own', won2(o.extraOwn));
   set('excl-solo', o.exclSolo ? '−' + won(o.exclSolo) : '0');
   set('excl-solo-own', o.exclSolo ? '−' + won2(o.exclSolo * dg.rate) : '0');
   set('excl-lens', o.exclLens ? '−' + won(o.exclLens) : '0');
   set('excl-lens-own', o.exclLens ? '−' + won2(o.exclLens * dg.rate) : '0');
-  o.rooms.forEach(r => { set('room-add-' + r.k, won(r.add)); set('room-own-' + r.k, won2(r.own)); });
+  o.rooms.forEach(r => set('room-own-' + r.k, won2(r.own)));
   set('room-days', o.days6 + '일');
   set('room6-own', '−' + won2(o.room6Own));
-  set('room-add', won(o.roomAdd));
   set('room-own', won2(o.roomOwn));
   set('drg-total', won(o.drgTotal));
   set('out-label', o.isOut
@@ -634,6 +670,19 @@ $('dg-clear').addEventListener('click', () => {
 function dgOnInput(e){
   const t = e.target;
   if (!t.dataset) return;
+  if (t.dataset.dx === 'total'){              // 별도보상총액
+    const a = readAmount(t);
+    if (a.ok) dg.exTotal = a.val;
+    if (!a.formula) reformatMoney(t, dg.exTotal);
+    dgPaint();
+    return;
+  }
+  if (t.dataset.dx === 'rate'){               // 별도보상총액 줄의 부담률
+    const s = t.value.trim();
+    dg.exRate = s === '' ? null : (parseFloat(s) || 0) / 100;
+    dgPaint();
+    return;
+  }
   if (t.id === 'dg-solo'){                    // 1인실 이용일수
     dg.solo = Math.max(0, Math.round(Number(String(t.value).replace(/[^0-9]/g, '')) || 0));
     dgPaint();
@@ -667,7 +716,7 @@ function dgOnInput(e){
   // 맨 아래 줄을 채우면 그 밑에 빈 줄을 하나 더 붙인다 (표는 다시 그리지 않는다)
   if (i === dg.items.length - 1 && !dgIsBlank(it)){
     const tb = $('dg-extra').querySelector('tbody');
-    const tr = tb && tb.querySelectorAll('tr')[i];
+    const tr = tb && tb.querySelectorAll('tr')[i + 1];   // tbody 첫 줄은 별도보상총액
     if (tr && !tr.querySelector('[data-ddel]'))
       tr.lastElementChild.innerHTML =
         '<button class="btn xs" data-ddel="' + i + '" title="이 줄 지우기">✕</button>';
@@ -677,6 +726,7 @@ function dgOnInput(e){
   dgPaint();
 }
 function dgMoneyValue(t){                 // 그 칸이 지금 들고 있는 값
+  if (t.dataset.dx === 'total') return dg.exTotal;
   if (t.id === 'dg-fee') return dg.fee;
   if (t.id === 'dg-base6') return dg.base6;
   if (t.dataset.dr) return (dg.rooms[t.dataset.dr] || {}).p || 0;
@@ -742,19 +792,24 @@ $('dg-extra').addEventListener('keydown', e => {
 function dgCommitFix(inp, keep){
   const cell = inp.closest('[data-dfix]');
   if (!cell) return;
-  const it = dg.items[Number(cell.dataset.dfix)];
-  if (keep && it){
+  const key = cell.dataset.dfix;
+  const it = key === 'base' ? null : dg.items[Number(key)];
+  if (keep && (it || key === 'base')){
     const s = inp.value.trim();
     const v = s === '' ? null : (HAS_OP.test(s) ? calcExpr(s) : parseMoney(s));
-    it.burdenFix = dgHas(v) ? Math.max(0, Math.round(v)) : null;
+    const val = dgHas(v) ? Math.max(0, Math.round(v)) : null;
+    if (key === 'base') dg.exFix = val; else it.burdenFix = val;
   }
-  cell.innerHTML = '0';
+  cell.innerHTML = key === 'base'
+    ? '<span data-dout="ex-base-own">0</span><div class="saved-note" data-dout="ex-base-note"></div>'
+    : '0';
   dgPaint();
 }
 $('dg-extra').addEventListener('dblclick', e => {
   const cell = e.target.closest('[data-dfix]');
   if (!cell || cell.querySelector('[data-dfixin]')) return;
-  const it = dg.items[Number(cell.dataset.dfix)];
+  const key = cell.dataset.dfix;
+  const it = key === 'base' ? { burdenFix: dg.exFix } : dg.items[Number(key)];
   if (!it) return;
   cell.innerHTML = '<input class="field-input money mini" data-dfixin="1" inputmode="numeric" ' +
     'placeholder="자동" title="비우고 나가면 다시 자동 계산" value="' +

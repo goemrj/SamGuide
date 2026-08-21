@@ -323,12 +323,13 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
    sticky 는 상단 흰 띠(.page-top) 아래에 붙어야 해서 그 높이(--stick)를 더한다. */
 /* 칸 폭을 줄였을 때 왼쪽에 여백을 조금만 둔다 — 가운데까지 밀면 너무 멀다(2026-08-21 요청).
    남는 폭의 1/4 만, 최대 120px 까지만 밀고 나머지는 오른쪽에 둔다.
-   --dgw(칸 폭)는 page-drg.js 의 슬라이더가 넣는다. 348px = 오른쪽 칸 330 + 사이 18 */
+   --dgw(칸 폭)는 page-drg.js 의 슬라이더가 넣는다.
+   666px = 요약 칸 330 + 메모 칸 300 + 사이 18 × 2 */
 .dg-wrap{
   display:flex; gap:18px; align-items:flex-start;
-  max-width:calc(var(--dgw, 980px) + 348px);
+  max-width:calc(var(--dgw, 980px) + 666px);
   margin-right:auto;
-  margin-left:min(120px, max(0px, calc((100% - (var(--dgw, 980px) + 348px)) / 4)));
+  margin-left:min(120px, max(0px, calc((100% - (var(--dgw, 980px) + 666px)) / 4)));
 }
 .dg-main{flex:1; min-width:0;}
 /* 표 폭은 칸 폭과 따로 맞춘다 — --dgtw 는 page-drg.js 의 슬라이더가 넣는다 */
@@ -337,11 +338,21 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
   width:330px; flex:0 0 330px;
   position:sticky; top:calc(var(--stick, 0px) + 14px);
 }
+/* 메모는 요약 오른쪽 칸에 따로 둔다 (2026-08-21 요청) — 요약과 같이 따라온다 */
+.dg-note{
+  width:300px; flex:0 0 300px;
+  position:sticky; top:calc(var(--stick, 0px) + 14px);
+}
 @media (max-width:1180px){
   .dg-wrap{flex-direction:column;}
-  .dg-side{width:100%; flex:none; position:static;}
+  .dg-side, .dg-note{width:100%; flex:none; position:static;}
 }
 .dg-h{font-size:14px; letter-spacing:-.02em;}
+/* 카드 제목 앞 표식 — 번호(①②③) 대신 파란 둥근 네모로 구분한다 (2026-08-21 요청) */
+.dg-dot{
+  display:inline-block; width:9px; height:9px; border-radius:3px;
+  background:var(--accent); margin-right:8px; vertical-align:middle; margin-top:-2px;
+}
 /* 오른쪽 합계 카드 — 세 줄의 숫자를 같은 오른쪽 선에 맞춘다(칸 셋: 이름 · 숫자 · 원) */
 .dg-sum-big, .dg-sum-line{
   display:grid; grid-template-columns:1fr auto 16px; align-items:baseline; gap:6px;
@@ -362,7 +373,7 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 
 /* 요약 아래 메모 — 이 브라우저에만 저장된다 */
 .dg-memo{
-  display:block; width:100%; margin-top:8px; min-height:150px; resize:vertical;
+  display:block; width:100%; margin-top:8px; min-height:280px; resize:vertical;
   border:1px solid var(--line-strong); border-radius:5px; background:var(--card);
   padding:8px 10px; font-size:12.5px; line-height:1.65; color:var(--text-2); outline:none;
 }

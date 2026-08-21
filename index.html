@@ -217,15 +217,17 @@
       <div class="dg-main" id="dg-main">
 
       <div class="card"><div class="card-pad">
-        <b class="dg-h">① 포괄수가</b>
+        <b class="dg-h"><i class="dg-dot"></i>포괄수가</b>
         <div id="dg-pack" style="margin-top:10px;"></div>
       </div></div>
 
       <div class="card"><div class="card-pad">
-        <b class="dg-h">② 별도산정</b>
+        <b class="dg-h"><i class="dg-dot"></i>별도산정</b>
         <div id="dg-extra" style="margin-top:10px;"></div>
         <div class="saved-note" style="margin-top:8px;">
-          식대 · 외과전문의 가산 · PCA 등 포괄수가 밖에서 따로 산정하는 항목입니다. 금액은 직접 적습니다
+          맨 위 <b>별도보상총액</b>이 총진료비 자리입니다 — 그 아래에 <b>부담률이 다른 항목</b>(식대 50% · 2인실 차액 · 정책수가 …)을 적으면
+          <b>남는 금액 × 부담률 + Σ(항목 × 각 부담률)</b> 로 본인부담을 냅니다(본인부담금 계산기와 같은 방식).
+          총액에 더해지는 금액은 별도보상총액이고, 항목은 그 안에 든 것이라 따로 더하지 않습니다. 금액은 직접 적습니다
           (칸 안에서 <b>+ − × ÷</b> 셈이 됩니다 — 예: <b>6540*4*4</b> → 104,640).
           맨 아래 빈 줄에 적으면 그 아래에 빈 줄이 하나 더 생기고, <b>Tab</b>·<b>Enter</b> 로 금액 → 부담률 → 다음 줄 금액으로 넘어갑니다.
           부담률을 비워 두면 위에서 고른 본인부담률을 씁니다(기본식대 20% · 식대총액 50% · 선별급여 80% 등은 직접 적으세요).
@@ -236,17 +238,17 @@
       </div></div>
 
       <div class="card"><div class="card-pad">
-        <b class="dg-h">③ 2인실~5인실 입원료 <span class="saved-note">(별표 2의3)</span></b>
+        <b class="dg-h"><i class="dg-dot"></i>2인실~5인실 입원료 <span class="saved-note">(별표 2의3)</span></b>
         <div id="dg-room" style="margin-top:10px;"></div>
         <div class="saved-note" style="margin-top:8px;">
-          기본점수입원료 단가는 직접 적습니다(가산·감산 적용 안 한 금액).
-          추가비용 = (그 인실 − 6인실 이상) × 이용일수 · 본인부담 = Σ(인실 단가 × 일수 × 인실 부담률) − (6인실 이상 × 총 이용일수 × 자격 부담률).
-          부담률은 종별·자격에 맞게 자동으로 채워지고 직접 고칠 수 있습니다.
+          2인실~5인실 <b>추가비용(차액)은 별도보상</b>이라 <b>별도산정</b>에 적어 총액에 넣습니다 — 여기서는 <b>본인부담만</b> 계산합니다.
+          본인부담 = Σ(인실 단가 × 일수 × 인실 부담률) − (6인실 이상 × 총 이용일수 × 자격 부담률).
+          기본점수입원료 단가와 부담률은 종별·자격에 맞게 자동으로 채워지고 직접 고칠 수 있습니다.
         </div>
       </div></div>
 
       <div class="card"><div class="card-pad">
-        <b class="dg-h">④ 요양급여비용 열외군</b>
+        <b class="dg-h"><i class="dg-dot"></i>요양급여비용 열외군</b>
         <div id="dg-out" style="margin-top:10px;"></div>
         <div class="saved-note" style="margin-top:8px;">
           행위별 진료비총액이 질병군 요양급여비용총액보다 <b>100만원을 초과</b>해 많으면 열외군입니다.
@@ -259,8 +261,11 @@
       <div class="dg-side">
         <div class="card"><div class="card-pad" id="dg-sum"></div></div>
         <div class="card"><div class="card-pad" id="dg-sum-tbl"></div></div>
+      </div>
+
+      <div class="dg-note">
         <div class="card"><div class="card-pad">
-          <b class="dg-h">메모</b>
+          <b class="dg-h"><i class="dg-dot"></i>메모</b>
           <textarea class="dg-memo" id="dg-memo"
                     placeholder="이 계산에 대해 적어 둘 것 (이 브라우저에 저장됩니다)"></textarea>
         </div></div>
