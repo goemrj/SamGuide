@@ -91,6 +91,7 @@ function dgNewState(){
            fee:0,                               // 행위별 진료비총액 (열외군 판정)
            base6:0,                             // 6인실이상 기본점수입원료
            width:980, tableW:980,               // 칸(카드) 폭 · 표 폭 — 화면에서 조절한다
+           memo:'',                             // 요약 아래 메모
            rooms:{ r2:{ d:0, p:0, rate:null }, r3:{ d:0, p:0, rate:null },
                    r4:{ d:0, p:0, rate:null }, r5:{ d:0, p:0, rate:null } } };
 }
@@ -119,6 +120,7 @@ function dgLoad(){
   if (isFinite(w) && w >= 560 && w <= 1600) o.width = Math.round(w / 20) * 20;
   const tw = Number(s.tableW);
   if (isFinite(tw) && tw >= 440 && tw <= 1600) o.tableW = Math.round(tw / 20) * 20;
+  if (typeof s.memo === 'string') o.memo = s.memo;
   if (Array.isArray(s.items))
     o.items = s.items.filter(i => i && typeof i === 'object').map(i => ({
       name:String(i.name || ''),
@@ -449,13 +451,12 @@ function dgRenderOut(){
 function dgRenderSum(o){
   const line = (name, a, b) =>
     '<tr><td>' + name + '</td><td class="num">' + won2(a) + '</td><td class="num">' + won2(b) + '</td></tr>';
-  // 오른쪽 칸 — 큰 숫자 카드와 내역 표 카드를 따로 둔다(스크롤을 내려도 따라온다)
+  // 오른쪽 칸 — 큰 숫자 카드와 내역 표 카드를 따로 둔다(스크롤을 내려도 따라온다).
+  // 세 줄 모두 숫자를 같은 오른쪽 선에 맞춘다(칸 셋으로 나눈 grid — '원' 칸 폭이 고정이다).
   $('dg-sum').innerHTML =
-    '<div class="res-head" style="border-bottom:0; padding-bottom:4px;">' +
-      '<div class="res-big"><span>본인일부부담금</span><b>' + won(o.own) + '</b><i>원</i></div>' +
-    '</div>' +
-    '<div class="dg-sum-line">요양급여비용총액 1 <b>' + won(o.total) + '</b>원</div>' +
-    '<div class="dg-sum-line">청구액 <b>' + won(o.claim) + '</b>원</div>';
+    '<div class="dg-sum-big"><span>본인일부부담금</span><b>' + won(o.own) + '</b><i>원</i></div>' +
+    '<div class="dg-sum-line"><span>요양급여비용총액 1</span><b>' + won(o.total) + '</b><i>원</i></div>' +
+    '<div class="dg-sum-line"><span>청구액</span><b>' + won(o.claim) + '</b><i>원</i></div>';
   $('dg-sum-tbl').innerHTML =
     '<table class="fields items dgt fixed" data-k="drg-sum"><thead><tr>' +
       '<th>구분</th><th style="width:31%;">금액</th><th style="width:31%;">본인부담</th>' +
@@ -506,14 +507,23 @@ function dgApplyWidth(){
     m.style.maxWidth = dg.width + 'px';
     m.style.setProperty('--dgtw', dg.tableW + 'px');
   }
+  // 좌우 두 칸을 한 덩어리로 가운데 놓는다 — 칸을 좁혔을 때 왼쪽으로 쏠려 보이지 않게
+  const wrap = document.querySelector('#page-drg .dg-wrap');
+  if (wrap) wrap.style.setProperty('--dgw', dg.width + 'px');
   if ($('dg-w')) $('dg-w').value = dg.width;
   if ($('dg-w-val')) $('dg-w-val').textContent = dg.width + 'px';
   if ($('dg-tw')) $('dg-tw').value = dg.tableW;
   if ($('dg-tw-val')) $('dg-tw-val').textContent = dg.tableW + 'px';
 }
+// 메모 — 치는 중에는 건드리지 않는다
+function dgApplyMemo(){
+  const el = $('dg-memo');
+  if (el && document.activeElement !== el) el.value = dg.memo || '';
+}
 
 function dgRefresh(){
   dgApplyWidth();
+  dgApplyMemo();
   dgRenderPickers();
   dgRenderItems();
   dgRenderRooms();
@@ -549,8 +559,11 @@ $('dg-gyn').addEventListener('change', () => { dg.gyn = $('dg-gyn').checked; dgP
   setStickTop();          // 폭이 바뀌면 상단 띠 높이(글 줄바꿈)도 달라진다
   dgSave();
 }));
+$('dg-memo').addEventListener('input', () => { dg.memo = $('dg-memo').value; dgSave(); });
 $('dg-clear').addEventListener('click', () => {
-  const keep = { inst:dg.inst, rate:dg.rate, q:dg.q, width:dg.width, tableW:dg.tableW };
+  // 「비우기」는 계산만 지운다 — 폭 설정과 메모는 그대로 둔다(적어 둔 글을 잃으면 안 된다)
+  const keep = { inst:dg.inst, rate:dg.rate, q:dg.q,
+                 width:dg.width, tableW:dg.tableW, memo:dg.memo };
   dg = Object.assign(dgNewState(), keep);
   dgRefresh();
 });

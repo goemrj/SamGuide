@@ -8,6 +8,9 @@
      3. 줄의 바이트 길이를 그 레코드의 허용 길이와 견준다
      4. 어긋난 줄은 "몇 byte 모자란지/남는지 · 어느 필드에서 끊겼는지"를 적고,
         줄을 누르면 필드별로 잘라서 보여 준다
+     5. 어긋난 줄이 어느 명세서인지 — 명일련번호와 수진자 이름을 함께 적는다
+        (이름은 일반내역(A)에만 있어 같은 청구번호+명일련번호의 A 줄에서 가져온다)
+     6. 파일 구조 — 청구서(H)는 파일에 1줄만, 청구서의 건수는 일반내역 줄 수와 같아야 한다
 
    허용 길이는 레이아웃(js/layout-*.js)에서 그대로 뽑는다 — 여기에 숫자를 적어 두지 않는다.
      · 전체 길이 = 필드 끝 위치의 최대값
@@ -54,6 +57,18 @@ function scAllowed(claim, rk){
 
 function scFieldNamed(L, name){ return L.fields.find(f => f.name === name); }
 
+/* 어느 명세서의 줄인지 짚는 데 쓰는 필드.
+   명일련번호는 분야마다 이름이 다르고(의과는 '명일련번호', 나머지는 '명세서일련번호'),
+   수진자 이름 필드도 분야마다 다르다 — 이름 모음은 layout-shim.js 의 PATIENT_NAME_FIELDS 에
+   있고 레이아웃 파일들이 로드 중에 자기 이름을 보탠다(수진자성함 · 수진자성명 · 산재근로자성명 · 환자성명).
+   '명세서일련번호(당초)' 같은 다른 필드에 걸리지 않도록 이름이 정확히 같은 것만 찾는다. */
+const SC_SEQ_NAMES = ['명세서일련번호', '명일련번호'];
+function scSeqField(L){
+  for (const n of SC_SEQ_NAMES){ const f = scFieldNamed(L, n); if (f) return f; }
+  return null;
+}
+function scNameField(L){ return L.fields.find(f => PATIENT_NAME_FIELDS.has(f.name)) || null; }
+
 // 청구분야 하나의 점검 규격 — 레코드마다 서식번호 · 내역구분 위치와 허용 길이
 function scSpec(claim){
   const L = layoutsOf(claim);
@@ -66,14 +81,29 @@ function scSpec(claim){
       form: form && form.codes ? form : null,
       kind: kind && kind.codes ? kind : null,
       ftype: scFieldNamed(L[rk], '진료형태') || null,
+      cn: scFieldNamed(L[rk], '청구번호') || null,
+      seq: scSeqField(L[rk]),
+      pname: scNameField(L[rk]),
       allowed: scAllowed(claim, rk),
       full: scFull(L[rk]),
     };
   }
+  // 레코드를 판별하지 못한 줄에서도 명일련번호를 읽으려면 기준 자리가 필요하다.
+  // 청구서(H)를 뺀 나머지 레코드가 청구번호·명일련번호 자리를 똑같이 쓰는 분야에서만 쓴다
+  // (지금 11분야 모두 청구번호 1~10 · 명일련번호 11~15 로 같다).
+  let head = null, headOk = true;
+  for (const rk of Object.keys(recs)){
+    const r = recs[rk];
+    if (rk === 'H' || !r.cn || !r.seq) continue;
+    const cur = r.cn.pos + ':' + r.cn.len + '/' + r.seq.pos + ':' + r.seq.len;
+    if (!head) head = {key: cur, cn: r.cn, seq: r.seq};
+    else if (head.key !== cur) headOk = false;
+  }
   // 내역구분을 쓰는 청구분야는 한 파일에 여러 레코드가 섞여 들어온다(GEN · DRG · NDRG · JABO · WANHWA).
   // 내역구분이 없는 쪽(MG · CHUB · HANBANG · SANJAE · SANJAE_HAN · JABO_HAN)은 파일 하나가 레코드 하나다.
   const multiFile = !Object.keys(recs).some(k => recs[k].kind);
-  return { claim, recs, multiFile, ftc: CLAIM_TYPES[claim].formTypeChars || null };
+  return { claim, recs, multiFile, detailHead: headOk ? head : null,
+           ftc: CLAIM_TYPES[claim].formTypeChars || null };
 }
 
 const SC_SPECS = {};
@@ -233,6 +263,71 @@ function scDiag(rec, bytes){
   };
 }
 
+/* ---------- 어느 명세서의 줄인가 ----------
+   청구번호 + 명일련번호로 명세서를 가리키고, 수진자 이름은 일반내역(A)에만 있으므로
+   같은 열쇠를 가진 A 줄에서 가져온다(명세서 파일이 따로 오는 분야도 있어 파일을 가로질러 찾는다). */
+function scWho(spec, rec, bytes){
+  const cnF = rec ? rec.cn : (spec.detailHead && spec.detailHead.cn);
+  const seqF = rec ? rec.seq : (spec.detailHead && spec.detailHead.seq);
+  return {
+    cn: cnF ? scAscii(bytes, cnF.pos, cnF.len) : null,
+    seq: seqF ? scAscii(bytes, seqF.pos, seqF.len) : null,
+    // 잘린 줄이면 이름이 반만 들어올 수 있다 — 있는 만큼 읽는다
+    pname: rec && rec.pname ? scText(scSlice(bytes, rec.pname)).trim() : '',
+    guessed: !rec,                  // 레코드를 판별하지 못해 표준 앞머리(1~15)로 읽은 경우
+  };
+}
+function scKey(row){
+  return row.cn != null && row.seq != null ? row.cn + '/' + row.seq : '';
+}
+// A(일반내역)에서 읽은 이름을 같은 명세서의 다른 줄에 채워 넣는다
+function scFillNames(res){
+  const byKey = {};
+  res.forEach(r => r.rows.forEach(row => {
+    const k = scKey(row);
+    if (k && row.pname) byKey[k] = row.pname;
+  }));
+  res.forEach(r => r.rows.forEach(row => {
+    const k = scKey(row);
+    if (k && !row.pname && byKey[k]) row.pname = byKey[k];
+  }));
+}
+
+/* ---------- 파일 구조 점검 ----------
+   1. 청구서(H)는 파일에 딱 1줄이다. 두 청구를 한 파일에 이어 붙이면 여기서 걸린다
+      (2026-08-21 실샘플: H010 이 2줄 — 건수 1건/3건, 청구일자 08-05/08-12).
+   2. 청구서의 「건수」(= 명세서 청구건수 합)는 일반내역(A) 줄 수와 같아야 한다.
+      청구서가 1줄이고 일반내역이 함께 첨부된 때만 본다 — 명세서 파일을 안 놓으면 셀 수 없다. */
+function scStructCheck(res, claim){
+  const hAll = [];
+  let aTotal = 0;
+  res.forEach(r => r.rows.forEach(row => {
+    if (!row.rec) return;
+    if (row.rec.key === 'H') hAll.push(row);
+    if (row.rec.key === 'A') aTotal++;
+  }));
+
+  res.forEach(r => {
+    const hs = r.rows.filter(x => x.rec && x.rec.key === 'H');
+    r.hCount = hs.length;
+    if (hs.length < 2) return;
+    hs.forEach((x, i) => {
+      if (!i) return;
+      x.struct = '청구서가 이 파일에 ' + hs.length + '줄 있습니다 — 청구서는 1줄만 있어야 합니다' +
+        ' (첫 청구서는 ' + hs[0].no + '줄)';
+    });
+  });
+
+  if (hAll.length === 1 && aTotal){
+    const h = hAll[0], cf = scFieldNamed(h.rec.layout, '건수');
+    const raw = cf ? scAscii(h.bytes, cf.pos, cf.len) : null;
+    const v = raw === null ? NaN : parseInt(raw, 10);
+    if (!isNaN(v) && v !== aTotal)
+      h.struct = '청구서의 건수 ' + v.toLocaleString() + '건이 일반내역(A) ' + aTotal.toLocaleString() + '줄과 다릅니다';
+  }
+  res.forEach(r => { r.structBad = r.rows.filter(x => x.struct).length; });
+}
+
 /* 숫자 칸에 숫자가 아닌 값이 들어간 곳 — 줄이 밀린 자리를 짚는 데 쓴다(확정이 아니라 짐작) */
 function scNumBad(rec, bytes){
   const out = [];
@@ -274,7 +369,8 @@ function scCheckFile(file, claim){
     const pick = scPickRec(spec, b, fileRole);
     if (!pick){
       unknown++;
-      rows.push({no, len: b.length, bytes: b, rec: null, head: scText(b.subarray(0, 24))});
+      rows.push(Object.assign({no, len: b.length, bytes: b, rec: null, head: scText(b.subarray(0, 24))},
+                              scWho(spec, null, b)));
       return;
     }
     counts[pick.rec.key] = (counts[pick.rec.key] || 0) + 1;
@@ -284,7 +380,8 @@ function scCheckFile(file, claim){
     }
     const diag = scDiag(pick.rec, b);
     if (diag) bad++;
-    rows.push({no, len: b.length, bytes: b, rec: pick.rec, by: pick.by, form: pick.form, diag});
+    rows.push(Object.assign({no, len: b.length, bytes: b, rec: pick.rec, by: pick.by, form: pick.form, diag},
+                            scWho(spec, pick.rec, b)));
   });
 
   return {
@@ -323,13 +420,17 @@ function scRender(){
   }
 
   const res = SC.list.map(f => scCheckFile(f, claim));
+  scFillNames(res);                 // 수진자 이름을 일반내역에서 가져와 같은 명세서의 줄에 채운다
+  scStructCheck(res, claim);        // 청구서 1줄 · 건수 = 일반내역 줄 수
   const tot = res.reduce((a, r) => ({
     lines: a.lines + r.lineCount, bad: a.bad + r.bad, unknown: a.unknown + r.unknown,
-  }), {lines: 0, bad: 0, unknown: 0});
+    struct: a.struct + r.structBad,
+  }), {lines: 0, bad: 0, unknown: 0, struct: 0});
 
   $('sc-filter-row').style.display = '';
   $('sc-only').innerHTML =
-    '<button class="chip' + (SC.onlyBad ? ' on' : '') + '" data-only="1">어긋난 줄만<small>' + (tot.bad + tot.unknown) + '</small></button>' +
+    '<button class="chip' + (SC.onlyBad ? ' on' : '') + '" data-only="1">어긋난 줄만<small>' +
+      (tot.bad + tot.unknown + tot.struct) + '</small></button>' +
     '<button class="chip' + (SC.onlyBad ? '' : ' on') + '" data-only="0">모든 줄<small>' + tot.lines + '</small></button>';
   $('sc-only').querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
     SC.onlyBad = c.dataset.only === '1'; scRender();
@@ -342,6 +443,7 @@ function scRender(){
       '<span>파일 <b>' + res.length + '</b>개</span>' +
       '<span>줄 <b>' + tot.lines.toLocaleString() + '</b></span>' +
       '<span>길이 어긋남 <b>' + tot.bad.toLocaleString() + '</b></span>' +
+      '<span>구조 오류 <b>' + tot.struct.toLocaleString() + '</b></span>' +
       '<span>판별 못한 줄 <b>' + tot.unknown.toLocaleString() + '</b></span>' +
       '<span class="meta-note">길이는 바이트(EUC-KR, 한글 2byte) 기준</span>' +
     '</div><div id="sc-sum"></div></div>' +
@@ -379,10 +481,12 @@ function scRenderSummary(res, claim){
     if (r.mode !== '줄바꿈') notes.push('줄바꿈이 없어 ' + r.mode + ' 로 잘라서 봤습니다.');
     if (r.nl === '없음' && r.mode === '줄바꿈') notes.push('줄바꿈이 없습니다 — 파일 전체를 한 줄로 봤습니다.');
     if (r.blankLines) notes.push('빈 줄 ' + r.blankLines + '개');
+    if (r.hCount > 1) notes.push('청구서(H)가 ' + r.hCount + '줄입니다 — 청구서는 1줄만 있어야 합니다. 청구 두 건이 한 파일에 이어 붙었을 수 있습니다.');
     const okLines = r.lineCount - r.bad - r.unknown - r.blankLines;
-    const verdict = (r.bad || r.unknown || r.blankLines)
+    const verdict = (r.bad || r.unknown || r.blankLines || r.structBad)
       ? '<b class="sc-bad">' + [
           r.bad ? '길이 어긋남 ' + r.bad + '줄' : '',
+          r.structBad ? '구조 오류 ' + r.structBad + '건' : '',
           r.unknown ? '판별 불가 ' + r.unknown + '줄' : '',
           r.blankLines ? '빈 줄 ' + r.blankLines + '개' : '',
         ].filter(Boolean).join(' · ') + '</b>'
@@ -407,18 +511,18 @@ function scRenderSummary(res, claim){
 
 // 줄 표 — 어긋난 줄(또는 모든 줄)
 function scRenderRows(res){
-  let t = '<table class="fields"><thead><tr><th>파일 · 줄</th><th>레코드</th><th>서식번호</th>' +
+  let t = '<table class="fields"><thead><tr><th>파일 · 줄</th><th>명일련 · 수진자</th><th>레코드</th><th>서식번호</th>' +
     '<th>길이</th><th>허용 길이</th><th>어디서 어긋났나</th></tr></thead><tbody>';
   let shown = 0, hidden = 0;
   res.forEach((r, fi) => {
     r.rows.forEach(row => {
-      const isBad = row.blank || !row.rec || !!row.diag;
+      const isBad = row.blank || !row.rec || !!row.diag || !!row.struct;
       if (SC.onlyBad && !isBad) return;
       if (shown >= 500){ hidden++; return; }
       shown++;
       if (row.blank){
         t += '<tr><td>' + esc(r.name) + '<br><span class="sc-dim">' + row.no + '줄</span></td>' +
-          '<td colspan="5"><b class="sc-bad">빈 줄</b> — 레코드가 없습니다.</td></tr>';
+          '<td colspan="6"><b class="sc-bad">빈 줄</b> — 레코드가 없습니다.</td></tr>';
         return;
       }
       const key = fi + ':' + row.no;
@@ -434,9 +538,11 @@ function scRenderRows(res){
               ? '<div class="sc-dim">빠진 필드 ' + row.diag.lost.length + '개: ' +
                 esc(row.diag.lost.slice(0, 6).join(' · ')) + (row.diag.lost.length > 6 ? ' …' : '') + '</div>'
               : '')
-          : '<span class="sc-ok">맞습니다</span>';
+          : row.struct ? '<span class="sc-dim">길이는 맞습니다</span>' : '<span class="sc-ok">맞습니다</span>';
+      const struct = row.struct ? '<div><b class="sc-bad">' + esc(row.struct) + '</b></div>' : '';
       t += '<tr class="sc-row' + (isBad ? ' sc-hit' : '') + '" data-key="' + key + '">' +
         '<td>' + esc(r.name) + '<br><span class="sc-dim">' + row.no + '줄</span></td>' +
+        '<td>' + scWhoCell(row, rec) + '</td>' +
         '<td>' + (rec
             ? '<span class="tag an">' + esc(rec.key) + '</span> ' + esc(rec.name) +
               '<div class="sc-dim">' + esc(row.by) + ' 판별</div>'
@@ -444,15 +550,31 @@ function scRenderRows(res){
         '<td>' + (row.form ? '<span class="code"><b>' + esc(row.form) + '</b></span>' : '<span class="sc-dim">—</span>') + '</td>' +
         '<td class="sc-num">' + row.len.toLocaleString() + '</td>' +
         '<td class="sc-num">' + (rec ? rec.allowed.join(' / ') : '—') + '</td>' +
-        '<td>' + why + '</td></tr>';
+        '<td>' + struct + why + '</td></tr>';
       if (SC.open.has(key) && rec)
-        t += '<tr class="sc-detail"><td colspan="6">' + scBreak(rec, row) + '</td></tr>';
+        t += '<tr class="sc-detail"><td colspan="7">' + scBreak(rec, row) + '</td></tr>';
     });
   });
-  if (hidden) t += '<tr><td colspan="6" class="sc-dim">줄이 너무 많아 500줄까지만 보여 줍니다 (' + hidden.toLocaleString() + '줄 생략).</td></tr>';
-  if (!shown) t += '<tr><td colspan="6" style="text-align:center;padding:22px;">' +
+  if (hidden) t += '<tr><td colspan="7" class="sc-dim">줄이 너무 많아 500줄까지만 보여 줍니다 (' + hidden.toLocaleString() + '줄 생략).</td></tr>';
+  if (!shown) t += '<tr><td colspan="7" style="text-align:center;padding:22px;">' +
     '<span class="sc-ok">모든 줄의 길이가 서식과 맞습니다.</span></td></tr>';
   $('sc-rows').innerHTML = t + '</tbody></table>';
+}
+
+/* 명일련번호 · 수진자 칸.
+   청구서(H)는 명세서 하나를 가리키는 줄이 아니라 명일련번호가 없다.
+   레코드를 판별하지 못한 줄은 표준 앞머리(청구번호 1~10 · 명일련번호 11~15)로 읽은 값이라 그렇게 적어 준다. */
+function scWhoCell(row, rec){
+  if (rec && rec.key === 'H')
+    return '<span class="sc-dim">청구서 — 명세서 단위가 아닙니다</span>';
+  const seq = row.seq == null ? '' : row.seq.trim();
+  const parts = [];
+  parts.push(seq ? '<span class="sc-seq">' + esc(seq) + '</span>'
+                 : '<span class="sc-dim">명일련 못 읽음</span>');
+  parts.push(row.pname ? '<div>' + esc(row.pname) + '</div>'
+                       : '<div class="sc-dim">이름은 일반내역(A)에 있습니다</div>');
+  if (row.guessed) parts.push('<div class="sc-dim">앞 15byte 로 읽음 (레코드 판별 전)</div>');
+  return parts.join('');
 }
 
 /* 필드별로 잘라 보여 준다 — 어디서 끊겼는지 · 숫자 칸에 숫자가 아닌 값이 있는지 */

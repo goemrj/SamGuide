@@ -321,7 +321,12 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
 /* ---------- 질병군(DRG) 계산기 — 계산기와 같은 작은 입력 표 ---------- */
 /* 왼쪽에 계산 카드(①~④), 오른쪽에 합계 — 오른쪽은 스크롤을 내려도 따라온다 (2026-08-21 요청).
    sticky 는 상단 흰 띠(.page-top) 아래에 붙어야 해서 그 높이(--stick)를 더한다. */
-.dg-wrap{display:flex; gap:18px; align-items:flex-start;}
+/* 칸 폭을 줄여도 왼쪽으로 쏠려 보이지 않게 두 칸을 한 덩어리로 **가운데** 놓는다.
+   --dgw(칸 폭)는 page-drg.js 의 슬라이더가 넣는다. 348px = 오른쪽 칸 330 + 사이 18 */
+.dg-wrap{
+  display:flex; gap:18px; align-items:flex-start;
+  max-width:calc(var(--dgw, 980px) + 348px); margin:0 auto;
+}
 .dg-main{flex:1; min-width:0;}
 /* 표 폭은 칸 폭과 따로 맞춘다 — --dgtw 는 page-drg.js 의 슬라이더가 넣는다 */
 #dg-main table.dgt{max-width:var(--dgtw, none);}
@@ -334,12 +339,31 @@ table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--te
   .dg-side{width:100%; flex:none; position:static;}
 }
 .dg-h{font-size:14px; letter-spacing:-.02em;}
-/* 오른쪽 합계 카드의 두 줄 (요양급여비용총액 · 청구액) */
-.dg-sum-line{
-  display:flex; justify-content:space-between; align-items:baseline; gap:10px;
-  padding:5px 2px; font-size:12.5px; color:var(--text-2);
+/* 오른쪽 합계 카드 — 세 줄의 숫자를 같은 오른쪽 선에 맞춘다(칸 셋: 이름 · 숫자 · 원) */
+.dg-sum-big, .dg-sum-line{
+  display:grid; grid-template-columns:1fr auto 16px; align-items:baseline; gap:6px;
 }
-.dg-sum-line b{color:var(--text); font-variant-numeric:tabular-nums; font-weight:700;}
+.dg-sum-big{padding:2px 2px 8px; border-bottom:1px solid var(--line); margin-bottom:6px;}
+.dg-sum-big span{font-size:13px; color:var(--text-2); font-weight:600;}
+.dg-sum-big b{
+  font-size:24px; font-weight:700; letter-spacing:-.03em; color:var(--accent);
+  text-align:right; font-variant-numeric:tabular-nums;
+}
+.dg-sum-big i, .dg-sum-line i{font-style:normal; color:var(--text-3);}
+.dg-sum-big i{font-size:13px;}
+.dg-sum-line{padding:4px 2px; font-size:12.5px; color:var(--text-2);}
+.dg-sum-line b{
+  color:var(--text); font-weight:700; text-align:right; font-variant-numeric:tabular-nums;
+}
+.dg-sum-line i{font-size:11.5px;}
+
+/* 요약 아래 메모 — 이 브라우저에만 저장된다 */
+.dg-memo{
+  display:block; width:100%; margin-top:8px; min-height:150px; resize:vertical;
+  border:1px solid var(--line-strong); border-radius:5px; background:var(--card);
+  padding:8px 10px; font-size:12.5px; line-height:1.65; color:var(--text-2); outline:none;
+}
+.dg-memo:focus{border-color:var(--accent); box-shadow:var(--focus);}
 /* 질병군번호를 잘못 적었을 때 — 빨강은 계산기 비교표와 같은 --minus 를 쓴다 */
 .dg-err{color:var(--minus); font-size:12px; font-weight:600;}
 .field-input.dg-bad{border-color:var(--minus); color:var(--minus);}
@@ -858,21 +882,38 @@ table.fields.emg td.emg-code:empty::after{content:"–"; color:var(--text-4);}
 table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
 /* ---------- SAM 파일 점검 ---------- */
-/* 파일 놓는 자리 — 상단 바가 통째로 고정되므로(--stick) 한 줄로 낮게 둔다 */
+/* 파일 놓는 자리 — 파일을 놓기 전에는 크게 열어 두고, 결과를 보는 동안에는 얇은 띠(.slim)로 줄인다.
+   상단 바가 통째로 고정되므로(--stick) 큰 상자를 계속 띄워 두면 화면을 그만큼 잡아먹는다.
+   대신 점검 중에도 화면 아무 곳에나 파일을 놓을 수 있다(page-samcheck.js 의 문서 단위 drop). */
 .sc-drop{
-  width:100%; border:1px dashed var(--line-strong); border-radius:8px;
-  background:var(--group-tint); padding:9px 12px;
-  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  width:100%; border:2px dashed var(--line-strong); border-radius:10px;
+  background:var(--group-tint); padding:26px 16px; min-height:132px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;
+  text-align:center;
 }
 .sc-drop.over{border-color:var(--accent); background:var(--accent-tint);}
-.sc-drop b{font-size:13px; color:var(--text);}
-.sc-drop .sc-hint{font-size:11.5px; color:var(--text-3); flex:1; min-width:180px;}
+.sc-drop .sc-ico{width:34px; height:34px; fill:none; stroke:var(--text-4); stroke-width:1.6;
+  stroke-linecap:round; stroke-linejoin:round;}
+.sc-drop.over .sc-ico{stroke:var(--accent);}
+.sc-drop b{font-size:15px; color:var(--text); letter-spacing:-.01em;}
+.sc-drop .sc-hint{font-size:12px; color:var(--text-3);}
+.sc-drop .sc-btns{display:flex; gap:8px; margin-top:2px;}
+
+.sc-drop.slim{
+  min-height:0; padding:9px 12px; border-width:1px; border-radius:8px;
+  flex-direction:row; align-items:center; gap:10px; flex-wrap:wrap; text-align:left;
+}
+.sc-drop.slim .sc-ico{width:18px; height:18px; flex:0 0 18px;}
+.sc-drop.slim b{font-size:13px;}
+.sc-drop.slim .sc-hint{flex:1; min-width:160px; font-size:11.5px;}
+.sc-drop.slim .sc-btns{margin-top:0;}
 
 .sc-dim{color:var(--text-3); font-size:11.5px; margin-top:2px;}
 .sc-ok{color:var(--accent); font-weight:600;}
 .sc-bad{color:var(--minus); font-weight:600;}
 .sc-warn{color:var(--minus); font-size:11.5px; margin-top:4px; word-break:keep-all;}
 .sc-num{white-space:nowrap; width:1%; text-align:right; font-variant-numeric:tabular-nums;}
+.sc-seq{font-family:var(--mono); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
 /* 값은 원본 바이트 그대로 — 공백을 살리고(pre-wrap) 어디서든 접어서 가로 스크롤을 막는다 */
 .sc-val{font-family:var(--mono); font-size:11.5px; color:var(--text-2); white-space:pre-wrap; word-break:break-all;}
 table.fields tr.sc-row{cursor:pointer;}
