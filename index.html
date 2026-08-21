@@ -27,14 +27,23 @@
       <button class="navbtn" data-page="layout"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>SAM 파일 레이아웃</button>
       <button class="navbtn" data-page="hangmok"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>항 · 목 코드</button>
       <button class="navbtn" data-page="detail"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>특정내역</button>
-      <button class="navbtn" data-page="special"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>산정특례 특정기호</button>
+      <button class="navbtn" data-page="special"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>특정기호</button>
       <button class="navbtn" data-page="pharm"><svg class="ico" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>약국 산정특례</button>
       <button class="navbtn" data-page="injury"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4 3 19h18z"/><path d="M12 10v4M12 17h.01"/></svg>상해외인</button>
       <button class="navbtn" data-page="pilot"><svg class="ico" viewBox="0 0 24 24"><path d="M8 3h8"/><path d="M10 3v6l-4 8a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-4-8V3"/></svg>시범사업</button>
+      <button class="navbtn" data-page="b12"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="6" r="3"/><path d="M6 21v-4a6 6 0 0 1 12 0v4"/><path d="M9 13h6"/></svg>[별표12] 소아가산</button>
+      <button class="navbtn" data-page="emergency"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>응급의료행위</button>
       <!-- 메모장은 카테고리가 늘어도 항상 맨 아래 — 새 메뉴는 이 줄 위에 넣는다 -->
       <button class="navbtn" data-page="memo"><svg class="ico" viewBox="0 0 24 24"><path d="M17 3l4 4L8 20H4v-4z"/><path d="M14 6l4 4"/></svg>메모장</button>
     </nav>
     <div class="foot">
+      <!-- 끌어서 바꾼 열 너비를 data/colw-defaults.js 에 박아 어느 PC 에서 열든 같게 만든다.
+           localStorage 는 그 브라우저에서만 유효해서 따로 굳히는 자리가 필요했다. -->
+      <button class="foot-btn" id="colw-freeze"
+              title="지금 표 열 너비를 data/colw-defaults.js 에 저장합니다 (깃에 올리면 어느 PC에서든 같은 너비)">
+        열 너비 기본값으로 굳히기
+      </button>
+      <div class="foot-msg" id="colw-msg"></div>
       브라우저 안에서만 동작하고 외부로 아무것도 보내지 않습니다.<br>
       메모는 이 PC 브라우저에 저장됩니다.
     </div>
@@ -81,51 +90,81 @@
     <section class="page" id="page-calc">
       <div class="page-head">
         <h1>본인부담금 계산기</h1>
-        <p>총진료비에서 별도 본인부담 항목을 빼고 나머지에 기본 부담률을 적용합니다. 소수점을 그대로 두고 계산한 뒤 마지막에 절사합니다.</p>
+        <p>왼쪽 칸에 총진료비와 <b>본인부담률이 다른 항목</b>의 금액을 적으면, 오른쪽 칸에 각각의 본인부담이 나옵니다. 소수점을 그대로 두고 계산한 뒤 마지막에 한 번만 절사합니다.</p>
       </div>
 
-      <div class="calc-wrap">
-        <div class="calc-left">
-          <div class="card">
-            <div class="card-pad">
-              <div class="form-grid">
-                <label><span>자격</span><select class="field-input" id="c-qual"></select></label>
-                <label><span>진료형태</span><select class="field-input" id="c-mode"></select></label>
-                <label><span>요양기관 종별</span><select class="field-input" id="c-inst"></select></label>
-                <label><span>환자유형</span><select class="field-input" id="c-type"></select></label>
-                <label><span>산정특례</span><select class="field-input" id="c-spec"></select></label>
-                <label id="c-dispense-wrap"><span>원내 직접조제</span>
-                  <select class="field-input" id="c-dispense">
-                    <option value="0">아니오 (직접조제 이외)</option>
-                    <option value="1">예 (원내 직접조제)</option>
-                  </select>
-                </label>
-                <label class="wide"><span>총진료비 (요양급여비용총액 1)</span>
-                  <input class="field-input money" id="c-total" type="text" inputmode="numeric" placeholder="0" value=""></label>
+      <div class="toolbar"><div class="chips chips-seg" id="c-way"></div></div>
+
+      <!-- 명세서 여러 건을 한꺼번에 — 계산 한 벌이 탭 하나 -->
+      <div class="toolbar" id="c-tabs-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="chips chips-rec" id="c-tabs"></div>
+        <button class="btn xs" id="c-newtab">+ 새 계산</button>
+      </div>
+
+      <div id="c-pane-manual">
+        <div class="calc-wrap">
+          <div class="calc-left">
+            <div class="card">
+              <div class="card-pad">
+                <div id="c-led"></div>
+                <div id="c-warn"></div>
+                <div class="row-end" style="margin-top:12px;">
+                  <span class="spacer"></span>
+                  <button class="btn xs" id="c-clear">비우기</button>
+                </div>
               </div>
-              <div class="rule-hint" id="c-hint"></div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-pad">
-              <div class="row-end" style="margin-bottom:10px;">
-                <b style="font-size:14px;letter-spacing:-.02em;">별도 본인부담 항목</b>
-                <span class="spacer"></span>
-                <select class="field-input" id="c-add" style="max-width:260px;"></select>
+          <div class="calc-right">
+            <!-- MG · 병원 두 벌 비교 — 총진료비는 왼쪽 표를 따라오고, 청구액을 적으면
+                 본인부담금(총진료비 − 청구액)과 두 벌의 차액이 나온다 -->
+            <div class="card">
+              <div class="card-pad">
+                <b style="font-size:14px;letter-spacing:-.02em;">MG · 병원 청구액으로 거꾸로 계산</b>
+                <div id="c-cmp" style="margin-top:10px;"></div>
+                <div class="saved-note" style="margin-top:8px;">
+                  총진료비는 왼쪽 표에 적은 값을 그대로 씁니다. 청구액만 적으면
+                  <b>본인부담금 = 총진료비 − 청구액</b> 으로 계산합니다.
+                  병원 본인부담금이 MG보다 <b>적으면 빨강</b> · <b>크면 파랑</b>으로 나옵니다.
+                </div>
               </div>
-              <div id="c-items"></div>
-              <div class="saved-note" style="margin-top:8px;">
-                금액은 총진료비 <b>안에</b> 포함된 금액입니다. 부담률은 자격·종별에 맞게 자동으로 채워지며 직접 고칠 수 있습니다.
+            </div>
+
+            <div class="card">
+              <div class="card-pad">
+                <div class="res-head">
+                  <div class="res-big"><span>본인부담금</span><b data-out="burden">0</b><i>원</i></div>
+                  <div class="res-sub">청구액 <b data-out="claim">0</b>원 · 총진료비 <b data-out="total">0</b>원</div>
+                </div>
+                <div class="saved-note" style="margin-top:10px;">
+                  법정본인부담 <b data-out="base-burden">0</b> + 제외 항목 <b data-out="exburden">0</b>
+                  = <b data-out="raw">0</b>원 (절사 전)
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="calc-right">
-          <div class="card">
-            <div class="card-pad">
-              <div id="c-result"></div>
+        <!-- 쓰는 법은 카드 안에 넣지 않고 표 아래 공백에 글자로만 둔다 -->
+        <div class="saved-note calc-help">
+          제외 항목의 금액은 총진료비 <b>안에</b> 포함된 금액입니다. 맨 아래 빈 줄에 적으면 그 아래에 빈 줄이 하나 더 생깁니다.
+          부담률은 모두 직접 적습니다 — 법정본인부담률은 첫 줄 부담률 칸에 적고, <b>%</b> 단추를 누르면 <b>원</b>(정액)으로 바뀝니다.
+          절사 단위(외래 100원 · 입원 10원)는 <b>절사 줄</b>에서 고릅니다.
+          금액 칸에서는 <b>+ − × ÷</b> 로 셈도 됩니다 (예: <b>190040+342080</b> → 532,120).
+          <b>Tab</b> 이나 <b>Enter</b> 를 누르면 금액 → 부담률 → 다음 줄 금액으로 넘어갑니다.
+          오른쪽 <b>본인부담 칸을 두 번 누르면</b> 그 줄 금액을 직접 고쳐 넣을 수 있습니다(비우면 다시 자동 계산).
+          적어 둔 것은 이 브라우저에 저장되어 새로고침해도 남습니다 — 지우려면 <b>비우기</b>를 누르세요.
+        </div>
+      </div>
+
+      <div id="c-pane-sam" style="display:none;">
+        <div class="card">
+          <div class="card-pad">
+            <b style="font-size:14px;letter-spacing:-.02em;">SAM 파일에서 금액 뽑아 계산</b>
+            <div class="saved-note" style="margin-top:8px;line-height:1.7;">
+              아직 만들지 않았습니다. 어떤 레코드의 어느 금액을 읽어서 어느 칸에 넣을지 알려주시면
+              이 화면에 붙입니다 (예: 명세서 총진료비 · 특정내역 · 상병 · 항·목별 금액 중 무엇을 쓸지).
             </div>
           </div>
         </div>
@@ -195,10 +234,10 @@
       </div>
     </section>
 
-    <!-- 산정특례 특정기호 -->
+    <!-- 특정기호 -->
     <section class="page" id="page-special">
       <div class="page-head">
-        <h1>산정특례 특정기호</h1>
+        <h1>특정기호</h1>
         <p>특정기호 · 상병코드 · 상병일련번호 · 질환명 — 「산정특례 질환별 등록기준」(2026.1.1. 기준)
            에 「특정기호 목록」(2026.8.19. 기준)의 F 기호 · 상병목록 없는 V 기호를 더해 특정기호 263개 전부</p>
       </div>
@@ -274,6 +313,57 @@
       </div>
     </section>
 
+    <!-- [별표12] 소아가산 -->
+    <section class="page" id="page-b12">
+      <div class="page-head">
+        <h1>[별표12] 소아가산</h1>
+        <p>동반된 마취료에 대한 가산을 별도보상 받는 행위 코드 618건 — 심평원 「★ 별표12 신포괄 보상률 정리본_(별첨)별도보상마스터(기관안내용)」의
+           <b>2.소아가산관련행위목록</b> 시트를 그대로 옮긴 표입니다.</p>
+      </div>
+
+      <div class="toolbar"><div class="chips chips-seg" id="bt-gbs"></div></div>
+      <div class="toolbar">
+        <input class="field-input" id="bt-search" type="search" style="flex:1;min-width:280px;"
+               placeholder="분류번호 · 수가코드 · 명칭 · 비고 검색  (예: N0655, 자65, 이식술, 외이)">
+        <label class="saved-note" id="bt-age-wrap">연령
+          <select class="field-input" id="bt-age">
+            <option value="">전체</option>
+            <option value="u6">6세 미만</option>
+            <option value="a16">6세 이상~16세 미만</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="bt-meta"></div>
+        <div id="bt-table"></div>
+      </div>
+      <div id="bt-intro"></div>
+    </section>
+
+    <!-- 응급의료행위 별표 -->
+    <section class="page" id="page-emergency">
+      <div class="page-head">
+        <h1>응급의료행위</h1>
+        <p>수가책 「제1편 제2부 제19장 응급의료수가」의 <b>(별표 1) ~ (별표 4)</b>, 709~763쪽을 그대로 옮긴 표입니다.
+           어느 별표에 있는 행위인지에 따라 응급가산이 달라집니다 — 가산율과 산정코드 기재 규칙은
+           같은 장의 산정지침(제2절 704~705쪽 · 제3절 706~708쪽)에 있습니다.
+           (별표 4)는 원문에 장 · 코드가 없어 수가책에서 분류번호로 찾아 채웠고, 그 값에는 점선 밑줄을 두었습니다.</p>
+      </div>
+
+      <div class="toolbar"><div class="chips chips-seg" id="emg-tabs"></div></div>
+      <div class="toolbar"><div class="chips chips-rec" id="emg-chs"></div></div>
+      <div class="toolbar">
+        <input class="field-input" id="emg-search" type="search" style="flex:1;min-width:280px;"
+               placeholder="분류번호 · 코드 · 분류(행위명) 검색  (예: 자587, M5873, 심폐소생술, 흉강삽관)">
+      </div>
+
+      <div class="card">
+        <div class="meta-bar" id="emg-meta"></div>
+        <div id="emg-table"></div>
+      </div>
+    </section>
+
     <!-- 메모장 (항상 맨 아래) -->
     <section class="page" id="page-memo">
       <div class="page-head">
@@ -315,12 +405,17 @@
 <script src="data/detail-codes.js"></script>
 
 <script src="data/special-codes.js"></script>
+<script src="data/updated.js"></script>
 <script src="data/burden-hira.js"></script>
 <script src="data/symbol-codes.js"></script>
 <script src="data/injury-codes.js"></script>
 <script src="data/pilot-codes.js"></script>
 <script src="data/pharm-codes.js"></script>
+<script src="data/b12-codes.js"></script>
+<script src="data/emergency-codes.js"></script>
 <script src="data/memo-seed.js"></script>
+<!-- 열 너비 기본값 — common.js 보다 먼저 읽혀야 한다 -->
+<script src="data/colw-defaults.js"></script>
 
 <!-- 공통(화면 전환·도우미) → 카테고리별 화면 한 개당 한 파일 -->
 <script src="js/common.js"></script>
@@ -334,6 +429,8 @@
 <script src="js/page-pharm.js"></script>
 <script src="js/page-injury.js"></script>
 <script src="js/page-pilot.js"></script>
+<script src="js/page-b12.js"></script>
+<script src="js/page-emergency.js"></script>
 <script src="js/page-memo.js"></script>
 
 <!-- 화면들이 다 준비된 뒤에 마지막으로 보던 카테고리를 연다 -->

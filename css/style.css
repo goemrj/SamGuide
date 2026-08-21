@@ -16,6 +16,7 @@
   --note:#4B5563;           /* 비고 본문 */
   --note-label:#9CA3AF;
   --accent:#2563EB;
+  --minus:#DC2626;          /* 빨강 — 계산기 비교표에서 "더 적음"에만 쓴다 (2026-08-21 추가) */
   --accent-hover:#1D4ED8;
   --accent-2:#93C5FD;       /* 액센트 보조 */
   --accent-tint:#EFF6FF;    /* 액센트 배경 tint */
@@ -83,6 +84,15 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
   margin-top:auto; padding:12px 14px; border-top:1px solid var(--line-2);
   font-size:12px; line-height:1.6; color:var(--text-3);
 }
+/* 「열 너비 기본값으로 굳히기」 — 자주 누를 것이 아니라 눈에 띄지 않게 둔다 */
+.foot-btn{
+  display:block; width:100%; text-align:left; margin-bottom:8px;
+  background:#fff; border:1px solid var(--line); border-radius:5px;
+  padding:6px 9px; font-size:11.5px; color:var(--text-25);
+}
+.foot-btn:hover{border-color:var(--accent); color:var(--accent);}
+.foot-msg{font-size:11px; color:var(--accent); margin-bottom:8px;}
+.foot-msg:empty{display:none;}
 
 #main{flex:1; min-width:0; padding:24px 32px 56px;}
 .page{display:none;}
@@ -99,6 +109,10 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
 .page-head{margin:0 0 12px;}
 .page-head h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.02em;}
 .page-head p{margin:7px 0 0; color:var(--text-3); font-size:12px;}
+/* 제목 뒤 자료 갱신일 — 고시가 바뀌면 data/updated.js 만 고친다 */
+.page-head h1 .upd{margin-left:10px; font-size:11.5px; font-weight:400; color:var(--text-4);
+  letter-spacing:0; cursor:help;}
+.page-head h1 .upd.none{color:var(--accent-2);}
 /* 흰 띠 안에서는 툴바 사이 간격만 두고 아래 여백은 띠가 맡는다 */
 .page-top .toolbar{margin-bottom:8px;}
 .page-top .toolbar:last-child{margin-bottom:0;}
@@ -123,6 +137,9 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
 .chips-seg .chip{border-radius:8px; padding:7px 14px;}
 .chips-rec .chip{border-radius:999px;}
 .chips-rec .chip.on{background:var(--accent-tint); border-color:var(--accent); color:var(--accent); font-weight:600;}
+/* 계산기 탭의 닫기 — 칩 안에 들어가는 작은 ✕ (칩이 단추라 중첩하지 않고 span 으로 둔다) */
+.chip .tabx{margin-left:8px; opacity:.45; font-size:11px;}
+.chip .tabx:hover{opacity:1; color:var(--accent);}
 
 .field-input{
   border:1px solid var(--line); background:#fff; border-radius:4px;
@@ -228,9 +245,13 @@ table.fields.mm mark{background:var(--accent-tint); color:var(--accent); border-
 .dt-src{margin-top:10px; color:var(--text-3); font-size:11.5px;}
 
 /* ---------- ② 계산기 ---------- */
-.calc-wrap{display:flex; gap:14px; align-items:flex-start;}
-.calc-left{flex:1; min-width:0;}
+/* 원장은 필요한 만큼만 넓히고(720px) MG·병원 칸을 그 **옆에** 붙인다 — 사이는 24px 띈다.
+   남는 오른쪽 공백은 그대로 둔다 (2026-08-21 요청). 창이 좁으면 아래로 접힌다. */
+.calc-wrap{display:flex; gap:24px; align-items:flex-start;}
+.calc-left{flex:0 1 720px; min-width:0;}
 .calc-right{width:400px; flex:0 0 400px; position:sticky; top:20px;}
+/* 쓰는 법 — 카드 밖 공백에 글자로만 (표 폭에 맞춰 줄바꿈) */
+.calc-help{margin-top:14px; max-width:1144px; line-height:1.9;}
 
 .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
 .form-grid label{display:flex; flex-direction:column; gap:5px; min-width:0;}
@@ -254,6 +275,39 @@ select.field-input{appearance:none; background:#fff url("data:image/svg+xml;char
 table.fields.items td{padding:4px 6px; vertical-align:middle;}
 table.fields.items th{font-size:11.5px;}
 
+/* 원장 — 왼쪽 금액 ↔ 오른쪽 그 금액의 본인부담을 나란히 놓은 표 */
+table.fields.led td{padding:6px 10px;}
+table.fields.led .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+table.fields.led .strong{font-weight:700; color:var(--accent);}
+table.fields.led .num .saved-note{font-weight:400; color:var(--text-3); white-space:normal;}
+table.fields.led tfoot td{
+  border-top:1px solid var(--line); background:var(--group-tint); color:var(--text-2);
+}
+table.fields.led tfoot .strong{font-size:14px;}
+/* 파랑 강조(.strong)는 **최종 본인부담금 한 칸에만** 쓴다.
+   그 밖의 합계는 굵은 본문색(.num.b)으로만 구분한다 (2026-08-21 요청). */
+table.fields.led .num.b, table.fields.cmp .num.b{font-weight:700; color:var(--text);}
+/* 본인부담 칸은 두 번 눌러 손으로 적을 수 있다 */
+.fixable{cursor:cell;}
+
+/* MG · 병원 두 벌 비교 — 원장과 같은 규칙 */
+table.fields.cmp td{padding:6px 10px;}
+table.fields.cmp .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+table.fields.cmp tfoot td{
+  border-top:1px solid var(--line); background:var(--group-tint); color:var(--text-2);
+}
+/* 병원 본인부담금이 MG 보다 **적으면 빨강 · 크면 파랑** (차액도 같은 색) — 2026-08-21 요청.
+   빨강은 이 팔레트에 없던 색이라 --minus 토큰을 새로 넣었다(README 참조).
+   .num.b 와 같은 굵기를 유지해야 하니 이 두 줄은 .b 규칙보다 아래에 둔다.
+   이름에 cmp- 를 붙인 이유 — `.more` 는 이미 「더보기」 단추(밑줄)가 쓰고 있다. */
+table.fields.cmp .num.cmp-less{color:var(--minus);}
+table.fields.cmp .num.cmp-more{color:var(--accent);}
+/* 절사 단위는 절사 줄 안에서 고른다 (진료형태 칸을 없앤 자리) */
+.cutsel{width:auto; display:inline-block; margin-left:4px; padding:3px 6px;}
+.rate-cell{display:flex; gap:4px; align-items:center;}
+.rate-cell .field-input{text-align:right;}
+.rate-cell .btn.xs{flex:0 0 auto; min-width:28px; text-align:center;}
+
 .res-head{padding:4px 2px 14px; border-bottom:1px solid var(--line);}
 .res-big{display:flex; align-items:baseline; gap:8px;}
 .res-big span{font-size:13px; color:var(--text-2); font-weight:600;}
@@ -271,8 +325,9 @@ table.fields.res .num{text-align:right; font-variant-numeric:tabular-nums; white
 table.fields.res .strong{font-weight:700; color:var(--accent);}
 table.fields.res tfoot td{border-top:1px solid var(--line); background:var(--group-tint); font-size:12.5px; color:var(--text-2);}
 
-@media (max-width:1180px){
+@media (max-width:1240px){
   .calc-wrap{flex-direction:column;}
+  .calc-left{flex:none; width:100%;}
   .calc-right{width:100%; flex:none; position:static;}
 }
 
@@ -509,6 +564,13 @@ table.b2 th .rz:hover::after, table.fields th .rz:hover::after,
 table.dt-tb th .rz:hover::after, table.dt-tb td .rz:hover::after{opacity:.75;}
 /* 끌고 있는 동안 — 글자가 선택되지 않고 커서 모양을 유지한다 */
 body.rz-on{user-select:none; cursor:col-resize;}
+/* 행이 많은 표에서 끌 때 나오는 세로 안내선 (엑셀에서 열 경계를 끌 때와 같은 모양).
+   표를 1px 마다 다시 배치하면 618행에 32ms · 1,277행에 54ms 가 걸려 화면이 멎는다 —
+   끄는 동안은 이 선만 옮기고 폭은 놓을 때 한 번만 준다. js/common.js 참조. */
+.rz-line{
+  position:fixed; top:0; bottom:0; width:2px; margin-left:-1px;
+  background:var(--accent); opacity:.75; z-index:100; pointer-events:none;
+}
 body.rz-on table.b2 th .rz::after, body.rz-on table.fields th .rz::after,
 body.rz-on table.dt-tb th .rz::after, body.rz-on table.dt-tb td .rz::after{opacity:.75;}
 table.b2 td{
@@ -688,3 +750,45 @@ table.fields.pl{width:100%;}
 .pl-rate{color:var(--text-2); line-height:1.6; word-break:keep-all;}
 tr.pl-empty .pl-sym{color:var(--text-4); font-weight:600;}
 table.fields.pl mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* ---------- [별표12] 소아가산 ---------- */
+/* 열이 7개라 너비를 정하고 fixed 로 둔다. 기본값은 js/page-b12.js 의 BT_ACT_COLW(%)가
+   <th> 인라인 width 로 넣는다 — px 로 박으면 좁은 창에서 가로 스크롤이 생긴다(전체 전제 위반). */
+.b12-cls{color:var(--text-2); font-size:12px; word-break:break-all;}
+.b12-code{font-family:var(--mono); font-weight:700; color:var(--accent); letter-spacing:.01em;}
+.b12-name{letter-spacing:-.01em; color:var(--text); word-break:keep-all;}
+.b12-gb{color:var(--text-2); font-size:12px; word-break:keep-all;}
+.b12-note{color:var(--text-2); font-size:11.5px; line-height:1.6; word-break:keep-all;}
+/* '해당' 은 값이 있다는 뜻이라 눈에 띄게, 빈 칸은 — 로 (page-b12.js) */
+.b12-yn{text-align:center;}
+.b12-y{font-weight:700; color:var(--accent);}
+table.fields.b12-act mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* 표 아래 원문 머리말 카드 (약국 산정특례 .ph-notes 와 같은 결) */
+.b12-intro{margin-top:14px;}
+.b12-intro-h{
+  font-size:9.5px; font-weight:700; letter-spacing:.06em;
+  color:var(--text-3); margin-bottom:9px;
+}
+.b12-note-p{font-size:12px; line-height:1.7; color:var(--text-2); word-break:keep-all; margin:0 0 7px;}
+.b12-note-p:last-child{margin-bottom:0;}
+.b12-note-p.d1{padding-left:16px;}
+.b12-intro mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
+
+/* ---------- 응급의료행위 ---------- */
+/* 짧은 열(별표·장·분류번호·코드)에 width:1% + nowrap 을 주어 분류 칸이 남는 폭을 다 먹게 한다
+   (table-layout:auto + width:100%). 가로 스크롤 금지 전제라 분류 칸은 칸 안에서 줄바꿈시킨다. */
+table.fields.emg{width:100%;}
+.emg-t{white-space:nowrap; width:1%; color:var(--text-3); font-size:11.5px; font-variant-numeric:tabular-nums;}
+.emg-ch{white-space:nowrap; width:1%; color:var(--text-2); font-variant-numeric:tabular-nums;}
+.emg-no{white-space:nowrap; width:1%; font-weight:600; letter-spacing:-.01em; color:var(--text);}
+.emg-code{white-space:nowrap; width:1%; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;}
+.emg-name{letter-spacing:-.01em; word-break:keep-all; color:var(--text);}
+/* (별표 4)의 장·코드는 원문에 없어 같은 수가책에서 분류번호로 찾아 채운 값이다.
+   원문에 적혀 있던 값과 같아 보이면 안 되므로 점선 밑줄로 구분한다(근거는 title 로 붙는다).
+   색은 새로 만들지 않는다 — 글자색은 그대로 두고 밑줄만 --line-strong 를 쓴다. */
+.emg-fill{border-bottom:1px dotted var(--line-strong); cursor:help;}
+/* 채우지 못한 칸이 생기면 눈에 보이게 — 빈 칸은 "위와 같음" 으로 읽힐 수 있다 */
+table.fields.emg td.emg-ch:empty::after,
+table.fields.emg td.emg-code:empty::after{content:"–"; color:var(--text-4);}
+table.fields.emg mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}

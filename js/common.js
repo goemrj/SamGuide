@@ -175,7 +175,10 @@ function colwEndOf(key){
    끝선을 옮기는 손잡이(.rz-end)를 넣는다.
    화면을 다시 그릴 때마다 없어지므로 아래 MutationObserver 가 다시 넣는다. */
 function addGrips(root){
-  const sel = 'table.b2, table.fields, table.dt-tb:not(.dt-ex)';
+  /* 계산기의 입력 표(table.fields.items — 원장 · MG·병원 비교)는 뺀다.
+     자료 표가 아니라 입력 UI 라 열을 끌 일이 없고, 예전에 저장해 둔 픽셀 너비가
+     되살아나면 카드보다 넓어져 옆 카드와 겹친다 (2026-08-21). */
+  const sel = 'table.b2, table.fields:not(.items), table.dt-tb:not(.dt-ex)';
   (root || document).querySelectorAll(sel).forEach(t => {
     const ths = headCells(t);
     if (!ths) return;
@@ -393,6 +396,7 @@ function watchTables(){
   const main = document.getElementById('main');
   if (!main) return;
   wrapPageTops();
+  showUpdated();
   addGrips(main);
   setStickTop();
   initFreezeColW();
@@ -418,5 +422,22 @@ function wrapPageTops(){
     // 제목 바로 뒤에 이어지는 툴바까지 같은 띠에 넣는다(중간에 다른 것이 나오면 멈춘다)
     while (box.nextElementSibling && box.nextElementSibling.classList.contains('toolbar'))
       box.appendChild(box.nextElementSibling);
+  });
+}
+
+/* 화면 제목 뒤에 자료 갱신일을 작게 붙인다 (data/updated.js).
+   고시가 바뀌면 그 파일의 날짜를 고치는 것이 유일한 할 일이 되도록 한 곳에 모아 뒀다.
+   날짜가 '' 인 카테고리는 "갱신일 미확인" 으로 두고 추측해 채우지 않는다. */
+function showUpdated(){
+  if (typeof SG_UPDATED === 'undefined') return;
+  document.querySelectorAll('.page').forEach(p => {
+    const h1 = p.querySelector('.page-head h1');
+    const info = SG_UPDATED[p.id];
+    if (!h1 || !info || h1.querySelector('.upd')) return;
+    const s = document.createElement('span');
+    s.className = 'upd' + (info.d ? '' : ' none');
+    s.textContent = info.d ? '자료 갱신 ' + info.d : '갱신일 미확인';
+    if (info.src) s.title = '출처: ' + info.src;
+    h1.appendChild(s);
   });
 }
