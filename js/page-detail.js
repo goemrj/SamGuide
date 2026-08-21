@@ -135,29 +135,80 @@ const dtNorm = s => s.replace(/\s+/g, ' ').trim();
    로 만든다(화면 순서로 세면 필터 때마다 어긋난다). dtDocHtml 이 코드마다 세워 준다. */
 let dtDocKey = '', dtTblN = 0;
 
-// 줄 묶음 → 표. 첫 줄이 짧은 칸들로만 되어 있으면 머리줄로 본다.
-function dtTableHtml(lines, bs, mark){
-  const rows = lines.map(l => dtSplitAt(l, bs));
-  const n = bs.length + 1;
+/* --- 첫 칸(구분)의 병합 되살리기 ---
+   원문 표의 구분 칸은 여러 행을 묶는 병합 셀이고, PDF 는 그 글자를 묶음 **가운데**에 놓는다.
+   그래서 텍스트에서는 구분 글자가 묶음 중간의 한두 줄에만 나온다.
+     진료 / 기록부  → 6행을 묶는 "진료기록부" 한 칸
+   글자가 나온 줄묶음(아래 blk)을 찾고, 묶음 사이 빈 구간의 **가운데**를 경계로 본다.
+   글자는 이어 붙일 뿐 바뀌지 않는다("진료"+"기록부" = "진료기록부").
+   구분 칸이 행마다 값을 갖는 표(MT018 의 M001·M002 …)는 병합하지 않는다 — 아래 조건으로 가른다. */
+function dtSpans(rows){
+  if (rows.some(r => !r)) return null;                 // 칸을 가로지르는 줄이 섞이면 손대지 않는다
+  if (!rows.some(r => !r[0])) return null;             // 첫 칸이 행마다 차 있으면 병합이 아니다
+  const blk = [];
+  rows.forEach((r, i) => {
+    if (!r[0]) return;
+    const last = blk[blk.length - 1];
+    if (last && last.to === i - 1) last.to = i;
+    else blk.push({from: i, to: i});
+  });
+  if (!blk.length || blk.length * 2 > rows.length) return null;
+  // 병합 셀의 글자는 짧다(구분 이름). 길거나 여러 줄이면 그냥 값이 든 칸으로 본다.
+  const text = b => rows.slice(b.from, b.to + 1).map(r => r[0]).join('');
+  if (!blk.every(b => b.to - b.from < 3 && text(b).length <= 12)) return null;
+
+  const out = [];
+  blk.forEach((b, i) => {
+    const start = i === 0 ? 0
+      : (() => { const p = blk[i - 1]; return p.to + 1 + Math.round((b.from - p.to - 1) / 2); })();
+    out.push({start, text: text(b)});
+  });
+  out.forEach((g, i) => { g.end = (i + 1 < out.length ? out[i + 1].start : rows.length) - 1; });
+  return out.every(g => g.start <= g.end) ? out : null;
+}
+
+/* 줄 묶음(쪽마다 하나) → 표 하나. 첫 줄이 짧은 칸들로만 되어 있으면 머리줄로 본다.
+   chunks = [{lines, bs}, …] — 쪽이 넘어가며 갈라진 것을 한 표로 그린다. */
+function dtTableHtml(chunks, mark){
+  const rows = [], lines = [];
+  chunks.forEach(c => c.lines.forEach(l => { lines.push(l); rows.push(dtSplitAt(l, c.bs)); }));
+  const n = Math.max.apply(null, chunks.map(c => c.bs.length + 1));
   const head = rows[0] && rows[0].every(c => c.length <= 12) && rows[0].filter(c => c).length >= 2
              ? rows[0] : null;
   const headKey = head ? head.map(dtNorm).join('|') : null;
 
+  // 머리줄을 뺀 본문 줄에서만 구분 칸의 병합을 본다
+  const body = head ? rows.slice(1) : rows;
+  const bodyLines = head ? lines.slice(1) : lines;
+  const spans = dtSpans(body);
+  const spanAt = i => spans && spans.find(g => g.start === i);
+  const inSpan = i => spans && spans.some(g => i > g.start && i <= g.end);
+
   let html = '<table class="dt-tb" data-k="' + esc('dtb|' + dtDocKey + '|' + (dtTblN++)) + '">';
   if (head) html += '<thead><tr>' + head.map(c => '<th>' + mark(c) + '</th>').join('') + '</tr></thead>';
   html += '<tbody>';
-  rows.forEach((r, i) => {
-    if (head && i === 0) return;
+  body.forEach((r, i) => {
     if (!r){                                            // 칸을 가로지르는 줄 — 한 칸으로
-      html += '<tr class="wide"><td colspan="' + n + '">' + mark(dtNorm(lines[i])) + '</td></tr>';
+      html += '<tr class="wide"><td colspan="' + n + '">' + mark(dtNorm(bodyLines[i])) + '</td></tr>';
       return;
     }
     const rehead = headKey && r.map(dtNorm).join('|') === headKey;
     /* 원문에서 한 칸이 여러 줄로 넘어간 줄 — 첫 칸이나 마지막 칸이 비어 있다.
-       가로선을 지워 위 줄과 한 칸처럼 읽히게 한다(글자는 그대로 둔다). */
-    const cont = !rehead && i > 0 && (!r[0] || !r[r.length - 1]);
-    html += '<tr' + (rehead ? ' class="rehead"' : (cont ? ' class="cont"' : '')) + '>' +
-      r.map(c => '<td>' + (c ? mark(c) : '') + '</td>').join('') + '</tr>';
+       가로선을 지워 위 줄과 한 칸처럼 읽히게 한다(글자는 그대로 둔다).
+       구분 칸을 병합한 표에서는 첫 칸이 비는 게 정상이므로 마지막 칸만 본다. */
+    const cont = !rehead && i > 0 && (spans ? !r[r.length - 1] : (!r[0] || !r[r.length - 1]));
+    const g = spanAt(i);
+    const cls = rehead ? ' class="rehead"' : (g && i > 0 ? ' class="gstart"' : (cont ? ' class="cont"' : ''));
+    html += '<tr' + cls + '>' +
+      r.map((c, j) => {
+        if (j === 0 && spans){
+          if (inSpan(i)) return '';                     // 병합된 칸 — 묶음 첫 줄이 대신 그린다
+          const rs = g ? g.end - g.start + 1 : 1;
+          return '<td class="grp"' + (rs > 1 ? ' rowspan="' + rs + '"' : '') + '>' +
+                 mark(g ? g.text : c) + '</td>';
+        }
+        return '<td>' + (c ? mark(c) : '') + '</td>';
+      }).join('') + '</tr>';
   });
   return html + '</tbody></table>';
 }
@@ -203,15 +254,18 @@ function dtLinesHtml(lines, mark){
   return html;
 }
 
-// 한 묶음(빈 줄 · ※ · ☞ 로 끊긴 구간) 을 표 · 예시 · 글줄로 그린다
-function dtRunHtml(lines, mark){
-  if (lines.every(l => DT_EXLINE.test(l))) return dtExHtml(lines, mark);
+/* 한 묶음(빈 줄 · ※ · ☞ 로 끊긴 구간)을 앞 글줄 / 표 / 뒤 각주로 가른다.
+   표는 {lines, bs} 묶음(chunk)으로 넘긴다 — PDF 쪽이 넘어가며 갈라진 표를 나중에
+   한 표로 이어 붙일 때, **쪽마다 칸 위치가 다르므로 경계(bs)도 쪽마다 따로** 들고 있어야 한다.
+   (줄만 이어 붙이면 두 쪽의 칸이 어긋나 안 쪼개지는 줄이 생긴다.) */
+function dtRunParts(lines){
+  if (lines.every(l => DT_EXLINE.test(l))) return {pre: lines};
 
   const indent = Math.min.apply(null, lines.map(l => {
     const i = l.search(/\S/); return i < 0 ? 9999 : i;
   }));
   let bs = dtBoundaries(lines, 0, 9999, indent, 0);
-  if (!bs.length) return dtLinesHtml(lines, mark);
+  if (!bs.length) return {pre: lines};
 
   /* 표 앞에 붙은 글줄(※ 머리글 · <표 이름> 등)을 떼어낸다.
      표의 첫 줄은 칸이 두 개 이상 채워진 줄이어야 한다 — 짧아서 경계 뒤가 빈 줄은
@@ -223,33 +277,30 @@ function dtRunHtml(lines, mark){
     i++;
   }
   const pre = lines.slice(0, i), rest = lines.slice(i);
-  if (rest.length < 2) return dtLinesHtml(lines, mark);
+  if (rest.length < 2) return {pre: lines};
 
   // 표만 남기고 경계를 다시 잰다 (앞 글줄이 섞이면 자리가 흔들린다)
   const ind2 = Math.min.apply(null, rest.map(l => {
     const j = l.search(/\S/); return j < 0 ? 9999 : j;
   }));
   bs = dtBoundaries(rest, 0, 9999, ind2, 0);
-  if (!bs.length) return dtLinesHtml(lines, mark);
+  if (!bs.length) return {pre: lines};
 
   const full = l => { const c = dtSplitAt(l, bs); return !!c && c.filter(x => x).length >= 2; };
 
   /* 기재 예시(구분코드 + 값)가 여러 줄 이어지면 그것도 칸이 맞아 보이지만 표가 아니다.
      칸이 맞은 줄의 반 이상이 예시 줄이면 표로 세우지 않고 예시 상자 + 글줄로 그린다. */
   const solid = rest.filter(full);
-  if (solid.filter(l => DT_EXLINE.test(l)).length * 2 > solid.length)
-    return dtLinesHtml(lines, mark);
+  if (solid.filter(l => DT_EXLINE.test(l)).length * 2 > solid.length) return {pre: lines};
 
   /* 표 뒤에 붙은 각주(* · ※ · ☞ 로 시작하는 줄)는 표 밖으로 뺀다.
      그 밖의 줄은 원문에서 칸을 넘어 이어진 줄이므로 표 안에 그대로 둔다. */
   let j = rest.length;
   while (j > 0 && !full(rest[j - 1]) && /^\s*[*※☞]/.test(rest[j - 1])) j--;
-  const post = rest.slice(j), body = rest.slice(0, j);
-  if (body.length < 2) return dtLinesHtml(lines, mark);
+  const post = rest.slice(j), tbl = rest.slice(0, j);
+  if (tbl.length < 2) return {pre: lines};
 
-  return (pre.length ? dtLinesHtml(pre, mark) : '') +
-         dtTableHtml(body, bs, mark) +
-         (post.length ? dtLinesHtml(post, mark) : '');
+  return {pre: pre, tbl: {chunks: [{lines: tbl, bs: bs}]}, post: post};
 }
 
 
@@ -264,21 +315,55 @@ function dtDocHtml(body, mark, key){
   });
 
   return items.map(lines => {
-    let html = '';
+    let html = '', headText = '';
     if (/^\s*[♦◆]/.test(lines[0])){
-      html += '<div class="dt-dia">' + mark(dtNorm(lines[0].replace(/^\s*[♦◆]\s*/, ''))) + '</div>';
+      headText = dtNorm(lines[0].replace(/^\s*[♦◆]\s*/, ''));
+      html += '<div class="dt-dia">' + mark(headText) + '</div>';
       lines = lines.slice(1);
+    }
+    /* 「적용일」·「기재형식」 항목은 표가 아니다 — 여러 줄이 날짜·형식으로 자리가 맞아
+       표로 잡히는 일이 있어(MT064 의 적용일 3줄) 여기서는 글줄로만 그린다. */
+    if (/^(적용일|기재형식)/.test(headText)){
+      if (lines.length) html += dtLinesHtml(lines, mark);
+      return '<div class="dt-item">' + html + '</div>';
     }
     /* 묶음을 나누는 자리 — 빈 줄(PDF 에서 표가 끊긴 자리)과 ※ · ☞ 로 시작하는 줄.
        ※ 는 표 앞머리에도 표 뒤 주석에도 나오므로 거기서 끊어야 표가 섞이지 않는다. */
+    const runs = [];
     let run = [];
-    const flush = () => { if (run.length){ html += dtRunHtml(run, mark); run = []; } };
+    const flush = () => { if (run.length){ runs.push(run); run = []; } };
     lines.forEach(l => {
       if (dtNorm(l) === ''){ flush(); return; }
       if (/^\s*(※|☞)/.test(l)) flush();
       run.push(l);
     });
     flush();
+
+    const parts = runs.map(dtRunParts);
+
+    /* PDF 쪽이 넘어가면서 **같은 머리줄로 다시 시작한** 표는 원문에서 한 표다
+       (MT015 제출자료별 세부코드 · MT018 본인부담구분코드 …). 뒤 묶음을 앞 표의
+       쪽묶음으로 붙이고 다시 나온 머리줄은 뺀다. 칸 경계는 쪽마다 그대로 둔다. */
+    for (let i = parts.length - 1; i > 0; i--){
+      const a = parts[i - 1], b = parts[i];
+      if (!a.tbl || !b.tbl || (b.pre && b.pre.length)) continue;
+      const aHead = dtNorm(a.tbl.chunks[0].lines[0]);
+      const bc = b.tbl.chunks[0];
+      if (!aHead || dtNorm(bc.lines[0]) !== aHead) continue;
+      if (bc.lines.length < 2) continue;
+      // b 가 이미 뒤 쪽을 품고 있을 수 있다(쪽이 셋 이상) — 그 쪽묶음까지 다 옮긴다
+      b.tbl.chunks.forEach((c, k) => {
+        a.tbl.chunks.push(k === 0 ? {lines: c.lines.slice(1), bs: c.bs} : c);
+      });
+      a.post = (a.post || []).concat(b.post || []);
+      parts.splice(i, 1);
+    }
+
+    parts.forEach(p => {
+      if (p.pre && p.pre.length) html += dtLinesHtml(p.pre, mark);
+      if (p.tbl) html += dtTableHtml(p.tbl.chunks, mark);
+      if (p.post && p.post.length) html += dtLinesHtml(p.post, mark);
+    });
     return '<div class="dt-item">' + html + '</div>';
   }).join('');
 }

@@ -337,6 +337,12 @@ table.dt-tb th:last-child, table.dt-tb td:last-child{border-right:0;}
 /* 원문에서 한 칸이 여러 줄로 넘어간 줄 — 가로선을 지워 한 칸처럼 읽히게 한다 */
 table.dt-tb tr.cont td{border-top:0; padding-top:0;}
 table.dt-tb tr.rehead td{background:var(--bg); color:var(--text-3); font-weight:600; font-size:11.5px;}
+/* 원문에서 여러 행을 묶던 구분 칸 — rowspan 으로 되살린다(디자인규칙: 그룹 열 배경 + 경계 2px) */
+table.dt-tb td.grp{
+  background:var(--group-tint); color:var(--text); font-weight:600;
+  vertical-align:middle;
+}
+table.dt-tb tr.gstart > td{border-top:2px solid var(--line-strong);}
 /* 기재 예시 상자 — 구분코드 + 기재값 */
 table.dt-tb.dt-ex{width:auto; min-width:280px;}
 table.dt-tb.dt-ex td{font-family:var(--mono); font-size:11.5px; color:var(--text);}
