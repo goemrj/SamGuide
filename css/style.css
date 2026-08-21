@@ -329,9 +329,50 @@ table.fields.dt{width:100%;}
   margin-top:6px; background:none; border:0; padding:0;
   color:var(--accent); font-size:11.5px; font-weight:600; text-decoration:underline;
 }
-tr.dt-bodyrow td{background:var(--group-tint); padding:2px 16px 14px;}
-tr.dt-bodyrow .dt-sec{margin:8px 0 6px;}
-tr.dt-bodyrow pre.dt-body{background:var(--card); max-height:480px;}
+/* 세부작성요령 — 코드 줄 아래에 표 전체 폭으로 펼쳐 둔다(접지 않는다) */
+tr.dt-bodyrow td{background:var(--group-tint); padding:2px 16px 16px;}
+tr.dt-bodyrow .dt-sec{margin:9px 0 7px;}
+.dt-doc{max-width:900px;}                        /* 글줄이 너무 길어지지 않게 */
+.dt-doc .dt-item + .dt-item{margin-top:9px;}
+/* ♦ 항목 머리줄 — 원문의 ◆ 기호를 앞에 세운다 */
+.dt-doc .dt-dia{
+  position:relative; padding-left:14px; color:var(--text); font-size:12.5px; line-height:1.65;
+}
+.dt-doc .dt-dia::before{content:'◆'; position:absolute; left:0; top:0; color:var(--accent-2); font-size:9px; line-height:2.1;}
+.dt-doc .dt-ln{padding-left:14px; color:var(--text-2); font-size:12.5px; line-height:1.65;}
+.dt-doc .dt-ln.note{color:var(--note); font-size:12px;}
+.dt-doc .dt-cap{
+  padding-left:14px; margin:8px 0 4px; font-size:11.5px; font-weight:600; color:var(--text-3);
+}
+/* 본문 안의 표 — 원문에서 칸이 맞은 구간을 그대로 세운 것 */
+table.dt-tb{
+  border-collapse:collapse; table-layout:auto; width:100%; max-width:100%;
+  margin:6px 0 6px 14px; background:var(--card);
+  border:1px solid var(--line); word-break:keep-all;
+}
+table.dt-tb th{
+  position:static;                              /* 본문 표의 머리줄은 고정하지 않는다 */
+  text-align:left; background:var(--bg); color:var(--text-3);
+  font-size:11.5px; font-weight:600; padding:6px 10px;
+  border-bottom:1px solid var(--line-strong); border-right:1px solid var(--line);
+}
+/* 바깥 표(table.fields)의 칸 규칙이 안쪽 표까지 내려오므로 여기서 다시 못박는다 */
+table.dt-tb td{
+  padding:5px 10px; vertical-align:top; font-size:12px; line-height:1.6; color:var(--text-2);
+  background:transparent;
+  border-top:1px solid var(--line); border-right:1px solid var(--line); border-bottom:0;
+}
+table.fields tr:hover table.dt-tb td{background:transparent;}
+table.dt-tb tr:first-child td{border-top:0;}
+table.dt-tb th:last-child, table.dt-tb td:last-child{border-right:0;}
+/* 원문에서 한 칸이 여러 줄로 넘어간 줄 — 가로선을 지워 한 칸처럼 읽히게 한다 */
+table.dt-tb tr.cont td{border-top:0; padding-top:0;}
+table.dt-tb tr.rehead td{background:var(--bg); color:var(--text-3); font-weight:600; font-size:11.5px;}
+/* 기재 예시 상자 — 구분코드 + 기재값 */
+table.dt-tb.dt-ex{width:auto; min-width:280px;}
+table.dt-tb.dt-ex td{font-family:var(--mono); font-size:11.5px; color:var(--text);}
+table.dt-tb.dt-ex td.c{font-weight:700; color:var(--accent); background:var(--group-tint); white-space:nowrap;}
+table.dt-tb mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 tr.dt-past .dt-code{color:var(--text-4);}
 table.fields.dt mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 
