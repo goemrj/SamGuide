@@ -12,7 +12,8 @@
    ② 별도산정   별도보상총액에서 부담률이 다른 항목(식대 · 2인실 차액 · 정책수가 …)을 빼고
                 나머지에 부담률을 곱한다 — ② 본인부담금 계산기의 원장과 같은 방식.
                 제외금액(1인실 · 인공수정체)은 총액에서 뺀다
-   ③ 상급병실   (별표 2의3) 2인실~5인실 **본인부담액만** — 추가비용(차액)은 ② 에 적어 총액에 넣는다
+   ③ 상급병실   (별표 2의3) 2인실~4인실 **본인부담액만** — 추가비용(차액)은 ② 에 적어 총액에 넣는다
+                (5인실 줄은 요청으로 뺐다 — DG_ROOMS 에 되살리면 다시 나온다)
    ④ 열외군     행위별 진료비총액 − 질병군 요양급여비용총액 − 100만원 (양수일 때만)
    ⑤ 합계       ①+②+③+④ → 10원 미만 **절사**
    ─────────────────────────────────────────────────────────
@@ -47,8 +48,10 @@ const DG_RATES = [
   { v:.03, label:'3% 차상위 15세 이하' },
   { v:0,   label:'0% 제왕절개·차상위 경감·6세 미만 등' },
 ];
+/* 화면에 놓는 인실 — 5인실은 요청으로 뺐다(2026-08-21). 단가표·부담률 규칙은 그대로 두었으니
+   다시 넣으려면 이 배열에 { k:'r5', label:'5인실' } 만 되살리면 된다. */
 const DG_ROOMS = [{ k:'r2', label:'2인실' }, { k:'r3', label:'3인실' },
-                  { k:'r4', label:'4인실' }, { k:'r5', label:'5인실' }];
+                  { k:'r4', label:'4인실' }];
 
 /* ---------- 기본점수입원료 (가산·감산 적용 안 한 금액) ----------
    출처: 사내 수가 마스터의 입원료 수가코드 (2026-01-01 적용, 급여) — 사용자가 준 화면 그대로.
@@ -107,7 +110,7 @@ const dgHas = v => v !== null && v !== undefined;
 /* ---------- 화면 상태 ---------- */
 function dgNewItem(){ return { name:'', amount:0, rate:null, burdenFix:null }; }
 function dgNewState(){
-  return { code:'', q:'', inst:'상급종합병원', los:1, rate:.20,
+  return { code:'', q:'', inst:'상급종합병원', los:0, rate:.20,   // los 0 = 입원일수 공란
            night:false, mid:false, rural:false, gyn:false,   // 야간·공휴 / 심야 / 분만취약지 / 부인과
            exTotal:0, exRate:null, exFix:null,  // 별도보상총액 · 그 줄 부담률 · 본인부담 수기
            items:[],
@@ -135,7 +138,7 @@ function dgLoad(){
   // 적어 둔 글자가 곧 질병군번호다. 예전 자료(고르는 칸이던 판)는 코드를 그대로 옮긴다.
   o.q = typeof s.q === 'string' && s.q.trim() ? s.q : o.code;
   if (DG_INSTS.some(i => i.name === s.inst)) o.inst = s.inst;
-  o.los = Math.max(1, Number(s.los) || 1);
+  o.los = Math.max(0, Math.round(Number(s.los) || 0));   // 0 = 비어 있음
   if (DG_RATES.some(r => r.v === s.rate)) o.rate = s.rate;
   o.night = !!s.night; o.mid = !!s.mid; o.rural = !!s.rural; o.gyn = !!s.gyn;
   o.exTotal = Number(s.exTotal) || 0;
@@ -209,7 +212,7 @@ function dgNightMult(){
    일자별 표도 이 함수를 그대로 쓴다 — 같은 계산을 두 벌 두지 않는다. */
 function dgPackAt(los){
   const S = dgPick(), inst = dgInst(), unit = dgUnit();
-  if (!S) return null;
+  if (!S || !los) return null;              // 질병군번호나 입원일수가 없으면 계산하지 않는다
   const i = inst.si;
   const base = (dg.gyn && S.gyn) ? S.gyn[i] : S.base[i];   // 부인과 가산이면 가산점수
   const day  = S.day[i];
@@ -238,7 +241,7 @@ function dgPackAt(los){
 /* ---------- 계산 ---------- */
 function dgCompute(){
   const S = dgPick(), unit = dgUnit();
-  const los = Math.max(1, Number(dg.los) || 1);
+  const los = Math.max(0, Math.round(Number(dg.los) || 0));   // 0 이면 아직 안 적은 것
   const o = Object.assign({ S, unit, los, band:'', score:0, hitScore:0, pack:0, packOwn:0 },
                           dgPackAt(los) || {});
 
@@ -336,7 +339,7 @@ function dgRenderPickers(){
   }
   dgFill($('dg-inst'), DG_INSTS, dg.inst, i => i.name, i => i.name);
   dgFill($('dg-rate'), DG_RATES, String(dg.rate), r => String(r.v), r => r.label);
-  $('dg-los').value = dg.los;
+  $('dg-los').value = dg.los ? dg.los : '';
   $('dg-night').checked = dg.night;
   $('dg-mid').checked = dg.mid;
   $('dg-rural').checked = dg.rural;
@@ -354,9 +357,11 @@ function dgMoney(attrs, val){
     ' title="+ − × ÷ 로 셈도 됩니다" placeholder="0" value="' +
     (val ? val.toLocaleString() : '') + '">';
 }
+/* 숫자 칸 — 0 은 **빈 칸**으로 둔다. 0 이 적혀 있으면 지우고 나서야 적을 수 있어 불편하다
+   (2026-08-21 요청). 값을 적으면 아래 handler 가 다시 숫자만 남겨 준다. */
 function dgNum(attrs, val){
   return '<input class="field-input mini num-in" ' + attrs + ' inputmode="decimal" value="' +
-    (dgHas(val) ? val : '') + '">';
+    (val ? val : '') + '">';
 }
 
 /* ① 포괄수가 */
@@ -368,6 +373,12 @@ function dgRenderPack(o){
       (m.state === 'bad'
         ? '「' + esc((dg.q || '').trim()) + '」와 일치하는 질병군번호가 없습니다 — 포괄수가를 계산할 수 없습니다.'
         : '질병군번호를 적으면 포괄수가를 계산합니다.') + '</div>';
+    return;
+  }
+  if (!o.los){                                  // 입원일수를 아직 안 적었다
+    $('dg-pack').innerHTML = '<div class="saved-note" style="padding:10px 2px;">' +
+      esc(S.c) + ' — <b>입원일수</b>를 적으면 포괄수가를 계산합니다' +
+      ' <span class="saved-note">(평균 ' + won2(S.avg) + '일 · 하한 ' + S.lo + '일 · 상한 ' + S.hi + '일)</span></div>';
     return;
   }
   // 점수·점수당 단가는 보여 주지 않는다(2026-08-21 요청) — 총액 · 본인부담금 · 청구액만.
@@ -641,7 +652,8 @@ $('dg-cand').addEventListener('click', e => {
 $('dg-inst').addEventListener('change', () => { dg.inst = $('dg-inst').value; dgRefresh(); });
 $('dg-rate').addEventListener('change', () => { dg.rate = Number($('dg-rate').value); dgRefresh(); });
 $('dg-los').addEventListener('input', () => {
-  dg.los = Math.max(1, Math.round(Number(String($('dg-los').value).replace(/[^0-9]/g, '')) || 1));
+  dg.los = Math.max(0, Math.round(Number(String($('dg-los').value).replace(/[^0-9]/g, '')) || 0));
+  $('dg-los').value = dg.los ? dg.los : '';   // 0 은 빈 칸으로 — 지우지 않고 바로 적을 수 있게
   dgPaint();
 });
 $('dg-night').addEventListener('change', () => { dg.night = $('dg-night').checked; dgPaint(); });
@@ -658,9 +670,10 @@ $('dg-gyn').addEventListener('change', () => { dg.gyn = $('dg-gyn').checked; dgP
 $('dg-memo').addEventListener('input', () => { dg.memo = $('dg-memo').value; dgSave(); });
 $('dg-clear').addEventListener('click', () => {
   // 「비우기」는 계산만 지운다 — 폭 설정과 메모는 그대로 둔다(적어 둔 글을 잃으면 안 된다)
-  // 질병군번호도 지운다(2026-08-21 요청). 종별·부담률과 폭 설정·메모는 남긴다.
-  const keep = { inst:dg.inst, rate:dg.rate,
-                 width:dg.width, tableW:dg.tableW, memo:dg.memo };
+  /* 「비우기」는 조건까지 처음 상태로 돌린다(2026-08-21 요청) —
+     종별 상급종합병원 · 입원일수 공란 · 본인부담률 20% · 가산 체크 해제.
+     화면 폭 설정과 메모만 남긴다(적어 둔 글과 보기 설정을 잃으면 안 된다). */
+  const keep = { width:dg.width, tableW:dg.tableW, memo:dg.memo };
   dg = Object.assign(dgNewState(), keep);
   dgRefresh();
 });
@@ -684,6 +697,7 @@ function dgOnInput(e){
   }
   if (t.id === 'dg-solo'){                    // 1인실 이용일수
     dg.solo = Math.max(0, Math.round(Number(String(t.value).replace(/[^0-9]/g, '')) || 0));
+    t.value = dg.solo ? dg.solo : '';        // 0 은 빈 칸으로
     dgPaint();
     return;
   }
@@ -700,7 +714,7 @@ function dgOnInput(e){
     if (!r) return;
     const f = t.dataset.df;
     if (f === 'p'){ const a = readAmount(t); if (a.ok) r.p = a.val; if (!a.formula) reformatMoney(t, r.p); }
-    else if (f === 'd') r.d = Math.max(0, Math.round(Number(t.value.replace(/[^0-9]/g, '')) || 0));
+    else if (f === 'd'){ r.d = Math.max(0, Math.round(Number(t.value.replace(/[^0-9]/g, '')) || 0)); t.value = r.d ? r.d : ''; }
     else if (f === 'rate'){ const s = t.value.trim(); r.rate = s === '' ? null : (parseFloat(s) || 0) / 100; }
     dgPaint();
     return;
