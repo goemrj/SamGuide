@@ -658,7 +658,8 @@ $('dg-gyn').addEventListener('change', () => { dg.gyn = $('dg-gyn').checked; dgP
 $('dg-memo').addEventListener('input', () => { dg.memo = $('dg-memo').value; dgSave(); });
 $('dg-clear').addEventListener('click', () => {
   // 「비우기」는 계산만 지운다 — 폭 설정과 메모는 그대로 둔다(적어 둔 글을 잃으면 안 된다)
-  const keep = { inst:dg.inst, rate:dg.rate, q:dg.q,
+  // 질병군번호도 지운다(2026-08-21 요청). 종별·부담률과 폭 설정·메모는 남긴다.
+  const keep = { inst:dg.inst, rate:dg.rate,
                  width:dg.width, tableW:dg.tableW, memo:dg.memo };
   dg = Object.assign(dgNewState(), keep);
   dgRefresh();
