@@ -26,4 +26,4 @@ const SG_UPDATED = {
 };
 
 /* 특정기호 배지(모든 화면의 표에 붙는 F018 등)는 카테고리가 아니라 공용 자료다 */
-const SG_UPDATED_SYMB = { d:'2026.08.19', src:'특정기호_20260819.xlsx' };
+const SG_UPDATED_SYMB = { d:'2026.08.24', src:'특정기호_20260824.xlsx (기호마다 이력 여러 줄 — 적용/종료일자 포함)' };

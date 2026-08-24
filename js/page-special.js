@@ -1,18 +1,29 @@
 /* ---------- ⑥ 특정기호 (2026-08-21 이름 바꿈 — 예전 「산정특례 특정기호」) ----------
    data/special-codes.js 는 「산정특례 질환별 등록기준」 엑셀에서
    특정기호·상병코드·상병일련번호·질환명(국문)만 뽑은 것이다(3,600건이 넘는다).
-   여기에 data/symbol-codes.js(「특정기호_20260819.xlsx」 전체 263건)에만 있는 기호를
+   여기에 data/symbol-codes.js(「특정기호_20260824.xlsx」 전체 285개)에만 있는 기호를
    「F코드」·「중증질환」·「이식·공여자」·「가정간호」·「중증화상」·「기타 V코드」 구분으로 더해,
-   특정기호 263개를 한 화면에서 다 찾을 수 있게 한다. */
+   특정기호 285개를 한 화면에서 다 찾을 수 있게 한다.
+   적용일자·종료일자도 같은 파일에서 온다 — 종료일자가 오늘보다 지난 기호는 글자를 흐리게 죽인다. */
 const sp = { group: '', page: 0 };
 const SP_PAGE = 300;                      // 3,600행이 넘어 한 번에 다 그리면 느리다
 
-/* 특정기호 목록(data/symbol-codes.js)에는 있는데 질환별 등록기준에는 없는 기호가 69개 있다.
-   F 기호 27개(본인부담 특례)와, 상병목록이 딸리지 않는 V 기호 42개
+/* 적용일자·종료일자는 기호마다 하나라 행(SPECIAL_CODES)에는 없다 — 기호로 찾아 쓴다.
+   날짜는 yyyy.MM.dd 라 글자 그대로 비교하면 날짜 순서가 된다(오늘도 같은 꼴로 만든다). */
+const p2 = n => (n < 10 ? '0' : '') + n;
+const SP_TODAY = (d => d.getFullYear() + '.' + p2(d.getMonth() + 1) + '.' + p2(d.getDate()))(new Date());
+const spFrom = sym => (SYMBOLS[sym] || {}).from || '';
+const spTo   = sym => (SYMBOLS[sym] || {}).to   || '';
+const spPast = sym => { const t = spTo(sym); return !!t && t < SP_TODAY; };   // 종료일자가 오늘보다 지난 기호
+
+/* 특정기호 목록(data/symbol-codes.js)에는 있는데 질환별 등록기준에는 없는 기호가 91개 있다.
+   F 기호 31개(본인부담 특례)와, 상병목록이 딸리지 않는 V 기호 60개
    (뇌혈관·심장·중증외상·이식·공여자·가정간호·호스피스·약국 특례 등)다.
+   끝난 기호 22개(F002·F004·F008·F010 과 V007~V249 의 열여덟)도 여기 들어 있다 —
+   지난 청구를 들여다볼 때 필요하니 지우지 않고 글자를 흐리게 죽여 둔다.
    기호 하나를 어느 화면에서 찾을지 헷갈리지 않게 같은 표에 붙인다.
    상병코드·상병일련번호는 이 기호들에 없는 값이라 비워 둔다(추측해 채우지 않는다).
-   질환명 칸에는 특정기호 목록의 한글명칭을 원문 그대로 넣고, 끝난 기호만 종료일자를 덧붙인다. */
+   질환명 칸에는 특정기호 목록의 한글명칭을 원문 그대로 넣는다. */
 const SP_F_GROUP = 'F코드';
 const SP_V_ETC = '기타 V코드';
 
@@ -46,8 +57,7 @@ for (const [g, list] of SP_V_GROUPS){
 }
 const SP_SYM_ROWS = Object.keys(SYMBOLS).filter(k => !SP_IN_SPEC[k]).sort().map(k => ({
   g: k.charAt(0) === 'F' ? SP_F_GROUP : (SP_V_OF[k] || SP_V_ETC), sym: k, code: '', seq: '',
-  name: SYMBOLS[k].n +
-        (SYMBOLS[k].to && SYMBOLS[k].to !== '9999.12.31' ? ' (~' + SYMBOLS[k].to + ')' : '')
+  name: SYMBOLS[k].n
 })).sort((a, b) =>
   SP_SYM_ORDER.indexOf(a.g) - SP_SYM_ORDER.indexOf(b.g) || a.sym.localeCompare(b.sym));
 const SP_ROWS = SPECIAL_CODES.concat(SP_SYM_ROWS);
@@ -118,7 +128,8 @@ function spFiltered(){
   const needle = $('sp-search').value.trim().toLowerCase();
   const rows = SP_ROWS.filter(d =>
     (!sp.group || d.g === sp.group) &&
-    (!needle || sgHit(d.sym + ' ' + d.code + ' ' + d.seq + ' ' + d.name, needle)));
+    (!needle || sgHit(d.sym + ' ' + d.code + ' ' + d.seq + ' ' + d.name + ' ' +
+                      spFrom(d.sym) + ' ' + spTo(d.sym), needle)));
   /* 전체(구분을 고르지 않은 상태)는 특정기호 오름차순으로 본다.
      구분을 고르면 원본 엑셀 순서(질환 등록기준 순서)를 그대로 둔다. */
   if (!sp.group){
@@ -151,9 +162,9 @@ function renderSpTable(){
       (rows.length > SP_PAGE ? ' 중 ' + (start + 1).toLocaleString() + '~' +
         Math.min(start + SP_PAGE, rows.length).toLocaleString() : '') + '</span>' +
     '<span class="meta-note">' +
-      (SP_SYM_ORDER.includes(sp.group) ? '특정기호 목록 (2026.8.19. 기준)'
-       : sp.group ? '산정특례 질환별 등록기준 (2026.1.1. 기준)'
-       : '산정특례 질환별 등록기준 (2026.1.1. 기준) · 특정기호 목록 (2026.8.19. 기준)') +
+      (SP_SYM_ORDER.includes(sp.group) ? '특정기호 목록 (2026.8.24. 기준)'
+       : sp.group ? '산정특례 질환별 등록기준 (2026.1.1. 기준) · 적용일자는 특정기호 목록'
+       : '산정특례 질환별 등록기준 (2026.1.1. 기준) · 특정기호 목록 (2026.8.24. 기준)') +
     '</span>';
 
   if (!view.length){ $('sp-table').innerHTML = '<div class="empty">검색 결과가 없습니다.</div>'; return; }
@@ -181,11 +192,15 @@ function renderSpTable(){
       ? html + ' <span class="sp-keynote">' + esc(SP_F_NOTE[d.sym]) + '</span>' : html;
   };
   let html = '<table class="fields sp"><thead><tr>' +
-    '<th>구분</th><th>특정기호</th><th>상병코드</th><th>상병일련번호</th><th>질환명 (국문)</th>' +
+    '<th>구분</th><th>특정기호</th><th>적용일자</th><th>종료일자</th>' +
+    '<th>상병코드</th><th>상병일련번호</th><th>질환명 (국문)</th>' +
     '</tr></thead><tbody>' +
     view.map(d =>
-      '<tr><td class="sp-g">' + esc(d.g) + '</td>' +
+      '<tr' + (spPast(d.sym) ? ' class="sp-past"' : '') + '>' +
+      '<td class="sp-g">' + esc(d.g) + '</td>' +
       '<td class="sp-sym">' + mark(d.sym) + '</td>' +
+      '<td class="sp-date">' + mark(spFrom(d.sym)) + '</td>' +
+      '<td class="sp-date">' + mark(spTo(d.sym)) + '</td>' +
       '<td class="sp-code">' + (d.code ? mark(d.code) : '<span class="saved-note">—</span>') + '</td>' +
       '<td class="sp-seq">' + (d.seq ? esc(d.seq) : '<span class="saved-note">—</span>') + '</td>' +
       '<td class="sp-name">' + spName(d) + '</td></tr>'

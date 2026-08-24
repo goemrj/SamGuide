@@ -538,6 +538,12 @@ table.fields.hm{margin-bottom:2px;}
    배경 없이 파랑 볼드만 준다. 문구 목록은 js/page-special.js 의 SP_F_KEY. */
 .sp-key{color:var(--accent); font-weight:700;}
 .sp-keynote{color:var(--text-4); font-size:11.5px;}
+/* 적용일자 · 종료일자 — 특정기호 목록에서 온 값이라 기호마다 하나다 */
+.sp-date{white-space:nowrap; color:var(--text-2); font-size:11.5px; font-variant-numeric:tabular-nums;}
+/* 종료일자가 오늘보다 지난 기호 — 줄은 그대로 두고 글자만 흐리게 죽인다.
+   검색 하이라이트(mark)는 그대로 둬서 흐린 줄에서도 찾은 자리가 보인다. */
+tr.sp-past td, tr.sp-past .sp-g, tr.sp-past .sp-sym, tr.sp-past .sp-date,
+tr.sp-past .sp-key, tr.sp-past .saved-note{color:var(--text-4);}
 table.fields.sp mark{background:var(--accent-tint); color:var(--accent); border-radius:3px;}
 .pager{display:flex; gap:10px; align-items:center; justify-content:center; padding:14px; color:var(--text-2); font-size:12.5px;}
 .pager .btn[disabled]{opacity:.4; cursor:default;}
