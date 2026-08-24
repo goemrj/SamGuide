@@ -119,7 +119,8 @@ function dgNewState(){
            fee:0,                               // 행위별 진료비총액 (열외군 판정)
            base6:0,                             // 6인실이상 기본점수입원료
            width:980, tableW:980,               // 칸(카드) 폭 · 표 폭 — 화면에서 조절한다
-           memo:'',                             // 요약 아래 메모
+           memo:'',                             // 메모
+           cmp:{ mg:0, hos:0 },                 // MG · 병원 청구액 (거꾸로 계산)
            rooms:{ r2:{ d:0, p:0, rate:null }, r3:{ d:0, p:0, rate:null },
                    r4:{ d:0, p:0, rate:null }, r5:{ d:0, p:0, rate:null } } };
 }
@@ -153,6 +154,8 @@ function dgLoad(){
   const tw = Number(s.tableW);
   if (isFinite(tw) && tw >= 440 && tw <= 1600) o.tableW = Math.round(tw / 20) * 20;
   if (typeof s.memo === 'string') o.memo = s.memo;
+  if (s.cmp && typeof s.cmp === 'object')
+    o.cmp = { mg:Number(s.cmp.mg) || 0, hos:Number(s.cmp.hos) || 0 };
   if (Array.isArray(s.items))
     o.items = s.items.filter(i => i && typeof i === 'object').map(i => ({
       name:String(i.name || ''),
@@ -451,7 +454,7 @@ function dgRenderItems(){
       // 첫 줄 = 별도보상총액 (계산기의 총진료비 자리)
       '<tr><td><span class="c-name">별도보상총액</span>' +
         '<div class="saved-note">아래 줄들을 뺀 나머지에 이 부담률을 곱합니다</div></td>' +
-        '<td><input class="field-input money mini" data-dx="total" data-df="amount" type="text" ' +
+        '<td><input class="field-input money mini dg-key-in" data-dx="total" data-df="amount" type="text" ' +
           'inputmode="numeric" title="+ − × ÷ 로 셈도 됩니다" placeholder="0" value="' +
           (dg.exTotal ? dg.exTotal.toLocaleString() : '') + '"></td>' +
         '<td><input class="field-input mini pctin" data-dx="rate" data-df="rate" inputmode="decimal" ' +
@@ -573,6 +576,47 @@ function dgRenderSum(o){
     '</tfoot></table>';
 }
 
+/* ---------- MG · 병원 청구액으로 거꾸로 계산 (② 본인부담금 계산기와 같은 방식) ----------
+   총진료비는 이 화면에서 계산한 요양급여비용총액 1 을 그대로 쓰고,
+   청구액을 적으면 본인부담금 = 총진료비 − 청구액. 두 벌의 차액도 같이 보여 준다.
+   (CMP_COLS 는 page-calc.js 가 이미 쓰는 이름이라 DG_ 를 붙였다.) */
+const DG_CMP_COLS = [{ key:'mg', label:'MG' }, { key:'hos', label:'병원' }];
+function dgCmpBurden(k, total){ return total - (dg.cmp[k] || 0); }
+function dgRenderCmp(){
+  if (!$('dg-cmp')) return;
+  $('dg-cmp').innerHTML =
+    '<table class="fields items cmp fixed" data-k="drg-cmp"><thead><tr><th>구분</th>' +
+      DG_CMP_COLS.map(c => '<th style="width:31%;">' + esc(c.label) + '</th>').join('') +
+    '</tr></thead><tbody>' +
+      '<tr><td>총진료비</td>' +
+        DG_CMP_COLS.map(() => '<td class="num" data-dout="cmp-total">0</td>').join('') + '</tr>' +
+      '<tr><td>청구액</td>' +
+        DG_CMP_COLS.map(c => '<td><input class="field-input money mini" data-dcmp="' + c.key + '" ' +
+          'type="text" inputmode="numeric" title="+ − × ÷ 로 셈도 됩니다" placeholder="0" value="' +
+          (dg.cmp[c.key] ? dg.cmp[c.key].toLocaleString() : '') + '"></td>').join('') + '</tr>' +
+      '<tr><td><span class="c-name">본인부담금</span></td>' +
+        DG_CMP_COLS.map(c => '<td class="num b" data-dout="cmp-own-' + c.key + '">0</td>').join('') + '</tr>' +
+    '</tbody><tfoot><tr><td>차액 (MG − 병원)</td>' +
+      '<td class="num b" colspan="2" data-dout="cmp-diff">0</td></tr></tfoot></table>';
+}
+function dgPaintCmp(total){
+  if (!$('dg-cmp')) return;
+  const set = (k, v) => document.querySelectorAll('#dg-cmp [data-dout="' + k + '"]')
+                                .forEach(el => el.innerHTML = v);
+  const mg = dgCmpBurden('mg', total), hos = dgCmpBurden('hos', total);
+  set('cmp-total', won(total));
+  set('cmp-own-mg', won(mg));
+  set('cmp-own-hos', won(hos));
+  set('cmp-diff', won(mg - hos) + '원');
+  const dir = hos === mg ? '' : (hos < mg ? 'cmp-less' : 'cmp-more');
+  ['cmp-own-hos', 'cmp-diff'].forEach(k => {
+    const el = $('dg-cmp').querySelector('[data-dout="' + k + '"]');
+    if (!el) return;
+    el.classList.remove('cmp-less', 'cmp-more');
+    if (dir) el.classList.add(dir);
+  });
+}
+
 function dgPaint(){
   const o = dgCompute();
   // 지금 손으로 적어 넣는 중인 칸(입력칸이 들어 있는 칸)은 건드리지 않는다
@@ -601,6 +645,7 @@ function dgPaint(){
     : '열외군 아님 <span class="saved-note">차액이 100만원을 넘지 않으면 0</span>');
   set('out-add', won(o.outAdd));
   set('out-own', won2(o.outOwn));
+  dgPaintCmp(o.total);
   dgRenderPack(o);
   dgRenderSum(o);
   dgSave();
@@ -635,6 +680,7 @@ function dgRefresh(){
   dgRenderItems();
   dgRenderRooms();
   dgRenderOut();
+  dgRenderCmp();
   dgPaint();
 }
 
@@ -668,6 +714,34 @@ $('dg-gyn').addEventListener('change', () => { dg.gyn = $('dg-gyn').checked; dgP
   dgSave();
 }));
 $('dg-memo').addEventListener('input', () => { dg.memo = $('dg-memo').value; dgSave(); });
+
+/* MG · 병원 청구액 칸 — 원장과 같이 셈(+ − × ÷)도 되고 Enter 로 옆 칸으로 넘어간다 */
+if ($('dg-cmp')){
+  $('dg-cmp').addEventListener('input', e => {
+    const k = e.target.dataset && e.target.dataset.dcmp;
+    if (!k) return;
+    const a = readAmount(e.target);
+    if (a.ok) dg.cmp[k] = a.val;
+    if (!a.formula) reformatMoney(e.target, dg.cmp[k]);
+    dgPaintCmp(dgCompute().total);
+    dgSave();
+  });
+  $('dg-cmp').addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !e.target.dataset || !e.target.dataset.dcmp) return;
+    e.preventDefault();
+    const v = dg.cmp[e.target.dataset.dcmp] || 0;
+    e.target.value = v ? v.toLocaleString() : '';
+    const ins = [...$('dg-cmp').querySelectorAll('input.money')];
+    const n = ins[ins.indexOf(e.target) + 1];
+    if (n){ n.focus(); try { n.select(); } catch (err) {} }
+  });
+  $('dg-cmp').addEventListener('focusout', e => {
+    const k = e.target.dataset && e.target.dataset.dcmp;
+    if (!k || e.target.value.trim() === '') return;
+    const v = dg.cmp[k] || 0;
+    e.target.value = v ? v.toLocaleString() : '';
+  });
+}
 $('dg-clear').addEventListener('click', () => {
   // 「비우기」는 계산만 지운다 — 폭 설정과 메모는 그대로 둔다(적어 둔 글을 잃으면 안 된다)
   /* 「비우기」는 조건까지 처음 상태로 돌린다(2026-08-21 요청) —
