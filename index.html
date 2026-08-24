@@ -146,6 +146,27 @@
                 </div>
               </div>
             </div>
+
+            <!-- 날짜 계산기 — 진료개시일 + 입(내)원일수 → 진료기간 -->
+            <div class="card">
+              <div class="card-pad">
+                <b style="font-size:14px;letter-spacing:-.02em;">날짜 계산기</b>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                  <label class="saved-note">진료개시일
+                    <input class="field-input" id="d-start" type="date" style="width:150px;">
+                  </label>
+                  <label class="saved-note">입(내)원일수
+                    <input class="field-input" id="d-days" inputmode="numeric" placeholder="일수"
+                           style="width:58px;text-align:right;">
+                  </label>
+                </div>
+                <div id="d-out" style="margin-top:10px;"></div>
+                <div class="saved-note" style="margin-top:8px;">
+                  진료개시일부터 <b>연속으로</b> 센 기간입니다 — 종료일 = 개시일 + (일수 − 1).
+                  외래처럼 날짜가 떨어져 있으면 그대로 쓸 수 없습니다.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

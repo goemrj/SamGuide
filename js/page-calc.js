@@ -293,7 +293,7 @@ function sheetToSave(s){
 function saveCalc(){
   try {
     localStorage.setItem(CALC_KEY, JSON.stringify({
-      v:2, way:calcWay, cur:cur, sheets:sheets.map(sheetToSave)
+      v:2, way:calcWay, cur:cur, dates:dateCalc, sheets:sheets.map(sheetToSave)
     }));
   } catch (e) {}
 }
@@ -322,6 +322,9 @@ function loadCalc(){
   sheets = list.length ? list.map(sheetFromSave) : [newSheet()];
   cur = Number.isInteger(s.cur) && s.cur >= 0 && s.cur < sheets.length ? s.cur : 0;
   calc = sheets[cur];
+  if (s.dates && typeof s.dates === 'object')
+    dateCalc = { start:String(s.dates.start || ''),
+                 days:Math.max(0, Math.round(Number(s.dates.days) || 0)) };
 }
 
 function refreshCalc(){
@@ -329,6 +332,57 @@ function refreshCalc(){
   renderCmp();
   paint();
 }
+
+/* ---------- 날짜 계산기 (오른쪽 칸) ----------
+   진료개시일에 입(내)원일수를 더해 진료기간을 알려 준다.
+     진료종료일 = 진료개시일 + (입(내)원일수 − 1)      ← 개시일도 하루로 센다
+   (청구방법 237쪽 예시 "1월 1일~1월 5일 입원, 입원일수 5일"과 같은 셈이다.)
+   SAM 파일에 적는 CCYYMMDD 8자리도 같이 보여 준다.
+   탭(계산 한 벌)과 상관없는 딸림 도구라 값은 따로 저장한다. */
+let dateCalc = { start:'', days:0 };
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+function dcParse(s){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d) ? null : d;
+}
+function dcFmt(d){
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) +
+         ' <span class="saved-note">(' + DOW[d.getDay()] + ')</span>';
+}
+function dcSam(d){
+  const p = n => String(n).padStart(2, '0');
+  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+}
+function renderDate(){
+  if (!$('d-out')) return;
+  // 치는 중이 아니면 칸도 상태에 맞춘다(새로고침 뒤 되살리기)
+  if (document.activeElement !== $('d-start')) $('d-start').value = dateCalc.start || '';
+  if (document.activeElement !== $('d-days')) $('d-days').value = dateCalc.days ? dateCalc.days : '';
+  const start = dcParse(dateCalc.start), days = dateCalc.days;
+  if (!start || days < 1){
+    $('d-out').innerHTML = '<div class="saved-note">진료개시일과 입(내)원일수를 적으면 진료기간이 나옵니다.</div>';
+    return;
+  }
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + days - 1);
+  $('d-out').innerHTML =
+    '<div class="dg-sum-line"><span>진료기간</span>' +
+      '<b style="font-size:13.5px;">' + dcFmt(start) + ' ~ ' + dcFmt(end) + '</b><i></i></div>' +
+    '<div class="dg-sum-line"><span>입(내)원일수</span><b>' + days + '</b><i>일</i></div>' +
+    '<div class="dg-sum-line"><span>SAM (CCYYMMDD)</span>' +
+      '<b>' + dcSam(start) + ' ~ ' + dcSam(end) + '</b><i></i></div>';
+}
+if ($('d-start')) $('d-start').addEventListener('input', () => {
+  dateCalc.start = $('d-start').value;
+  renderDate(); saveCalc();
+});
+if ($('d-days')) $('d-days').addEventListener('input', () => {
+  dateCalc.days = Math.max(0, Math.round(Number(String($('d-days').value).replace(/[^0-9]/g, '')) || 0));
+  $('d-days').value = dateCalc.days ? dateCalc.days : '';
+  renderDate(); saveCalc();
+});
 
 /* ---------- 손 ---------- */
 $('c-led').addEventListener('input', e => {
@@ -525,3 +579,4 @@ loadCalc();          // 지난번에 적어 둔 것부터 되살린다
 renderWays();
 renderTabs();
 refreshCalc();
+renderDate();
