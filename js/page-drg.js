@@ -108,6 +108,15 @@ const cut10 = n => Math.floor(n / 10) * 10;       // 10원 미만 절사
 const dgHas = v => v !== null && v !== undefined;
 
 /* ---------- 화면 상태 ---------- */
+/* 칸 폭 · 표 폭의 처음 값. data/colw-defaults.js 에 굳혀 둔 값이 있으면 그것을 쓴다
+   — 열 너비와 달리 이 둘은 samguide_drg 에 따로 저장돼서, 굳혀 두지 않으면
+   브라우저를 바꾸거나 사이트(github.io)에서 열 때 980 으로 돌아간다.
+   슬라이더 범위(560~1600 / 440~1600) 밖의 값은 무시한다. */
+function dgDefW(key, fb){
+  const D = (typeof COLW_DEFAULTS === 'undefined') ? {} : COLW_DEFAULTS;
+  const v = Number(D[key]);
+  return (isFinite(v) && v >= 440 && v <= 1600) ? Math.round(v / 20) * 20 : fb;
+}
 function dgNewItem(){ return { name:'', amount:0, rate:null, burdenFix:null }; }
 function dgNewState(){
   return { code:'', q:'', inst:'상급종합병원', los:0, rate:.20,   // los 0 = 입원일수 공란
@@ -118,7 +127,9 @@ function dgNewState(){
            lens:0,                              // 인공수정체 제외유형 (별표 9) — 0 이면 없음
            fee:0,                               // 행위별 진료비총액 (열외군 판정)
            base6:0,                             // 6인실이상 기본점수입원료
-           width:980, tableW:980,               // 칸(카드) 폭 · 표 폭 — 화면에서 조절한다
+           // 칸(카드) 폭 · 표 폭 — 화면의 슬라이더로 조절한다.
+           // 「열 너비 기본값으로 굳히기」로 박아 둔 값이 있으면 그것이 처음 값이 된다
+           width:dgDefW('drg|paneW', 980), tableW:dgDefW('drg|tableW', 980),
            memo:'',                             // 메모
            cmp:{ mg:0, hos:0 },                 // MG · 병원 청구액 (거꾸로 계산)
            rooms:{ r2:{ d:0, p:0, rate:null }, r3:{ d:0, p:0, rate:null },
@@ -905,6 +916,13 @@ $('dg-extra').addEventListener('dblclick', e => {
   inp.focus();
   try { inp.select(); } catch (err) {}
 });
+
+/* 사이드바의 「열 너비 기본값으로 굳히기」가 칸 폭 · 표 폭도 같이 담게 등록한다
+   (common.js — 이 둘은 열 너비와 저장소가 달라 등록하지 않으면 담기지 않는다) */
+if (typeof COLW_EXTRA !== 'undefined'){
+  COLW_EXTRA['drg|paneW']  = () => dg.width;
+  COLW_EXTRA['drg|tableW'] = () => dg.tableW;
+}
 
 dgLoad();
 dgRefresh();

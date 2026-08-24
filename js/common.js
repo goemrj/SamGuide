@@ -512,9 +512,21 @@ document.addEventListener('dblclick', e => {
    index.html 을 더블클릭해 연 경우(file://)에는 파일을 내려받아 준다 — data/ 에 덮어 넣으면 된다. */
 const COLW_FILE = 'data/colw-defaults.js';
 
+/* 표 열 너비 말고도 같이 굳혀 두고 싶은 폭이 있는 화면은 여기에 등록한다.
+     COLW_EXTRA['drg|paneW'] = () => dg.width;
+   질병군 계산기의 「칸 폭」·「표 폭」 슬라이더가 그렇다 — 열 너비와 저장소가 달라
+   (samguide_drg) 등록해 주지 않으면 굳히기가 담지 못한다. 값은 숫자 하나다. */
+const COLW_EXTRA = {};
+
 function colwDefaultsText(){
   const D = (typeof COLW_DEFAULTS === 'undefined') ? {} : COLW_DEFAULTS;
-  const merged = Object.assign({}, D, COLW);          // 이 브라우저의 덧쓰기가 이긴다
+  const extra = {};
+  Object.keys(COLW_EXTRA).forEach(k => {
+    let v = null;
+    try { v = COLW_EXTRA[k](); } catch (e) { v = null; }
+    if (typeof v === 'number' && isFinite(v)) extra[k] = Math.round(v);
+  });
+  const merged = Object.assign({}, D, COLW, extra);   // 이 브라우저의 지금 값이 이긴다
   const keys = Object.keys(merged).sort();
   const head = [
     '/* ---------- 열 너비 기본값 (자동 생성 — 「열 너비 기본값으로 굳히기」가 다시 쓴다) ----------',
@@ -531,8 +543,9 @@ function colwDefaultsText(){
 
 async function freezeColW(say){
   const text = colwDefaultsText();
-  const n = Object.keys(Object.assign({}, (typeof COLW_DEFAULTS === 'undefined' ? {} : COLW_DEFAULTS), COLW))
-              .filter(k => !k.endsWith('|w')).length;
+  // 표 개수만 센다 — 열 너비는 배열, 표 끝선(|w)·칸 폭 같은 낱개 값은 숫자다
+  const merged = Object.assign({}, (typeof COLW_DEFAULTS === 'undefined' ? {} : COLW_DEFAULTS), COLW);
+  const n = Object.keys(merged).filter(k => Array.isArray(merged[k])).length;
   /* 성공 판정은 **204** 로만 한다. 예전 serve.ps1 은 메서드를 안 보고 무조건 파일을 돌려줘서
      PUT 에도 200 을 준다 — r.ok 로 보면 "저장했다"고 해 놓고 아무것도 안 쓴 꼴이 된다.
      새 serve.ps1 만 쓰고 나서 204(No Content)를 준다. */
