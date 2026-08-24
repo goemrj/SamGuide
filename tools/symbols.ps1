@@ -55,7 +55,9 @@ try {
 
   function Cell($c) {
     if ($null -eq $c) { return '' }
-    if ($c -is [double]) { return ([datetime]::FromOADate($c)).ToString('yyyy.MM.dd') }  # 엑셀 날짜는 시리얼값
+    # 엑셀 날짜는 시리얼값. CCYY-MM-DD 로 적는다 — 엑셀 원본에 보이는 꼴이고,
+    # 글자 그대로 비교하면 날짜 순서가 된다(2026-08-24 사용자 지정).
+    if ($c -is [double]) { return ([datetime]::FromOADate($c)).ToString('yyyy-MM-dd') }
     return ([string]$c).Trim()
   }
 

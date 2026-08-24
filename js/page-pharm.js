@@ -18,7 +18,7 @@ const ph = { sym: '' };
    화면 하나에서만 쓰는 코드는 그 화면 파일에 둔다(CLAUDE.md 소스 나누는 규칙). */
 function phSymb(code){
   const s = SYMBOLS[code];
-  const tip = s ? s.n + (s.to && s.to !== '9999.12.31' ? ' (~' + s.to + ')' : '') : '목록에 없는 기호';
+  const tip = s ? s.n + (s.to && s.to !== '9999-12-31' ? ' (~' + s.to + ')' : '') : '목록에 없는 기호';
   // title 은 쓰지 않는다 — 브라우저 기본 툴팁이 말풍선과 겹쳐 두 개로 보인다
   return '<span class="symb" data-tip="' + esc(tip) + '">' + esc(code) + '</span>';
 }

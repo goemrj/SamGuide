@@ -147,7 +147,7 @@ function boldNums(html){
 /* 특정기호 배지 한 개. 커서를 올리면 data/symbol-codes.js 의 한글명칭을 보여 준다. */
 function b2Symb(code){
   const s = SYMBOLS[code];
-  const tip = s ? s.n + (s.to && s.to !== '9999.12.31' ? ' (~' + s.to + ')' : '') : '목록에 없는 기호';
+  const tip = s ? s.n + (s.to && s.to !== '9999-12-31' ? ' (~' + s.to + ')' : '') : '목록에 없는 기호';
   // title 은 쓰지 않는다 — 브라우저 기본 툴팁이 아래 말풍선과 겹쳐서 두 개로 보인다
   return '<span class="symb" data-tip="' + esc(tip) + '">' + esc(code) + '</span>';
 }

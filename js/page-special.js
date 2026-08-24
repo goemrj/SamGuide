@@ -9,9 +9,9 @@ const sp = { group: '', page: 0 };
 const SP_PAGE = 300;                      // 3,600행이 넘어 한 번에 다 그리면 느리다
 
 /* 적용일자·종료일자는 기호마다 하나라 행(SPECIAL_CODES)에는 없다 — 기호로 찾아 쓴다.
-   날짜는 yyyy.MM.dd 라 글자 그대로 비교하면 날짜 순서가 된다(오늘도 같은 꼴로 만든다). */
+   날짜는 CCYY-MM-DD 라 글자 그대로 비교하면 날짜 순서가 된다(오늘도 같은 꼴로 만든다). */
 const p2 = n => (n < 10 ? '0' : '') + n;
-const SP_TODAY = (d => d.getFullYear() + '.' + p2(d.getMonth() + 1) + '.' + p2(d.getDate()))(new Date());
+const SP_TODAY = (d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()))(new Date());
 const spFrom = sym => (SYMBOLS[sym] || {}).from || '';
 const spTo   = sym => (SYMBOLS[sym] || {}).to   || '';
 const spPast = sym => { const t = spTo(sym); return !!t && t < SP_TODAY; };   // 종료일자가 오늘보다 지난 기호
@@ -192,18 +192,18 @@ function renderSpTable(){
       ? html + ' <span class="sp-keynote">' + esc(SP_F_NOTE[d.sym]) + '</span>' : html;
   };
   let html = '<table class="fields sp"><thead><tr>' +
-    '<th>구분</th><th>특정기호</th><th>적용일자</th><th>종료일자</th>' +
-    '<th>상병코드</th><th>상병일련번호</th><th>질환명 (국문)</th>' +
+    '<th>구분</th><th>특정기호</th><th>상병코드</th><th>상병일련번호</th>' +
+    '<th>질환명 (국문)</th><th>적용일자</th><th>종료일자</th>' +
     '</tr></thead><tbody>' +
     view.map(d =>
       '<tr' + (spPast(d.sym) ? ' class="sp-past"' : '') + '>' +
       '<td class="sp-g">' + esc(d.g) + '</td>' +
       '<td class="sp-sym">' + mark(d.sym) + '</td>' +
-      '<td class="sp-date">' + mark(spFrom(d.sym)) + '</td>' +
-      '<td class="sp-date">' + mark(spTo(d.sym)) + '</td>' +
       '<td class="sp-code">' + (d.code ? mark(d.code) : '<span class="saved-note">—</span>') + '</td>' +
       '<td class="sp-seq">' + (d.seq ? esc(d.seq) : '<span class="saved-note">—</span>') + '</td>' +
-      '<td class="sp-name">' + spName(d) + '</td></tr>'
+      '<td class="sp-name">' + spName(d) + '</td>' +
+      '<td class="sp-date">' + mark(spFrom(d.sym)) + '</td>' +
+      '<td class="sp-date">' + mark(spTo(d.sym)) + '</td></tr>'
     ).join('') + '</tbody></table>';
 
   const pages = Math.ceil(rows.length / SP_PAGE);
