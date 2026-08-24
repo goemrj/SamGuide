@@ -245,9 +245,25 @@ function ndMatch(){
   const list = NDRG_SCORES.filter(d => sgHit(d.c + ' ' + d.n, nd.q.trim())).slice(0, 12);
   return { state:list.length ? 'cand' : 'bad', list };
 }
+/* 후보 칩에서 지금 골라 둔 자리. −1 은 「아직 아무것도 안 골랐다」 (질병군 계산기와 같다) */
+let ndCandSel = -1;
+function ndCandChips(list){
+  return list.map((d, i) =>
+    '<button class="chip' + (i === ndCandSel ? ' on' : '') + '" data-ncand="' + esc(d.c) + '">' + esc(d.c) +
+    '<small>' + esc(d.n.length > 28 ? d.n.slice(0, 28) + '…' : d.n) + '</small></button>').join('');
+}
+/* 별표4 에서 **다른 질병군**으로 옮겨 갔으면 직접 적어 둔 기준수가 · 일당수가 · 평균 입원일수를
+   놓는다 — 그러지 않으면 새 질병군을 골라도 앞 질병군의 수가가 계속 이긴다(직접 적은 값이 앞서니까).
+   적어 둔 값을 잃지 않게 **자료에 딱 맞는 번호가 되었을 때만** 놓는다.
+   처음 열 때는 놓지 않는다(ndLastCode 를 저장분으로 채워 두고 시작한다). */
+let ndLastCode = '';
 function ndRenderPickers(){
   const m = ndMatch();
   nd.code = m.state === 'ok' ? m.hit.c : (nd.q || '').trim().toUpperCase();
+  if (m.state === 'ok'){
+    if (ndLastCode !== m.hit.c){ nd.base = 0; nd.day = 0; nd.avg = 0; }
+    ndLastCode = m.hit.c;
+  } else ndLastCode = '';
   if ($('nd-code-in').value !== (nd.q || '')) $('nd-code-in').value = nd.q || '';
   $('nd-name').innerHTML =
     m.state === 'ok' ? '<b>' + esc(m.hit.c) + '</b> <span class="saved-note">' + esc(m.hit.n) +
@@ -257,16 +273,17 @@ function ndRenderPickers(){
         (ndLensOpts().length ? ' (인공수정체 제외 대상 질병군입니다)' : '') + '</span>' :
     m.state === 'empty' ? '<span class="saved-note">질병군번호(RDRG)를 적으면 별표4 에서 점수를 찾습니다 — ' +
         '적지 않아도 아래 표에 수가를 직접 적어 계산할 수 있습니다</span>' :
-    m.state === 'cand' ? '<span class="saved-note">아래 후보에서 고르세요 (' + m.list.length + '건).</span>' :
+    m.state === 'cand' ? '<span class="saved-note">아래 후보에서 고르세요 (' + m.list.length + '건) — ' +
+        '<b>↑ ↓</b> 로 옮기고 <b>Enter</b> 로 넣습니다.</span>' :
         '<span class="dg-err">일치하는 질병군번호가 없습니다 — 별표4(607개 질병군) 안에서 확인해 주세요.</span>';
   $('nd-code-in').classList.toggle('dg-bad', m.state === 'bad');
   const row = $('nd-cand-row');
   if (m.list.length){
+    if (ndCandSel >= m.list.length) ndCandSel = m.list.length - 1;   // 후보가 줄었을 때
     row.style.display = '';
-    $('nd-cand').innerHTML = m.list.map(d =>
-      '<button class="chip" data-ncand="' + esc(d.c) + '">' + esc(d.c) +
-      '<small>' + esc(d.n.length > 28 ? d.n.slice(0, 28) + '…' : d.n) + '</small></button>').join('');
+    $('nd-cand').innerHTML = ndCandChips(m.list);
   } else {
+    ndCandSel = -1;
     row.style.display = 'none';
     $('nd-cand').innerHTML = '';
   }
@@ -575,13 +592,50 @@ function ndRefresh(){
 $('nd-code-in').addEventListener('input', () => {
   nd.q = $('nd-code-in').value.toUpperCase();
   nd.lens = 0;                                  // 질병군이 바뀌면 제외유형을 다시 고른다
+  ndCandSel = -1;                               // 글자가 바뀌면 골라 둔 자리를 놓는다
   ndRefresh();
+});
+/* 후보를 방향키로 고르고 Enter 로 넣는다 — 질병군 계산기와 같은 규칙.
+   ↑ ↓ 는 언제나, ← → 는 후보에 들어간 뒤에만 움직인다(적던 번호의 글자 사이를 오갈 수 있게).
+   Esc 로 빠져나온다. 칩만 다시 그린다. */
+function ndCandMove(step){
+  const list = ndMatch().list;
+  if (!list.length) return;
+  ndCandSel = ndCandSel < 0 ? (step > 0 ? 0 : list.length - 1)
+                            : (ndCandSel + step + list.length) % list.length;
+  $('nd-cand').innerHTML = ndCandChips(list);
+}
+function ndCandTake(){                // 골라 둔 것(없으면 첫 후보)을 번호 칸에 넣는다
+  const list = ndMatch().list;
+  if (!list.length) return false;
+  nd.q = (list[ndCandSel] || list[0]).c;
+  nd.lens = 0;
+  ndCandSel = -1;
+  ndRefresh();
+  return true;
+}
+$('nd-code-in').addEventListener('keydown', e => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = e.key;
+  if (k === 'ArrowDown' || (k === 'ArrowRight' && ndCandSel >= 0)){ e.preventDefault(); ndCandMove(1); }
+  else if (k === 'ArrowUp' || (k === 'ArrowLeft' && ndCandSel >= 0)){ e.preventDefault(); ndCandMove(-1); }
+  else if (k === 'Enter'){ if (ndCandTake()) e.preventDefault(); }
+  else if (k === 'Escape' && ndCandSel >= 0){
+    e.preventDefault();
+    ndCandSel = -1;
+    $('nd-cand').innerHTML = ndCandChips(ndMatch().list);
+  }
 });
 $('nd-cand').addEventListener('click', e => {
   const b = e.target.closest('[data-ncand]');
   if (!b) return;
   nd.q = b.dataset.ncand;
+  nd.lens = 0;
+  ndCandSel = -1;
   ndRefresh();
+  const inp = $('nd-code-in');        // 눌러서 넣었어도 다시 번호 칸에서 이어 적게
+  inp.focus();
+  try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (err) {}
 });
 $('nd-psy').addEventListener('change', () => { nd.psy = $('nd-psy').checked; ndPaint(); });
 ['nd-unit', 'nd-coef'].forEach(id => $(id).addEventListener('input', () => {
@@ -796,4 +850,5 @@ if (typeof COLW_EXTRA !== 'undefined'){
 }
 
 ndLoad();
+ndLastCode = (nd.q || '').trim().toUpperCase();   // 저장분의 직접 적은 수가를 첫 그림에서 잃지 않게
 ndRefresh();

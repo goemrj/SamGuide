@@ -339,6 +339,14 @@ function dgMatch(){
   const list = DRG_SCORES.filter(d => sgHit(d.c + ' ' + d.n, dg.q.trim())).slice(0, 12);
   return { state:list.length ? 'cand' : 'bad', list };
 }
+/* 후보 칩에서 지금 골라 둔 자리. −1 은 「아직 아무것도 안 골랐다」 (2026-08-24 요청 —
+   ↑ ↓ 로 옮기고 Enter 로 넣는다). 계산값이 아니라 보는 상태라 dg 에 담지 않는다. */
+let dgCandSel = -1;
+function dgCandChips(list){
+  return list.map((d, i) =>
+    '<button class="chip' + (i === dgCandSel ? ' on' : '') + '" data-dcand="' + d.c + '">' + esc(d.c) +
+    '<small>' + esc(d.n.length > 28 ? d.n.slice(0, 28) + '…' : d.n) + '</small></button>').join('');
+}
 function dgRenderPickers(){
   const m = dgMatch();
   dg.code = m.state === 'ok' ? m.hit.c : '';
@@ -347,16 +355,17 @@ function dgRenderPickers(){
     m.state === 'ok'   ? '<b>' + esc(m.hit.c) + '</b> <span class="saved-note">' + esc(m.hit.n) + '</span>' :
     m.state === 'empty' ? '<span class="saved-note">질병군번호를 적으세요 — 7개 질병군 ' + DRG_SCORES.length + '건 (예: C05100 · G08300 · N04700 · O01600)</span>' :
     // 치는 중일 수 있으니 후보가 있으면 안내만, 아예 없으면 빨간 오류
-    m.state === 'cand'  ? '<span class="saved-note">아래 후보에서 고르세요 (' + m.list.length + '건).</span>' :
+    m.state === 'cand'  ? '<span class="saved-note">아래 후보에서 고르세요 (' + m.list.length + '건) — ' +
+                            '<b>↑ ↓</b> 로 옮기고 <b>Enter</b> 로 넣습니다.</span>' :
                           '<span class="dg-err">일치하는 질병군번호가 없습니다. 7개 질병군(C05 · D11 · G08 · G09 · G10 · N04 · O01) 안에서 확인해 주세요.</span>';
   $('dg-code-in').classList.toggle('dg-bad', m.state === 'bad');
   const row = $('dg-cand-row');
   if (m.list.length){
+    if (dgCandSel >= m.list.length) dgCandSel = m.list.length - 1;   // 후보가 줄었을 때
     row.style.display = '';
-    $('dg-cand').innerHTML = m.list.map(d =>
-      '<button class="chip" data-dcand="' + d.c + '">' + esc(d.c) +
-      '<small>' + esc(d.n.length > 28 ? d.n.slice(0, 28) + '…' : d.n) + '</small></button>').join('');
+    $('dg-cand').innerHTML = dgCandChips(m.list);
   } else {
+    dgCandSel = -1;
     row.style.display = 'none';
     $('dg-cand').innerHTML = '';
   }
@@ -707,13 +716,49 @@ function dgRefresh(){
 /* ---------- 손 ---------- */
 $('dg-code-in').addEventListener('input', () => {
   dg.q = $('dg-code-in').value.toUpperCase();
+  dgCandSel = -1;                     // 글자가 바뀌면 골라 둔 자리를 놓는다
   dgRefresh();
+});
+/* 후보를 방향키로 고르고 Enter 로 넣는다 (2026-08-24 요청).
+   ↑ ↓ 는 언제나 움직이고, ← → 는 **후보에 들어간 뒤에만** 움직인다 —
+   그러지 않으면 적던 번호의 글자 사이를 오갈 수 없다. Esc 로 빠져나온다.
+   칩만 다시 그린다(dgRefresh 를 부르면 적던 칸이 흔들린다). */
+function dgCandMove(step){
+  const list = dgMatch().list;
+  if (!list.length) return;
+  dgCandSel = dgCandSel < 0 ? (step > 0 ? 0 : list.length - 1)
+                            : (dgCandSel + step + list.length) % list.length;
+  $('dg-cand').innerHTML = dgCandChips(list);
+}
+function dgCandTake(){                // 골라 둔 것(없으면 첫 후보)을 번호 칸에 넣는다
+  const list = dgMatch().list;
+  if (!list.length) return false;
+  dg.q = (list[dgCandSel] || list[0]).c;
+  dgCandSel = -1;
+  dgRefresh();
+  return true;
+}
+$('dg-code-in').addEventListener('keydown', e => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = e.key;
+  if (k === 'ArrowDown' || (k === 'ArrowRight' && dgCandSel >= 0)){ e.preventDefault(); dgCandMove(1); }
+  else if (k === 'ArrowUp' || (k === 'ArrowLeft' && dgCandSel >= 0)){ e.preventDefault(); dgCandMove(-1); }
+  else if (k === 'Enter'){ if (dgCandTake()) e.preventDefault(); }
+  else if (k === 'Escape' && dgCandSel >= 0){
+    e.preventDefault();
+    dgCandSel = -1;
+    $('dg-cand').innerHTML = dgCandChips(dgMatch().list);
+  }
 });
 $('dg-cand').addEventListener('click', e => {
   const b = e.target.closest('[data-dcand]');
   if (!b) return;
   dg.q = b.dataset.dcand;
+  dgCandSel = -1;
   dgRefresh();
+  const inp = $('dg-code-in');        // 눌러서 넣었어도 다시 번호 칸에서 이어 적게
+  inp.focus();
+  try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (err) {}
 });
 $('dg-inst').addEventListener('change', () => { dg.inst = $('dg-inst').value; dgRefresh(); });
 $('dg-rate').addEventListener('change', () => { dg.rate = Number($('dg-rate').value); dgRefresh(); });
