@@ -96,6 +96,20 @@ tools/                원본 PDF·엑셀 → data/ 변환 스크립트
 - **Excel COM · Word COM 은 정상 동작**한다. python 은 없다(Store 스텁만).
 - PDF 는 Git for Windows 의 **xpdf `pdftotext`**. poppler 가 아니라서 `-bbox-layout` 이 없고,
   대신 **`-table`** 이 있다. 여러 단으로 된 고시 표는 `-layout` 말고 `-table` 로 뽑아야 칸이 안 섞인다.
+- **글자를 못 뽑는 PDF 가 있다.** 폰트가 `Adobe-Korea1` CID 인데 ToUnicode 표가 없는 판
+  (신포괄 지침 등). `pdftotext` · 한글 · Word 변환 모두 깨진 글자만 나온다. 두 가지로 푼다.
+  - **쪽을 그림으로 그려서 읽기** — poppler(`pdftoppm`) · ghostscript · ImageMagick 이 다 없으니
+    윈도우 자체 PDF 엔진(WinRT `Windows.Data.Pdf`)을 PowerShell 5.1 에서 부른다
+    (`PdfDocument.LoadFromFileAsync` → `PdfPage.RenderToStreamAsync`,
+    `System.Runtime.WindowsRuntime` 의 `AsTask` 로 await. `PdfPage.Close()` 는 없다).
+    폭 1500~1700px 이면 표 숫자까지 읽힌다. Read 도구의 PDF 렌더는 `pdftoppm` 이 없어 못 쓴다.
+  - **깨진 글자를 되살리기** — 깨지는 방식이 글리프 하나 → 글자 하나 **일대일 치환**이라
+    대응표를 만들면 원문이 나온다. 아는 값(그림으로 읽은 한 쪽·다른 원본 파일)과 맞춰 표를 만들고,
+    **뽑아낸 값은 반드시 원본 안의 관계식으로 줄마다 검산한다**
+    (예: 별표4 는 `기준수가 = 10원미만 4사5입(기준점수 × 83.8)`). `tools/ndrg-scores.ps1` 참조.
+- **`tools/*.ps1` 은 UTF-8 BOM 으로 저장한다.** PowerShell 5.1 은 BOM 이 없으면 파일을 CP949 로
+  읽어 한글 주석·문자열이 깨지고 구문 오류가 난다. 해시 리터럴(`@{}`)의 열쇠는 **대소문자를
+  가리지 않아** `'B'`/`'b'` 를 같이 쓸 수 없다 — 그럴 때는 `Dictionary[char,char]` 를 쓴다.
 - awk 로 칸을 자를 때 **`LC_ALL=C.UTF-8` 필수**. 없으면 글자를 바이트로 세어 위치가 어긋난다.
 - **awk 를 줄번호(`NR==…`)로 편집하지 않는다.** 앞선 편집으로 번호가 밀려 엉뚱한 줄을 덮어쓴다.
   파일 수정은 Edit 도구로 한다.

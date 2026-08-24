@@ -242,7 +242,10 @@ function ndMatch(){
   if (!ndHasTable()) return { state:'notable', list:[] };
   const exact = NDRG_SCORES.find(d => d.c === t);
   if (exact) return { state:'ok', hit:exact, list:[] };
-  const list = NDRG_SCORES.filter(d => sgHit(d.c + ' ' + d.n, nd.q.trim())).slice(0, 12);
+  // 번호(RDRG · AADRG) · 명칭 · 중증도코드명 · 구분 어느 것으로 적어도 후보에 걸린다
+  const list = NDRG_SCORES
+    .filter(d => sgHit(d.c + ' ' + d.a + ' ' + d.n + ' ' + d.s + ' ' + d.g, nd.q.trim()))
+    .slice(0, 12);
   return { state:list.length ? 'cand' : 'bad', list };
 }
 /* 후보 칩에서 지금 골라 둔 자리. −1 은 「아직 아무것도 안 골랐다」 (질병군 계산기와 같다) */
@@ -253,7 +256,8 @@ function ndCandChips(list){
     '<small>' + esc(d.n.length > 28 ? d.n.slice(0, 28) + '…' : d.n) + '</small></button>').join('');
 }
 /* 별표4 에서 **다른 질병군**으로 옮겨 갔으면 직접 적어 둔 기준수가 · 일당수가 · 평균 입원일수를
-   놓는다 — 그러지 않으면 새 질병군을 골라도 앞 질병군의 수가가 계속 이긴다(직접 적은 값이 앞서니까).
+   놓고, 정신과 여부를 그 질병군의 구분으로 다시 맞춘다 — 그러지 않으면 새 질병군을 골라도
+   앞 질병군의 수가가 계속 이긴다(직접 적은 값이 앞서니까).
    적어 둔 값을 잃지 않게 **자료에 딱 맞는 번호가 되었을 때만** 놓는다.
    처음 열 때는 놓지 않는다(ndLastCode 를 저장분으로 채워 두고 시작한다). */
 let ndLastCode = '';
@@ -261,21 +265,28 @@ function ndRenderPickers(){
   const m = ndMatch();
   nd.code = m.state === 'ok' ? m.hit.c : (nd.q || '').trim().toUpperCase();
   if (m.state === 'ok'){
-    if (ndLastCode !== m.hit.c){ nd.base = 0; nd.day = 0; nd.avg = 0; }
+    if (ndLastCode !== m.hit.c){
+      nd.base = 0; nd.day = 0; nd.avg = 0;
+      nd.psy = m.hit.g === '정신과계';     // 별표4 구분 — 지침 36쪽의 정신과 14개 질병군과 같다
+    }
     ndLastCode = m.hit.c;
   } else ndLastCode = '';
   if ($('nd-code-in').value !== (nd.q || '')) $('nd-code-in').value = nd.q || '';
   $('nd-name').innerHTML =
-    m.state === 'ok' ? '<b>' + esc(m.hit.c) + '</b> <span class="saved-note">' + esc(m.hit.n) +
-        ' · 평균 ' + won2(m.hit.avg) + '일 · 하한 ' + m.hit.lo + '일 · 상한 ' + m.hit.hi + '일</span>' :
+    m.state === 'ok' ? '<b>' + esc(m.hit.c) + '</b> <span class="saved-note">' +
+        esc(m.hit.g) + ' · ' + esc(m.hit.n) + (m.hit.s ? ' · ' + esc(m.hit.s) : '') +
+        '<br>평균 ' + won2(m.hit.avg) + '일 · 정상군 ' + m.hit.lo + '~' + m.hit.hi + '일' +
+        ' · 기준점수 ' + won2(m.hit.bs) + ' · 일당점수 ' + won2(m.hit.ds) + '</span>' :
     m.state === 'notable' ? '<span class="saved-note">별표4(질병군별 점수) 자료가 아직 없습니다 — ' +
         '<b>기준수가 · 일당수가 · 평균 입원일수</b>를 아래 표에 직접 적으세요' +
         (ndLensOpts().length ? ' (인공수정체 제외 대상 질병군입니다)' : '') + '</span>' :
     m.state === 'empty' ? '<span class="saved-note">질병군번호(RDRG)를 적으면 별표4 에서 점수를 찾습니다 — ' +
-        '적지 않아도 아래 표에 수가를 직접 적어 계산할 수 있습니다</span>' :
+        (ndHasTable() ? won(NDRG_SCORES.length) + '건 (예: B65000 · C05200 · V61000) · ' : '') +
+        '명칭으로 적어도 후보에 걸립니다</span>' :
     m.state === 'cand' ? '<span class="saved-note">아래 후보에서 고르세요 (' + m.list.length + '건) — ' +
         '<b>↑ ↓</b> 로 옮기고 <b>Enter</b> 로 넣습니다.</span>' :
-        '<span class="dg-err">일치하는 질병군번호가 없습니다 — 별표4(607개 질병군) 안에서 확인해 주세요.</span>';
+        '<span class="dg-err">일치하는 질병군번호가 없습니다 — 별표4(RDRG ' +
+        (ndHasTable() ? won(NDRG_SCORES.length) + '건' : '') + ') 안에서 확인해 주세요.</span>';
   $('nd-code-in').classList.toggle('dg-bad', m.state === 'bad');
   const row = $('nd-cand-row');
   if (m.list.length){
