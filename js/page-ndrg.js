@@ -77,7 +77,10 @@ function ndNewState(){
            rateIn:.20, rateOver:.23,   // 평균 입원일수까지 · 초과분 본인부담률
            npTotal:0, npRate:null, npFix:null, items:[],   // 비포괄수가 원장
            fee:0,                      // 정상군 입원기간 행위별 총진료비 (열외군 판정)
-           width:ndDefW('ndrg|paneW', 980), tableW:ndDefW('ndrg|tableW', 980), wSet:false,
+           // 칸 폭은 700px 로 고정이다 (2026-08-24 요청) — data/colw-defaults.js 의
+           // "ndrg|paneW" 가 그 값이고, 슬라이더로 잠깐 넓혀 봐도 새로 열면 700 으로 돌아온다
+           // (ndLoad 가 칸 폭만 저장분에서 되살리지 않는다). 표 폭은 그대로 기억한다.
+           width:ndDefW('ndrg|paneW', 700), tableW:ndDefW('ndrg|tableW', 980), wSet:false,
            memo:'',
            cmp:{ mg:0, hos:0 } };
 }
@@ -107,10 +110,12 @@ function ndLoad(){
   o.npRate = typeof s.npRate === 'number' ? s.npRate : null;
   o.npFix  = typeof s.npFix  === 'number' ? s.npFix  : null;
   o.fee = num(s.fee, 0);
+  /* 칸 폭(width)은 저장분에서 되살리지 않는다 — 700px 고정이다.
+     표 폭(tableW)만 이 브라우저에서 직접 움직인 값을 따른다.
+     칸 폭을 다른 값으로 굳히려면 슬라이더로 맞추고 사이드바의
+     「열 너비 기본값으로 굳히기」를 누른다 — data/colw-defaults.js 의 "ndrg|paneW" 가 바뀐다. */
   if (s.wSet === true){
     o.wSet = true;
-    const w = Number(s.width);
-    if (isFinite(w) && w >= 560 && w <= 1600) o.width = Math.round(w / 20) * 20;
     const tw = Number(s.tableW);
     if (isFinite(tw) && tw >= 440 && tw <= 1600) o.tableW = Math.round(tw / 20) * 20;
   }
@@ -627,7 +632,7 @@ $('nd-psy').addEventListener('change', () => { nd.psy = $('nd-psy').checked; ndP
   ndPaint();
 }));
 ['nd-w', 'nd-tw'].forEach(id => $(id).addEventListener('input', () => {
-  nd.width  = Number($('nd-w').value)  || 980;
+  nd.width  = Number($('nd-w').value)  || 700;
   nd.tableW = Number($('nd-tw').value) || 980;
   nd.wSet = true;
   ndApplyWidth();
