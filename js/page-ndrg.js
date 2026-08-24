@@ -328,11 +328,12 @@ function ndRenderTotal(){
         (S ? from(S.ds, ndUp10(S.ds * nd.coef * nd.unit)) : '') + '</td>' +
         '<td>' + ndMoney('id="nd-day" placeholder="' +
           (S ? ndUp10(S.ds * nd.coef * nd.unit).toLocaleString() : '0') + '"', nd.day) + '</td></tr>' +
-      '<tr><td>환자 입원일수 <span class="saved-note">일</span></td>' +
-        '<td>' + ndDec('id="nd-los"', nd.los, '일수') + '</td></tr>' +
+      // 평균 → 환자 순서다 (2026-08-24 요청으로 두 줄을 맞바꿨다)
       '<tr><td>평균 입원일수 <span class="saved-note">일' +
         (S ? ' · 별표4 ' + won2(S.avg) + '일 (정상군 ' + S.lo + '~' + S.hi + '일)' : '') + '</span></td>' +
         '<td>' + ndDec('id="nd-avg"', nd.avg, S ? String(S.avg) : '0') + '</td></tr>' +
+      '<tr><td>환자 입원일수 <span class="saved-note">일</span></td>' +
+        '<td>' + ndDec('id="nd-los"', nd.los, '일수') + '</td></tr>' +
       '<tr><td>수정체 제외금액 ' + ndLensSel() + '</td>' +
         '<td class="num" data-nout="excl">0</td></tr>' +
       '<tr><td><span class="c-name">포괄수가</span>' +
@@ -402,49 +403,11 @@ function ndRenderNp(){
     '</tfoot></table>';
 }
 
-/* ③ 본인부담금 — 가) / 나) */
-function ndRenderOwn(o){
-  const line = (name, amt, rate, own) =>
-    '<tr><td>' + name + '</td>' +
-    '<td class="num">' + (amt === null ? '' : won2(amt)) + '</td>' +
-    '<td class="num">' + (rate === null ? '' : rate) + '</td>' +
-    '<td class="num">' + won2(own) + '</td></tr>';
-  const inPct   = pct(nd.rateIn);
-  const overPct = pct(nd.rateOver);
-  const head =
-    '<table class="fields items dgt fixed" data-k="ndrg-own"><thead><tr>' +
-      '<th>구분</th><th style="width:22%;">금액</th><th style="width:16%;">부담률</th>' +
-      '<th style="width:22%;">본인부담</th>' +
-    '</tr></thead><tbody>';
-  let body;
-  if (o.branch === '나'){
-    body =
-      line('① 평균 입원일수까지 <span class="saved-note">기준수가' +
-             (o.excl ? ' − 제외금액' : '') + '</span>', o.base - o.excl, inPct, o.ownIn) +
-      line('② 평균 입원일수 초과 <span class="saved-note">(' + won2(o.los) + ' − ' + won2(o.avg) +
-             ')일 × 일당수가</span>', o.over * o.day, overPct, o.ownOver) +
-      line('비포괄수가 <span class="saved-note">아래 원장에서 계산</span>', o.np, '', o.npOwn);
-  } else {
-    body =
-      line('포괄수가 <span class="saved-note">10원 미만 4사5입한 값</span>', o.pack, inPct, o.ownIn) +
-      line('비포괄수가 <span class="saved-note">아래 원장에서 계산</span>', o.np, '', o.npOwn);
-  }
-  const why = o.branch === '나'
-    ? '나) 환자 입원일수(' + won2(o.los) + '일)가 평균 입원일수(' + won2(o.avg) + '일)보다 길다'
-    : (nd.psy ? '가) 정신과 14개 질병군(U010~V610) — 입원일수와 무관하게 ' + pct(nd.rateIn)
-              : '가) 환자 입원일수가 평균 입원일수보다 짧거나 같다');
-  $('nd-own').innerHTML = head + body +
-      line('열외군 차액 <span class="saved-note">200만원 초과분</span>', o.outAdd, pct(nd.rateIn), o.outOwn) +
-    '</tbody><tfoot><tr>' +
-      '<td><span class="c-name">본인부담금</span>' +
-        '<div class="saved-note">' + esc(why) + ' · 더한 후 10원 미만 절사' +
-        (o.own !== o.ownS + o.outOwn ? ' (절사 전 ' + won2(o.ownS + o.outOwn) + ')' : '') + '</div></td>' +
-      '<td class="num"></td><td class="num"></td>' +
-      '<td class="num strong">' + won(o.own) + '</td>' +
-    '</tr></tfoot></table>';
-}
+/* 왼쪽의 「본인부담금」 카드(가)/나) 나눔 표)는 요청으로 걷어냈다 (2026-08-24) —
+   오른쪽 요약 카드와 같은 값을 두 번 보여 주고 있었다. 계산(ndCompute 의 branch · ownIn · ownOver)은
+   그대로 두었으니, 나눔 표가 다시 필요하면 그 값으로 그리면 된다. */
 
-/* ④ 열외군 */
+/* ③ 열외군 */
 function ndRenderOut(){
   $('nd-out').innerHTML =
     '<table class="fields items dgt fixed" data-k="ndrg-out"><thead><tr>' +
@@ -461,7 +424,7 @@ function ndRenderOut(){
       '<td class="num b" data-nout="out-own">0</td></tr></tfoot></table>';
 }
 
-/* ⑤ 합계 */
+/* ④ 합계 — 오른쪽 요약 카드 */
 function ndRenderSum(o){
   $('nd-sum').innerHTML =
     '<div class="dg-sum-big"><span>본인일부부담금</span><b>' + won(o.own) + '</b><i>원</i></div>' +
@@ -551,7 +514,6 @@ function ndPaint(){
     : '열외군 아님 <span class="saved-note">차액이 200만원을 넘지 않으면 0</span>');
   set('out-add', won(o.outAdd));
   set('out-own', won2(o.outOwn));
-  ndRenderOwn(o);
   ndRenderSum(o);
   ndPaintCmp(o.grand);
   ndSave();
