@@ -295,13 +295,11 @@ function ndRenderPickers(){
   });
 }
 
-/* 인공수정체 제외유형 고르는 칸 (별표9) */
+/* 인공수정체 제외유형 고르는 칸 (별표9) — 대상 질병군(C051~C054)이 아니면 아무것도 내놓지 않는다.
+   부연설명은 요청으로 걷어냈다(2026-08-24) — 카드 아래 설명에 남아 있다. */
 function ndLensSel(){
   const opts = ndLensOpts();
-  if (!opts.length)
-    return '<span class="saved-note">' +
-      ((nd.q || '').trim() ? '이 질병군은 인공수정체 제외 대상이 아닙니다 (수정체 수술 C051~C054만 해당)'
-                           : '질병군번호를 먼저 적으세요') + '</span>';
+  if (!opts.length) return '';
   return '<select class="field-input mini" id="nd-lens" style="width:auto;display:inline-block;">' +
     '<option value="0">없음</option>' +
     opts.map(o => '<option value="' + o.t + '"' + (nd.lens === o.t ? ' selected' : '') + '>' +
@@ -312,22 +310,22 @@ function ndLensSel(){
 /* ① 총액 — 사용자 엑셀의 [총액] 표를 그대로 옮긴 것 (구분 · 금액 두 칸) */
 function ndRenderTotal(){
   const S = ndPick();
+  /* 기준수가 · 일당수가 · 수정체 제외금액 · 인센티브 줄의 부연설명은 요청으로 걷어냈다(2026-08-24).
+     기준수가·일당수가는 별표4 자료가 있을 때 **어느 점수에서 나온 값인지**만 남긴다. */
   const from = (score, val) => S
-    ? '별표4 ' + won2(score) + '점 × 조정계수 ' + nd.coef + ' × 단가 ' + nd.unit +
-      ' = <b>' + won(val) + '</b>원' + (nd.base || nd.day ? ' · 적어 넣은 값이 있으면 그것을 씁니다' : '')
+    ? '<div class="saved-note">별표4 ' + won2(score) + '점 × 조정계수 ' + nd.coef +
+      ' × 단가 ' + nd.unit + ' = <b>' + won(val) + '</b>원</div>'
     : '';
   $('nd-total').innerHTML =
     '<table class="fields items dgt fixed" data-k="ndrg-total"><thead><tr>' +
       '<th>구분</th><th style="width:30%;">금액</th>' +
     '</tr></thead><tbody>' +
       '<tr><td><span class="c-name">기준수가</span>' +
-        '<div class="saved-note">' + (S ? from(S.bs, ndUp10(S.bs * nd.coef * nd.unit))
-              : '질병군별로 평균 입원일수만큼 입원했을 때의 건당 진료비') + '</div></td>' +
+        (S ? from(S.bs, ndUp10(S.bs * nd.coef * nd.unit)) : '') + '</td>' +
         '<td>' + ndMoney('id="nd-base" placeholder="' +
           (S ? ndUp10(S.bs * nd.coef * nd.unit).toLocaleString() : '0') + '"', nd.base) + '</td></tr>' +
       '<tr><td><span class="c-name">일당수가</span>' +
-        '<div class="saved-note">' + (S ? from(S.ds, ndUp10(S.ds * nd.coef * nd.unit))
-              : '입원일수가 1일 늘 때마다 더해지는 질병군별 진료비') + '</div></td>' +
+        (S ? from(S.ds, ndUp10(S.ds * nd.coef * nd.unit)) : '') + '</td>' +
         '<td>' + ndMoney('id="nd-day" placeholder="' +
           (S ? ndUp10(S.ds * nd.coef * nd.unit).toLocaleString() : '0') + '"', nd.day) + '</td></tr>' +
       '<tr><td>환자 입원일수 <span class="saved-note">일</span></td>' +
@@ -335,14 +333,13 @@ function ndRenderTotal(){
       '<tr><td>평균 입원일수 <span class="saved-note">일' +
         (S ? ' · 별표4 ' + won2(S.avg) + '일 (정상군 ' + S.lo + '~' + S.hi + '일)' : '') + '</span></td>' +
         '<td>' + ndDec('id="nd-avg"', nd.avg, S ? String(S.avg) : '0') + '</td></tr>' +
-      '<tr><td>수정체 제외금액 ' + ndLensSel() +
-        '<div class="saved-note">별표9 — 인공수정체를 쓰지 않거나 조절성(비급여)을 쓴 경우 포괄수가에서 뺀다</div></td>' +
+      '<tr><td>수정체 제외금액 ' + ndLensSel() + '</td>' +
         '<td class="num" data-nout="excl">0</td></tr>' +
       '<tr><td><span class="c-name">포괄수가</span>' +
         '<div class="saved-note">기준수가 + (환자 입원일수 − 평균 입원일수) × 일당수가 − 제외금액 · 10원 미만 4사5입' +
         '<span data-nout="pack-raw"></span></div></td>' +
         '<td class="num b" data-nout="pack">0</td></tr>' +
-      '<tr><td>인센티브 <span class="saved-note">별표3 정책가산율 총합 (%)</span></td>' +
+      '<tr><td>인센티브 <span class="saved-note">%</span></td>' +
         '<td>' + ndDec('id="nd-inc"', nd.inc, '0') + '</td></tr>' +
       '<tr><td>인센티브포괄수가 <span class="saved-note">가산수가 = 포괄수가 × 정책가산율 · 10원 미만 절사</span></td>' +
         '<td class="num b" data-nout="inc">0</td></tr>' +
@@ -478,7 +475,7 @@ function ndRenderSum(o){
       '<th>구분</th><th style="width:31%;">금액</th><th style="width:31%;">본인부담</th>' +
     '</tr></thead><tbody>' +
       line('포괄수가', o.pack, o.packOwn) +
-      line('인센티브포괄수가<div class="saved-note">가산수가 — 본인부담 없음</div>', o.inc, 0) +
+      line('인센티브포괄수가', o.inc, 0) +   // 부연설명은 요청으로 걷어냈다(2026-08-24)
       line('비포괄수가', o.np, o.npOwn) +
       line('열외군 차액<div class="saved-note">' + pct(nd.rateIn) + '</div>', o.outAdd, o.outOwn) +
     '</tbody><tfoot>' +
