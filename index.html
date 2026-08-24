@@ -25,6 +25,7 @@
       <button class="navbtn on" data-page="burden"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>본인부담금 규칙</button>
       <button class="navbtn" data-page="calc"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h4"/></svg>본인부담금 계산기</button>
       <button class="navbtn" data-page="drg"><svg class="ico" viewBox="0 0 24 24"><path d="M4 19V9M9 19V5M14 19v-7M19 19v-4"/><path d="M3 21h18"/></svg>질병군(DRG) 계산기</button>
+      <button class="navbtn" data-page="ndrg"><svg class="ico" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>신포괄 계산기</button>
       <button class="navbtn" data-page="layout"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>SAM 파일 레이아웃</button>
       <button class="navbtn" data-page="samcheck"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 15 2 2 4-4"/></svg>SAM 변환오류</button>
       <button class="navbtn" data-page="hangmok"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>항 · 목 코드</button>
@@ -279,6 +280,134 @@
         <div class="card"><div class="card-pad">
           <b class="dg-h"><i class="dg-dot"></i>메모</b>
           <textarea class="dg-memo" id="dg-memo"
+                    placeholder="이 계산에 대해 적어 둘 것 (이 브라우저에 저장됩니다)"></textarea>
+        </div></div>
+      </div>
+      </div><!-- /dg-wrap -->
+    </section>
+
+    <!-- 신포괄 계산기 -->
+    <section class="page" id="page-ndrg">
+      <div class="page-head">
+        <h1>신포괄 계산기</h1>
+        <p>포괄수가 + 가산수가(정책가산) + 비포괄수가로 <b>신포괄총액</b>과 <b>본인부담금</b>을 계산합니다.
+           출처: 「신포괄지불제도 시범사업 지침」 34~39쪽(산정방법 · 본인부담금 · 열외군) · 별표3 213쪽 · 별표4 215쪽 · 별표9 281쪽.</p>
+      </div>
+
+      <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <label class="saved-note">질병군번호
+          <input class="field-input" id="nd-code-in" style="width:120px;text-transform:uppercase;"
+                 placeholder="B65000" autocomplete="off">
+        </label>
+        <span id="nd-name" style="flex:1;min-width:240px;"></span>
+      </div>
+      <div class="toolbar" id="nd-cand-row" style="display:none;">
+        <div class="chips chips-rec" id="nd-cand"></div>
+      </div>
+      <div class="toolbar" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <label class="saved-note" title="보건복지부 고시 「건강보험 요양급여비용의 내역」 — 지침 39쪽 예시는 83.8">
+          점수당 단가 <input class="field-input" id="nd-unit" inputmode="decimal" style="width:64px;text-align:right;">
+        </label>
+        <label class="saved-note" title="시범기관별 · 질병군별로 부여된 조정계수 (34쪽)">
+          조정계수 <input class="field-input" id="nd-coef" inputmode="decimal" style="width:64px;text-align:right;">
+        </label>
+        <label class="saved-note" title="평균 입원일수까지의 포괄수가 본인부담률">
+          부담률 <input class="field-input pctin" id="nd-rate-in" inputmode="decimal" style="width:64px;"><span class="pctsign">%</span>
+        </label>
+        <label class="saved-note" title="평균 입원일수를 초과한 몫의 본인부담률">
+          초과분 <input class="field-input pctin" id="nd-rate-over" inputmode="decimal" style="width:64px;"><span class="pctsign">%</span>
+        </label>
+        <label class="saved-note" title="U010~V610 — 입원일수와 무관하게 20%를 산정한다 (36쪽)">
+          <input type="checkbox" id="nd-psy"> 정신과 14개 질병군
+        </label>
+        <span class="spacer" style="flex:1;"></span>
+        <label class="saved-note" title="카드(박스)의 가로 폭">
+          칸 폭 <input type="range" id="nd-w" min="560" max="1600" step="20" style="width:110px;vertical-align:middle;">
+          <b id="nd-w-val" style="font-variant-numeric:tabular-nums;"></b>
+        </label>
+        <label class="saved-note" title="카드 안 표의 가로 폭 — 칸 폭보다 크게 하면 칸 폭까지만 찹니다">
+          표 폭 <input type="range" id="nd-tw" min="440" max="1600" step="20" style="width:110px;vertical-align:middle;">
+          <b id="nd-tw-val" style="font-variant-numeric:tabular-nums;"></b>
+        </label>
+        <button class="btn xs" id="nd-clear">비우기</button>
+      </div>
+
+      <div class="dg-wrap">
+      <div class="dg-main" id="nd-main">
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h"><i class="dg-dot"></i>총액</b>
+        <div id="nd-total" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          <b>기준수가 · 일당수가 · 평균 입원일수</b>는 질병군번호를 적으면 별표4 에서 찾고,
+          직접 적으면 적은 값을 씁니다(별표4 자료가 아직 없으면 직접 적으세요).
+          별표4 의 점수로 낼 때는 <b>10원 미만 4사5입(점수 × 조정계수 × 점수당 단가)</b> 입니다.
+          금액 칸 안에서 <b>+ − × ÷</b> 셈이 됩니다.<br>
+          <b>포괄수가</b> = 기준수가 + (환자 입원일수 − 평균 입원일수) × 일당수가 − 인공수정체 제외금액 (10원 미만 4사5입).
+          <b>인센티브포괄수가</b>(가산수가) = 포괄수가 × 정책가산율 총합 (10원 미만 절사).
+          <b>신포괄총액</b> = 세 가지를 더한 뒤 10원 미만 절사.
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h"><i class="dg-dot"></i>본인부담금</b>
+        <div id="nd-own" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          입원일수가 평균 입원일수보다 <b>짧거나 같으면 가)</b>, <b>길면 나)</b> 식을 씁니다(지침 37쪽 · 그림3).
+          정신과 14개 질병군(U010~V610)은 입원일수와 무관하게 가) 입니다.
+          <b>가산수가(인센티브)에는 본인부담이 붙지 않습니다</b> — 지침의 두 식에 포괄수가 · 비포괄수가만 있고,
+          보험자부담금은 총액 − 본인부담금 입니다(39쪽 마).
+          의료급여 · 전액비포괄 항목은 행위별수가제와 같은 부담률을 쓰니 위 <b>부담률</b> 칸이나
+          아래 원장의 줄별 부담률로 고쳐 주세요.
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h"><i class="dg-dot"></i>비포괄수가</b>
+        <div id="nd-np" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          맨 위 <b>비포괄수가 총액</b>이 총진료비 자리입니다 — 그 아래에 <b>부담률이 다른 항목</b>
+          (전액비포괄 행위 · 식대 · 정책수가 …)을 적으면
+          <b>남는 금액 × 부담률 + Σ(항목 × 각 부담률)</b> 로 본인부담을 냅니다(본인부담금 계산기와 같은 방식).
+          비포괄 항목은 행위별수가의 80%, 전액비포괄 항목은 100%로 산정한 금액을 적습니다(35쪽).
+          맨 아래 빈 줄에 적으면 그 아래에 빈 줄이 하나 더 생기고, <b>Tab</b>·<b>Enter</b> 로
+          금액 → 부담률 → 다음 줄 금액으로 넘어갑니다.
+          <b>본인부담 칸을 두 번 누르면</b> 그 줄 금액을 직접 고칠 수 있습니다(비우면 다시 자동 계산).
+        </div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <b class="dg-h"><i class="dg-dot"></i>요양급여(의료급여)비용 열외군</b>
+        <div id="nd-out" style="margin-top:10px;"></div>
+        <div class="saved-note" style="margin-top:8px;">
+          신포괄총액이 행위별 총진료비보다 적고 그 차액이 <b>200만원을 초과</b>하면 열외군입니다(36쪽).
+          그 초과액을 총액에 더하고, 본인부담에는 초과액 × 부담률을 더합니다.
+          신포괄수가에서는 급여지만 행위별에서 비급여인 행위는 그 기관의 관행수가로,
+          약제 · 치료재료는 실구입금액으로 계산한 금액을 적습니다.
+        </div>
+      </div></div>
+
+      </div><!-- /nd-main -->
+
+      <div class="dg-side">
+        <div class="card"><div class="card-pad" id="nd-sum"></div></div>
+        <div class="card"><div class="card-pad" id="nd-sum-tbl"></div></div>
+      </div>
+
+      <div class="dg-note">
+        <div class="card"><div class="card-pad">
+          <b class="dg-h"><i class="dg-dot"></i>MG · 병원 청구액으로 거꾸로 계산</b>
+          <div id="nd-cmp" style="margin-top:10px;"></div>
+          <div class="saved-note" style="margin-top:8px;">
+            총진료비는 이 화면에서 계산한 <b>신포괄총액</b>(열외군이면 열외군 진료비)을 그대로 씁니다.
+            청구액만 적으면 <b>본인부담금 = 총진료비 − 청구액</b>. 병원 본인부담금이 MG보다
+            <b>적으면 빨강</b> · <b>크면 파랑</b>입니다.
+          </div>
+        </div></div>
+
+        <div class="card"><div class="card-pad">
+          <b class="dg-h"><i class="dg-dot"></i>메모</b>
+          <textarea class="dg-memo" id="nd-memo"
                     placeholder="이 계산에 대해 적어 둘 것 (이 브라우저에 저장됩니다)"></textarea>
         </div></div>
       </div>
@@ -581,6 +710,7 @@
 <script src="data/pharm-codes.js"></script>
 <script src="data/b12-codes.js"></script>
 <script src="data/drg-scores.js"></script>
+<script src="data/ndrg-scores.js"></script>
 <script src="data/emergency-codes.js"></script>
 <script src="data/memo-seed.js"></script>
 <!-- 열 너비 기본값 — common.js 보다 먼저 읽혀야 한다 -->
@@ -592,6 +722,7 @@
 <script src="js/page-burden.js"></script>
 <script src="js/page-calc.js"></script>
 <script src="js/page-drg.js"></script>
+<script src="js/page-ndrg.js"></script>
 <script src="js/page-layout.js"></script>
 <script src="js/page-samcheck.js"></script>
 <script src="js/page-hangmok.js"></script>
