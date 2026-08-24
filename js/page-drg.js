@@ -128,8 +128,9 @@ function dgNewState(){
            fee:0,                               // 행위별 진료비총액 (열외군 판정)
            base6:0,                             // 6인실이상 기본점수입원료
            // 칸(카드) 폭 · 표 폭 — 화면의 슬라이더로 조절한다.
-           // 「열 너비 기본값으로 굳히기」로 박아 둔 값이 있으면 그것이 처음 값이 된다
-           width:dgDefW('drg|paneW', 980), tableW:dgDefW('drg|tableW', 980),
+           // 「열 너비 기본값으로 굳히기」로 박아 둔 값이 있으면 그것이 처음 값이 된다.
+           // wSet 은 "이 브라우저에서 슬라이더를 직접 움직였다" 는 표시다 — 아래 dgLoad 참조
+           width:dgDefW('drg|paneW', 980), tableW:dgDefW('drg|tableW', 980), wSet:false,
            memo:'',                             // 메모
            cmp:{ mg:0, hos:0 },                 // MG · 병원 청구액 (거꾸로 계산)
            rooms:{ r2:{ d:0, p:0, rate:null }, r3:{ d:0, p:0, rate:null },
@@ -160,10 +161,18 @@ function dgLoad(){
   o.lens = Number(s.lens) || 0;
   o.fee = Number(s.fee) || 0;
   o.base6 = Number(s.base6) || 0;
-  const w = Number(s.width);
-  if (isFinite(w) && w >= 560 && w <= 1600) o.width = Math.round(w / 20) * 20;
-  const tw = Number(s.tableW);
-  if (isFinite(tw) && tw >= 440 && tw <= 1600) o.tableW = Math.round(tw / 20) * 20;
+  /* 폭은 **슬라이더를 직접 움직였을 때(wSet)만** 저장분을 따른다.
+     dgRefresh() 끝에서 dgSave() 를 하기 때문에, 이 화면을 한 번 열기만 해도 그때의 폭이
+     저장분에 박힌다. 예전에는 그 값을 무조건 따라서, 사이트를 한 번이라도 연 PC 는
+     data/colw-defaults.js 에 굳혀 둔 폭이 영영 먹히지 않았다(모든 PC 에서 980 으로 보였다).
+     표시가 없는 저장분(옛 판)은 굳혀 둔 기본값으로 흘려보낸다 — 그래야 스스로 풀린다. */
+  if (s.wSet === true){
+    o.wSet = true;
+    const w = Number(s.width);
+    if (isFinite(w) && w >= 560 && w <= 1600) o.width = Math.round(w / 20) * 20;
+    const tw = Number(s.tableW);
+    if (isFinite(tw) && tw >= 440 && tw <= 1600) o.tableW = Math.round(tw / 20) * 20;
+  }
   if (typeof s.memo === 'string') o.memo = s.memo;
   if (s.cmp && typeof s.cmp === 'object')
     o.cmp = { mg:Number(s.cmp.mg) || 0, hos:Number(s.cmp.hos) || 0 };
@@ -720,6 +729,7 @@ $('dg-gyn').addEventListener('change', () => { dg.gyn = $('dg-gyn').checked; dgP
 ['dg-w', 'dg-tw'].forEach(id => $(id).addEventListener('input', () => {
   dg.width  = Number($('dg-w').value)  || 980;
   dg.tableW = Number($('dg-tw').value) || 980;
+  dg.wSet = true;         // 직접 움직였다 — 이제부터 이 브라우저는 굳혀 둔 기본값보다 이 값을 쓴다
   dgApplyWidth();
   setStickTop();          // 폭이 바뀌면 상단 띠 높이(글 줄바꿈)도 달라진다
   dgSave();
@@ -758,7 +768,7 @@ $('dg-clear').addEventListener('click', () => {
   /* 「비우기」는 조건까지 처음 상태로 돌린다(2026-08-21 요청) —
      종별 상급종합병원 · 입원일수 공란 · 본인부담률 20% · 가산 체크 해제.
      화면 폭 설정과 메모만 남긴다(적어 둔 글과 보기 설정을 잃으면 안 된다). */
-  const keep = { width:dg.width, tableW:dg.tableW, memo:dg.memo };
+  const keep = { width:dg.width, tableW:dg.tableW, wSet:dg.wSet, memo:dg.memo };
   dg = Object.assign(dgNewState(), keep);
   dgRefresh();
 });
@@ -922,6 +932,8 @@ $('dg-extra').addEventListener('dblclick', e => {
 if (typeof COLW_EXTRA !== 'undefined'){
   COLW_EXTRA['drg|paneW']  = () => dg.width;
   COLW_EXTRA['drg|tableW'] = () => dg.tableW;
+  // 굳히고 나면 "직접 바꿨다" 표시를 내린다 — 방금 파일에 넣은 값이 곧 기본값이다
+  COLW_EXTRA_DONE.push(() => { dg.wSet = false; dgSave(); });
 }
 
 dgLoad();

@@ -517,6 +517,10 @@ const COLW_FILE = 'data/colw-defaults.js';
    질병군 계산기의 「칸 폭」·「표 폭」 슬라이더가 그렇다 — 열 너비와 저장소가 달라
    (samguide_drg) 등록해 주지 않으면 굳히기가 담지 못한다. 값은 숫자 하나다. */
 const COLW_EXTRA = {};
+/* 굳히기가 파일에 잘 쓴 뒤에 부를 뒷정리 함수들. 등록한 화면은 여기서 "이 브라우저에서
+   직접 바꿨다" 표시를 지운다 — 안 지우면 방금 파일에 넣은 값을 그 표시가 계속 가린다
+   (열 너비에서 localStorage 덧쓰기를 비우는 것과 같은 이유). */
+const COLW_EXTRA_DONE = [];
 
 function colwDefaultsText(){
   const D = (typeof COLW_DEFAULTS === 'undefined') ? {} : COLW_DEFAULTS;
@@ -559,9 +563,14 @@ async function freezeColW(say){
     // 파일에 들어갔으니 이 브라우저의 덧쓰기는 지운다 — 안 지우면 덧쓰기가 계속 기본값을 가린다
     if (typeof COLW_DEFAULTS !== 'undefined'){
       Object.keys(COLW).forEach(k => { COLW_DEFAULTS[k] = COLW[k]; });
+      Object.keys(COLW_EXTRA).forEach(k => {
+        try { const v = COLW_EXTRA[k](); if (typeof v === 'number' && isFinite(v)) COLW_DEFAULTS[k] = Math.round(v); }
+        catch (e) {}
+      });
     }
     Object.keys(COLW).forEach(k => delete COLW[k]);
     saveColW();
+    COLW_EXTRA_DONE.forEach(f => { try { f(); } catch (e) {} });
     say(n + '개 표의 너비를 기본값으로 굳혔습니다. (' + COLW_FILE + ')');
     return;
   }
