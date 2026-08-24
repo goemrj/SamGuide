@@ -355,8 +355,10 @@ function ndRenderTotal(){
         '<td>' + ndDec('id="nd-inc"', nd.inc, '0') + '</td></tr>' +
       '<tr><td>인센티브포괄수가 <span class="saved-note">가산수가 = 포괄수가 × 정책가산율 · 10원 미만 절사</span></td>' +
         '<td class="num b" data-nout="inc">0</td></tr>' +
-      '<tr><td>비포괄수가 <span class="saved-note">아래 「비포괄수가」 카드의 총액 · 10원 미만 절사 없음</span></td>' +
-        '<td class="num" data-nout="np">0</td></tr>' +
+      // 아래 「비포괄수가」 카드의 총액 칸과 **같은 값**이다 — 어느 쪽에 적어도 다른 쪽이 따라온다
+      // (2026-08-24 요청). 두 칸을 맞추는 것은 ndSyncNpTotal() 이 한다.
+      '<tr><td>비포괄수가 <span class="saved-note">아래 「비포괄수가」 카드의 총액과 같은 칸 · 10원 미만 절사 없음</span></td>' +
+        '<td>' + ndMoney('id="nd-np-total"', nd.npTotal) + '</td></tr>' +
     '</tbody><tfoot><tr>' +
       '<td><span class="c-name">신포괄총액</span>' +
         '<div class="saved-note">포괄수가 + 인센티브포괄수가 + 비포괄수가 · 더한 후 10원 미만 절사' +
@@ -508,7 +510,6 @@ function ndPaint(){
   set('pack-raw', o.los && o.packRaw !== o.pack ? ' · 4사5입 전 ' + won2(o.packRaw) : '');
   set('pack', won(o.pack));
   set('inc', won(o.inc));
-  set('np', won(o.np));
   set('total-raw', o.totalRaw !== o.total ? ' · 절사 전 ' + won2(o.totalRaw) : '');
   set('total', won(o.total));
   o.items.forEach((x, i) => set('item-own-' + i, won2(x.own) +
@@ -646,6 +647,16 @@ function ndDecVal(t, key, round){
   nd[key] = isFinite(v) && v > 0 ? (round ? Math.round(v) : v) : 0;
   if (String(t.value).replace(/[^0-9.]/g, '') !== t.value) t.value = nd[key] ? nd[key] : '';
 }
+/* 비포괄수가 총액은 칸이 두 개다 — 총액 표(#nd-np-total)와 비포괄수가 원장([data-nx="total"]).
+   한쪽에 적으면 다른 쪽 글자를 맞춰 준다(2026-08-24 요청). 지금 치고 있는 칸은 건드리지 않는다
+   — 셈(+ − × ÷)을 적는 중일 수 있어서 글자를 갈아 끼우면 안 된다. */
+function ndSyncNpTotal(src){
+  const v = nd.npTotal ? nd.npTotal.toLocaleString() : '';
+  const box = $('nd-np');
+  [$('nd-np-total'), box && box.querySelector('[data-nx="total"]')].forEach(el => {
+    if (el && el !== src && document.activeElement !== el) el.value = v;
+  });
+}
 function ndOnInput(e){
   const t = e.target;
   if (!t.dataset) return;
@@ -660,10 +671,11 @@ function ndOnInput(e){
   if (t.id === 'nd-los'){ ndDecVal(t, 'los', true);  ndPaint(); return; }
   if (t.id === 'nd-avg'){ ndDecVal(t, 'avg', false); ndPaint(); return; }
   if (t.id === 'nd-inc'){ ndDecVal(t, 'inc', false); ndPaint(); return; }
-  if (t.dataset.nx === 'total'){
+  if (t.id === 'nd-np-total' || t.dataset.nx === 'total'){   // 총액 표 · 비포괄수가 원장 — 같은 값
     const a = readAmount(t);
     if (a.ok) nd.npTotal = a.val;
     if (!a.formula) reformatMoney(t, nd.npTotal);
+    ndSyncNpTotal(t);
     ndPaint();
     return;
   }
@@ -695,7 +707,7 @@ function ndMoneyValue(t){
   if (t.id === 'nd-base') return nd.base;
   if (t.id === 'nd-day')  return nd.day;
   if (t.id === 'nd-fee')  return nd.fee;
-  if (t.dataset.nx === 'total') return nd.npTotal;
+  if (t.id === 'nd-np-total' || t.dataset.nx === 'total') return nd.npTotal;
   return (nd.items[Number(t.dataset.ni)] || {}).amount || 0;
 }
 $('nd-total').addEventListener('change', e => {
