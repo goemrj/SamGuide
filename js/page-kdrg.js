@@ -152,6 +152,16 @@ function kgParse(tokens, ctx){
   return expr();
 }
 
+/* 정의식이 몇 가지 조건을 걸고 있나 — 같은 표묶음 안에서 어느 쪽이 더 좁은 정의인지 가리는 데 쓴다 */
+function kgSpec(def){
+  let n = 0, run = false;
+  for (const t of kgLex(def || '')){
+    if (t === '(' || t === ')' || KG_OPS.has(t)){ run = false; continue; }
+    if (!run){ n++; run = true; }
+  }
+  return n;
+}
+
 /* 낱말 하나(항목)를 따진다. 분류집의 표를 가리키면 환자 값과 맞춰 보고, 아니면 모름. */
 function kgTerm(word, ctx){
   const w = kgNorm(word);
@@ -318,6 +328,20 @@ function kgGroup(pt){
     const r = (KG_PRIO[it.d.mdc] || {})[a4];
     return (part === 'S' ? 0 : part === 'O' ? 10000 : 20000) + (r === undefined ? 9999 : r);
   };
+  /* 같은 표묶음(같은 그룹) 안의 갈래는 **좁은 정의가 이긴다** — 우선순위표로 가르지 않는다.
+     책은 갈림길의 「아닌 쪽」을 조건 없이 적는다. 예를 들어 H03(담낭절제술) 은
+       H032 복강경을 이용한 전담낭절제술 = 시술명 table1 **and 부가코드**(ADC03 복강경)
+       H034 기타 전담낭절제술            = 시술명 table1
+     이라 복강경을 했으면 둘 다 참이 되는데, 우선순위는 H034(16)가 H032(17)보다 앞이라
+     순위로 고르면 거꾸로 간다. 부가코드가 붙은 좁은 쪽이 답이다.
+     우선순위표는 **서로 다른 그룹의 시술**끼리 겨룰 때 쓰는 것이다. */
+  const prune = list => list.filter(it =>
+    !list.some(o => o !== it && o.d.ts === it.d.ts && o.d.grp === it.d.grp &&
+                    kgSpec(o.d.def) > kgSpec(it.d.def)));
+  out.hit = prune(out.hit);
+  out.maybe = prune(out.maybe.filter(it =>
+    !out.hit.some(o => o.d.ts === it.d.ts && o.d.grp === it.d.grp && kgSpec(o.d.def) > kgSpec(it.d.def))));
+
   out.hit.sort((a, b) => rank(a) - rank(b));
   out.maybe.sort((a, b) => rank(a) - rank(b));
 
@@ -529,6 +553,20 @@ function kgCompare(r){
   return {k: 'bad', t: '다름'};
 }
 
+/* 어긋난 까닭으로 짚이는 것 — 판이 다르거나, 분류내역이 빠졌거나 */
+function kgHints(r){
+  const out = [];
+  const want4 = (r.drg || '').slice(0, 4);
+  if (!want4) return out;
+  if (!KG_ADRG[want4] && !KG_ERR[want4.slice(0, 3)])
+    out.push('파일의 <b class="kg-code">' + esc(want4) + '</b> 는 이 판(Version 1.6)의 ADRG 목록에 없습니다 — ' +
+             '다른 판(1.4 · 1.5 등)으로 분류된 명세서일 수 있습니다.');
+  else if (KG_ADRG[want4] && KG_ADRG[want4].p === 'S' && !r.codes.some(c => KG_OR.has(c.code)))
+    out.push('파일은 <b>외과 질병군</b>(' + esc(KG_ADRG[want4].n) + ')인데 L항 51~56목에 <b>OR procedure 코드가 하나도 없습니다</b> — ' +
+             '질병군 분류내역이 빠졌는지 확인해 보세요.');
+  return out;
+}
+
 /* ---------- 화면 ---------- */
 function kgRender(){
   $('kg-drop').classList.toggle('slim', !!KG.list.length);
@@ -611,7 +649,9 @@ function kgRenderDetail(){
        (g.note21 ? '<div class="saved-note">' + esc(g.note21) + '</div>' : '') + '</td></tr>';
 
   const cand = g.hit.concat(g.maybe);
-  h += '<tr><th>② 걸리는 질병군</th><td>';
+  h += '<tr><th>② 걸리는 질병군</th><td>' +
+       '<div class="saved-note">같은 그룹 안에서 갈리는 것은 <b>좁은 정의</b>가 이깁니다 ' +
+       '(부가코드가 붙은 쪽 등) — 우선순위표는 서로 다른 그룹끼리 겨룰 때 씁니다.</div>';
   if (!cand.length) h += '<span class="saved-note">' + esc(g.note || '없음') + '</span>';
   else {
     h += '<table class="fields kg-cand"><thead><tr><th style="width:64px;">질병군</th><th style="width:56px;">순위</th>' +
@@ -632,7 +672,7 @@ function kgRenderDetail(){
   }
   h += '</td></tr>';
 
-  h += '<tr><th>③ 우선순위로 결정</th><td>' +
+  h += '<tr><th>③ 결정</th><td>' +
        (src ? '<b class="kg-code">' + esc(src.d.c) + '</b> ' + esc(src.d.n) +
               (g.hit.length ? '' : ' <span class="kg-tag kg-warn">확인 필요</span>')
             : '<span class="saved-note">—</span>') + '</td></tr>';
@@ -658,7 +698,8 @@ function kgRenderDetail(){
          ? '<div class="saved-note">기타진단 <b class="kg-code">' + esc(r.cmp.by) + '</b> 을 주진단 자리에 놓으면 ' +
            '<b class="kg-code">' + esc(r.cmp.g.aadrg) + '</b> 이라 파일과 같아집니다 — 이원분류(†/*)처럼 ' +
            '별표 진단으로 분류된 경우일 수 있습니다. 분류집에 이원분류 대응표가 없어 규칙으로 삼지 않았습니다.</div>'
-         : '') + '</td></tr>';
+         : '') +
+       kgHints(r).map(t => '<div class="saved-note">' + t + '</div>').join('') + '</td></tr>';
   h += '</tbody></table>';
 
   /* L항 51~56 */
