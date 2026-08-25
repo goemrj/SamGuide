@@ -423,6 +423,12 @@ if ($('d-start')){
     if (e.key === 'Enter'){ e.preventDefault(); dcCommitStart(); }
   });
 }
+if ($('d-clear')) $('d-clear').addEventListener('click', () => {
+  dateCalc = { start:'', days:0 };
+  $('d-start').value = '';
+  $('d-days').value = '';
+  renderDate(); saveCalc();
+});
 if ($('d-days')) $('d-days').addEventListener('input', () => {
   dateCalc.days = Math.max(0, Math.round(Number(String($('d-days').value).replace(/[^0-9]/g, '')) || 0));
   $('d-days').value = dateCalc.days ? dateCalc.days : '';
