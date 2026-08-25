@@ -26,6 +26,7 @@
       <button class="navbtn" data-page="calc"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h4"/></svg>본인부담금 계산기</button>
       <button class="navbtn" data-page="drg"><svg class="ico" viewBox="0 0 24 24"><path d="M4 19V9M9 19V5M14 19v-7M19 19v-4"/><path d="M3 21h18"/></svg>질병군(DRG) 계산기</button>
       <button class="navbtn" data-page="ndrg"><svg class="ico" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>신포괄 계산기</button>
+      <button class="navbtn" data-page="kdrg"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v4"/><path d="M6 21v-6a6 6 0 0 1 12 0v6"/><path d="M3 21h18"/><circle cx="12" cy="9" r="2"/></svg>신포괄 분류번호</button>
       <button class="navbtn" data-page="layout"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>SAM 파일 레이아웃</button>
       <button class="navbtn" data-page="samcheck"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 15 2 2 4-4"/></svg>SAM 변환오류</button>
       <button class="navbtn" data-page="hangmok"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>항 · 목 코드</button>
@@ -428,6 +429,42 @@
       </div><!-- /dg-wrap -->
     </section>
 
+    <!-- 신포괄 분류번호 -->
+    <section class="page" id="page-kdrg">
+      <div class="page-head">
+        <h1>신포괄 분류번호</h1>
+        <p>SAM 신포괄 명세서를 놓으면 <b>L항 51~56목</b>의 수가를 모아 <b>KDRG 분류집</b>과 대조해 질병군 분류번호를 도출합니다.</p>
+      </div>
+
+      <div class="toolbar">
+        <div class="sc-drop" id="kg-drop">
+          <svg class="sc-ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13"/><path d="m7 8 5-5 5 5"/></svg>
+          <b>여기로 신포괄 SAM 파일을 끌어다 놓으세요</b>
+          <span class="sc-hint">서식번호 P020 · P030 인 명세서만 읽습니다</span>
+          <span class="sc-note">파일은 이 브라우저 안에서만 읽고 어디로도 보내지 않습니다</span>
+          <span class="sc-btns">
+            <button class="btn" id="kg-pick">파일 고르기</button>
+            <button class="btn" id="kg-clear" style="display:none;">비우기</button>
+          </span>
+          <input type="file" id="kg-file" multiple hidden>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="meta-bar" id="kg-sum" style="flex:1;min-width:260px;"></div>
+        <label class="saved-note"><input type="checkbox" id="kg-only"> 다른 것만 보기</label>
+      </div>
+
+      <div id="kg-list"></div>
+      <div id="kg-detail"></div>
+
+      <div class="toolbar">
+        <input class="field-input" id="kg-search" type="search" style="flex:1;min-width:260px;"
+               placeholder="수가코드 · 보험코드 · 시술명으로 분류집 찾기  (예: O1141, 자114주, 편도)">
+      </div>
+      <div id="kg-find"></div>
+    </section>
+
     <!-- SAM 파일 레이아웃 -->
     <section class="page" id="page-layout">
       <div class="page-head">
@@ -727,6 +764,11 @@
 <script src="data/drg-scores.js"></script>
 <script src="data/ndrg-scores.js"></script>
 <script src="data/emergency-codes.js"></script>
+<!-- 신포괄 분류번호 — KDRG 분류집 1.6 (tools/kdrg.awk 가 만든다) -->
+<script src="data/kdrg-adrg.js"></script>
+<script src="data/kdrg-tbl.js"></script>
+<script src="data/kdrg-mdcdx.js"></script>
+<script src="data/kdrg-sev.js"></script>
 <script src="data/memo-seed.js"></script>
 <!-- 열 너비 기본값 — common.js 보다 먼저 읽혀야 한다 -->
 <script src="data/colw-defaults.js"></script>
@@ -738,6 +780,7 @@
 <script src="js/page-calc.js"></script>
 <script src="js/page-drg.js"></script>
 <script src="js/page-ndrg.js"></script>
+<script src="js/page-kdrg.js"></script>
 <script src="js/page-layout.js"></script>
 <script src="js/page-samcheck.js"></script>
 <script src="js/page-hangmok.js"></script>

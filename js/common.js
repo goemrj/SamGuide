@@ -164,6 +164,7 @@ const SG_IME = {
   'page-detail':   'en',   // 특정내역 — MT001 같은 코드
   'page-special':  'en',   // 산정특례 특정기호 — V193
   'page-pharm':    'en',   // 약국 산정특례
+  'page-kdrg':     'en',   // 신포괄 분류번호 — O1141 같은 수가코드
   'page-b12':      'en',   // [별표12] 소아가산
   'page-emergency':'en',   // 응급의료행위
 };

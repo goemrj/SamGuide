@@ -30,7 +30,11 @@ BEGIN{
   print hd "\n   KDRG_MDCDX  MDC별 KCD 주진단 목록 — 주진단이 어느 MDC 로 가는지 정한다.\n"\
        "   MDC 18-1(HIV)은 원본에서 표 세 개로 나뉘어 있고 조건이\n"\
        "   「HIV 주진단명 table1 or (HIV 관련 주진단명 table2 and HIV 기타진단명 table3)」이다.\n"\
-       "   여기에는 세 표의 코드를 모두 모아 두었다.\n"\
+       "   KDRG_MDCDX 에는 주진단 목록(table1 + table2)만 넣고, 세 표는 KDRG_HIV 에 그대로 남겼다.\n"\
+       "\n"\
+       "   MDC 18-1 과 21-1(다발성 외상)의 코드는 **모두** 다른 MDC 에도 들어 있다 —\n"\
+       "   두 MDC 는 조건이 맞을 때만 얹히는 목록이지 주진단이 곧장 가는 곳이 아니다.\n"\
+       "   나머지 MDC 끼리 겹치는 것은 45개뿐이고 모두 12(남성)·13(여성)이라 성별로 갈린다.\n"\
        "-------------------------------------------------------------------------- */" > M;
   print hd "\n   KDRG_CCL  (부표 1) 기타 진단의 중증도 점수 — KCD: [외과계, 내과계]\n"\
        "   KDRG_SEV  (부표 2) AADRG별 중증도 구분 기준 — a AADRG · n 명칭 · rows [DRG 6자리, 기준]\n"\
@@ -67,8 +71,14 @@ function arr(s,k,   m){ if(match(s, "\"" k "\":(\\[.*\\])", m)) return m[1]; ret
   next;
 }
 /"t":"mdcdx"/{
-  nm++;
-  printf "%s  \"%s\": %s", (nm>1?",\n":""), fld($0,"mdc"), arr($0,"kcd") >> M;
+  # MDC 18-1(HIV)만 표 세 개로 나뉘어 온다. 주진단 목록(table1·table2)은 MDC 배정에 쓰고,
+  # 조건을 그대로 따질 수 있게 세 표를 KDRG_HIV 에 따로 남긴다.
+  mdc=fld($0,"mdc"); part=fld($0,"part"); k=arr($0,"kcd");
+  if(!(mdc in SEEN)){ SEEN[mdc]=1; MORD[++nm]=mdc }
+  if(part==""){ MX[mdc]=k; next }
+  if(part ~ /table1/) HIV1=k; else if(part ~ /table2/) HIV2=k; else HIV3=k;
+  if(part ~ /기타진단명/) next;                       # 기타진단 표는 MDC 배정 목록이 아니다
+  MX[mdc]=(MX[mdc]==""? k : substr(MX[mdc],1,length(MX[mdc])-1) "," substr(k,2));
   next;
 }
 /"t":"ccl"/{
@@ -76,6 +86,7 @@ function arr(s,k,   m){ if(match(s, "\"" k "\":(\\[.*\\])", m)) return m[1]; ret
   printf "%s\"%s\":[%s,%s]", (nc==1?"  ":(nc%8==1?",\n  ":", ")), fld($0,"kcd"), num($0,"s"), num($0,"m") >> S;
   next;
 }
+/"t":"dxtbl"/{ nx++; DXT[nx]=$0; next }
 /"t":"sev"/{ ns++; SEV[ns]=$0; next }
 
 END{
@@ -93,7 +104,18 @@ END{
   print "\n];" >> A;
 
   print "\n];" >> T;
+  for(i=1;i<=nm;i++) printf "%s  \"%s\": %s", (i>1?",\n":""), MORD[i], MX[MORD[i]] >> M;
   print "\n};" >> M;
+  print "\n/* MDC 18-1(HIV) 은 조건이 「HIV 주진단명 table1 or (HIV 관련 주진단명 table2 and HIV 기타진단명 table3)」 이다.\n"\
+        "   KDRG_MDCDX['18-1'] 에는 주진단 목록(table1 + table2)만 들어 있다. */" >> M;
+  printf "var KDRG_HIV = {\n  t1: %s,\n  t2: %s,\n  t3: %s\n};\n", HIV1, HIV2, HIV3 >> M;
+  print "\n/* MDC 08 끝에 붙어 있는 부위별 진단 표 — 어느 질병군에도 매이지 않고 MDC 전체가 함께 쓴다.\n"\
+        "   정의식에서 「Diagnosis Table6(견부 질환)」처럼 이름으로 부른다. */" >> M;
+  print "var KDRG_DXTBL = [" >> M;
+  for(i=1;i<=nx;i++)
+    printf "%s  { mdc:\"%s\", name:\"%s\", kcd:%s }", (i>1?",\n":""),
+      fld(DXT[i],"mdc"), fld(DXT[i],"name"), arr(DXT[i],"kcd") >> M;
+  print "\n];" >> M;
   print "\n};" >> S;
   print "\nvar KDRG_SEV = [" >> S;
   for(i=1;i<=ns;i++)

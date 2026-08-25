@@ -97,7 +97,9 @@ function kind(i,   m,f1,f2,w){
   if(m>=2 && f1 ~ /^[A-Z][0-9]{3,4}$/ && f2 ~ /[가-힣]/) return "DRG";
   # 시술 행 — 보험코드 · 시술코드 · 명칭. 칸 사이가 한 칸뿐인 줄도 있어 줄 전체로 본다.
   if(rowsplit(w)) return "ROW";
-  if(w ~ /^(시술명|주진단명|부가코드|기타진단)[0-9]*( table[0-9]*)?$/) return "TBLNAME";
+  if(w ~ /^(시술명|주진단명|부가코드|기타진단|기타진단명|주진단명 또는 기타진단명)[0-9]*( ?table ?[0-9]*)?$/) return "TBLNAME";
+  # MDC 08 끝에 붙어 있는 부위별 진단 표 (Diagnosis table1(슬관절 질환) …)
+  if(w ~ /^Diagnosis[ \t]*[Tt]able[ \t]*[0-9]+[ \t]*\([^)]*\)$/) return "DXTBL";
   if(w ~ /(시술명|주진단명|부가코드|인공호흡|주진단|기타진단)/ && w ~ /( and | or |not |\(|table)/) return "DEF";
   # 시술·진단 표를 가리키지 않는 조건식 (예: 입원시 체중 < 750g · 재원기간 < 5일 · Any OR Procedures)
   if(w ~ /(입원시|재원기간|퇴원유형|인공호흡|연령|체중|Any OR|모든 주진단|주진단명|출생시)/) return "DEF";
@@ -167,15 +169,27 @@ END{
     # ---------- 본문 ----------
     if(p>=P_BODY_S && p<=P_BODY_E){
       # MDC별 KCD 주진단 목록
-      if(w ~ /분류(된|되는) KCD 주진단명/){ defs_flush(); dxmode=1; dxmdc=mdc; ndx=0; continue }
+      if(w ~ /분류(된|되는) KCD 주진단명/){ defs_flush(); dxmode=1; dxmdc=mdc; dxpart=""; ndx=0; continue }
       if(dxmode){
         k=kind(i);
-        # MDC 18-1(HIV)만 주진단 목록이 표 세 개로 나뉘어 있다 — 표 이름·정의식 줄은 건너뛰고
-        # 세 표의 코드를 모두 이 MDC 의 주진단으로 모은다(정확한 조건은 README 참조).
+        # MDC 18-1(HIV)만 주진단 목록이 표 세 개로 나뉘어 있다
+        # (HIV 주진단명 table1 or (HIV 관련 주진단명 table2 and HIV 기타진단명 table3)).
+        # 표 이름이 나오면 앞 표를 내보내고 새 표로 넘어간다 — 조건을 그대로 따지려면 나뉘어 있어야 한다.
+        if(k=="TBLNAME" || (k=="DEF" && w ~ /table/)){
+          if(w ~ /table[0-9]*$/ && w !~ /( and | or |not |\()/){ dx_emit(); dxpart=w }
+          continue;
+        }
         if(k=="GRP" || k=="DRG"){ dx_emit(); dxmode=0 }
         else { if(haskcd(i)) for(j=1;j<=m;j++) if(F[i,j] ~ /^[A-Z][0-9]{2,5}$/){ ndx++; DX[ndx]=F[i,j] } ; continue }
       }
       k=kind(i);
+      # MDC 08 끝의 부위별 진단 표 — 어느 질병군에도 매이지 않고 MDC 전체가 함께 쓴다.
+      # 정의식에서 「Diagnosis Table6(견부 질환)」처럼 이름으로 부른다.
+      if(k=="DXTBL"){ defs_flush(); dt_emit(); dtmdc=mdc; dtname=w; ndt=0; dtmode=1; continue }
+      if(dtmode){
+        if(k=="GRP" || k=="DRG"){ dt_emit(); dtmode=0 }
+        else { if(haskcd(i)) tbl_dt(i); continue }
+      }
       if(k=="GRP"){
         defs_flush(); grp=f1; grpn=jf(i,2,m); grpe=""; wantgrpe=1; lastwas="GRP";
         # 그룹이 더 쪼개지지 않으면 그룹 자체가 질병군이다(예: D09 → D090).
@@ -191,7 +205,7 @@ END{
       if(k=="TBLNAME"){
         # 다음 줄이 표의 행이면 표 머리, 아니면 정의식
         nx=i+1; nk=(nx<=N? kind(nx) : "TXT");
-        if(nk=="ROW" || (nx<=N && w ~ /주진단명/ && haskcd(nx)) || (nx<=N && w ~ /부가코드/ && F[nx,1]=="부가코드")){
+        if(nk=="ROW" || (nx<=N && w ~ /(주진단명|기타진단)/ && haskcd(nx)) || (nx<=N && w ~ /부가코드/ && F[nx,1]=="부가코드")){
           if(nd==0 && grp!=""){ defs_add(grp "0", mdc, grp, grpn); DE[nd]=grpe }
           TENT=0; tbl_open(w);
         } else {
@@ -205,7 +219,7 @@ END{
         if(nd>0) DD[nd]=(DD[nd]==""? w : DD[nd]" "w);
         TENT=0; lastwas="DEF"; continue;
       }
-      if(tname!="" && tname ~ /주진단명/){ if(haskcd(i)) tbl_kcd(i); lastwas="KCD"; continue }
+      if(tname!="" && tname ~ /(주진단명|기타진단)/){ if(haskcd(i)) tbl_kcd(i); lastwas="KCD"; continue }
       if(k=="ROW" && tname!=""){ rowsplit(w); tbl_row(R1,R2,R3); lastwas="ROW"; continue }
       # 영문명
       if(w ~ /^[A-Za-z(]/ && (lastwas=="GRP" || lastwas=="DRG" || lastwas=="ENG")){
@@ -240,13 +254,20 @@ END{
       continue;
     }
   }
-  sev_flush(); defs_flush();
+  sev_flush(); dt_emit(); defs_flush();
 }
 
+function tbl_dt(i,   j){ for(j=1;j<=NC[i];j++) if(F[i,j] ~ /^[A-Z][0-9]{2,5}$/){ ndt++; DT[ndt]=F[i,j] } }
+function dt_emit(   j,s){
+  if(ndt==0 || dtname=="") return;
+  s=""; for(j=1;j<=ndt;j++) s=s (j>1?",":"") "\"" DT[j] "\"";
+  printf "{\"t\":\"dxtbl\",\"mdc\":\"%s\",\"name\":\"%s\",\"kcd\":[%s]}\n", dtmdc, esc(dtname), s;
+  ndt=0; dtname="";
+}
 function dx_emit(   j,s){
   if(ndx==0) return;
   s=""; for(j=1;j<=ndx;j++) s=s (j>1?",":"") "\"" DX[j] "\"";
-  printf "{\"t\":\"mdcdx\",\"mdc\":\"%s\",\"kcd\":[%s]}\n", dxmdc, s;
+  printf "{\"t\":\"mdcdx\",\"mdc\":\"%s\",\"part\":\"%s\",\"kcd\":[%s]}\n", dxmdc, esc(dxpart), s;
   ndx=0;
 }
 
