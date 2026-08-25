@@ -341,6 +341,36 @@ function refreshCalc(){
    탭(계산 한 벌)과 상관없는 딸림 도구라 값은 따로 저장한다. */
 let dateCalc = { start:'', days:0 };
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+
+/* 아무렇게나 적어도 CCYY-MM-DD 로 바꾼다 (엑셀처럼, 2026-08-21 요청)
+     7/27 · 7.27 · 7-27 · 727 · 0727   → 올해 7월 27일
+     2026-7-27 · 2026.07.27 · 20260727 → 그 날짜
+     26-07-27 · 260727                 → 2026년 (두 자리 연도는 2000년대로 본다)
+   달·일이 말이 안 되면(13월, 2월 30일 …) null 을 돌려주고 화면에서는 안내만 한다. */
+function dcNorm(str){
+  const t = String(str || '').trim().replace(/[.\/\s]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!t) return '';
+  const now = new Date();
+  let y, m, d;
+  if (/^\d+$/.test(t)){                       // 숫자만
+    if (t.length === 8){ y = +t.slice(0, 4); m = +t.slice(4, 6); d = +t.slice(6, 8); }
+    else if (t.length === 6){ y = 2000 + +t.slice(0, 2); m = +t.slice(2, 4); d = +t.slice(4, 6); }
+    else if (t.length === 4){ y = now.getFullYear(); m = +t.slice(0, 2); d = +t.slice(2, 4); }
+    else if (t.length === 3){ y = now.getFullYear(); m = +t.slice(0, 1); d = +t.slice(1, 3); }
+    else return null;
+  } else {
+    const p = t.split('-').map(Number);
+    if (p.some(isNaN)) return null;
+    if (p.length === 3){ y = p[0] < 100 ? 2000 + p[0] : p[0]; m = p[1]; d = p[2]; }
+    else if (p.length === 2){ y = now.getFullYear(); m = p[0]; d = p[1]; }
+    else return null;
+  }
+  if (!(y >= 1900 && y <= 2999 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;   // 2월 30일 같은 날짜
+  const p2 = n => String(n).padStart(2, '0');
+  return y + '-' + p2(m) + '-' + p2(d);
+}
 function dcParse(s){
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
   if (!m) return null;
@@ -352,32 +382,47 @@ function dcFmt(d){
   return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) +
          ' <span class="saved-note">(' + DOW[d.getDay()] + ')</span>';
 }
-function dcSam(d){
-  const p = n => String(n).padStart(2, '0');
-  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
-}
 function renderDate(){
   if (!$('d-out')) return;
-  // 치는 중이 아니면 칸도 상태에 맞춘다(새로고침 뒤 되살리기)
-  if (document.activeElement !== $('d-start')) $('d-start').value = dateCalc.start || '';
+  // 칸이 비어 있을 때만 저장값을 되살린다 — 적어 둔 글자는 덮어쓰지 않는다
+  // (날짜로 못 읽는 글자를 지워 버리면 어디가 틀렸는지 볼 수 없다)
+  if (!$('d-start').value.trim() && dateCalc.start) $('d-start').value = dateCalc.start;
   if (document.activeElement !== $('d-days')) $('d-days').value = dateCalc.days ? dateCalc.days : '';
   const start = dcParse(dateCalc.start), days = dateCalc.days;
   if (!start || days < 1){
-    $('d-out').innerHTML = '<div class="saved-note">진료개시일과 입(내)원일수를 적으면 진료기간이 나옵니다.</div>';
+    const typed = ($('d-start').value || '').trim();
+    const bad = typed && dcNorm(typed) === null;
+    $('d-out').innerHTML = '<div class="' + (bad ? 'dg-err' : 'saved-note') + '">' +
+      (bad ? '「' + esc(typed) + '」는 날짜로 읽을 수 없습니다.'
+           : '진료개시일과 입(내)원일수를 적으면 진료기간이 나옵니다.') + '</div>';
     return;
   }
+  // 양일법 — 입원한 날이 1일이라 종료일은 (일수 − 1) 만 더한다
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + days - 1);
   $('d-out').innerHTML =
     '<div class="dg-sum-line"><span>진료기간</span>' +
       '<b style="font-size:13.5px;">' + dcFmt(start) + ' ~ ' + dcFmt(end) + '</b><i></i></div>' +
-    '<div class="dg-sum-line"><span>입(내)원일수</span><b>' + days + '</b><i>일</i></div>' +
-    '<div class="dg-sum-line"><span>SAM (CCYYMMDD)</span>' +
-      '<b>' + dcSam(start) + ' ~ ' + dcSam(end) + '</b><i></i></div>';
+    '<div class="dg-sum-line"><span>입(내)원일수</span><b>' + days + '</b><i>일</i></div>';
 }
-if ($('d-start')) $('d-start').addEventListener('input', () => {
-  dateCalc.start = $('d-start').value;
+/* 치는 동안에는 글자를 건드리지 않고, 칸을 떠나거나 Enter 를 누를 때 CCYY-MM-DD 로 바꾼다 */
+function dcCommitStart(){
+  const v = dcNorm($('d-start').value);
+  if (v){ dateCalc.start = v; $('d-start').value = v; }
+  else if (!($('d-start').value || '').trim()) dateCalc.start = '';
   renderDate(); saveCalc();
-});
+}
+if ($('d-start')){
+  $('d-start').addEventListener('input', () => {
+    const v = dcNorm($('d-start').value);
+    dateCalc.start = v || '';                 // 읽히면 바로 계산해 보여 준다
+    renderDate(); saveCalc();
+  });
+  $('d-start').addEventListener('change', dcCommitStart);
+  $('d-start').addEventListener('blur', dcCommitStart);
+  $('d-start').addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); dcCommitStart(); }
+  });
+}
 if ($('d-days')) $('d-days').addEventListener('input', () => {
   dateCalc.days = Math.max(0, Math.round(Number(String($('d-days').value).replace(/[^0-9]/g, '')) || 0));
   $('d-days').value = dateCalc.days ? dateCalc.days : '';
