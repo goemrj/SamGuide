@@ -63,6 +63,7 @@ function fields(line, A,   n,i,B,s,e,m,t){
   m=0;
   for(i=s;i<=e;i++){ t=B[i]; gsub(/^[ \t]+|[ \t]+$/,"",t); if(t=="") continue; m++; A[m]=t }
   for(i=m+1;i<=n+2;i++) delete A[i];
+  IND=(m>0? index(line, A[1])-1 : 0);   # 첫 칸이 몇 번째 글자에서 시작하나 (부표2 이어지는 줄 가르기)
   return m;
 }
 function esc(s){ gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s); return s }
@@ -80,7 +81,7 @@ function jf(i,from,to,   j,s){ s=""; for(j=from;j<=to;j++){ if(F[i,j]=="") conti
     else if(match(t, /MDC[ \t]*(0[1-9]|1[0-9]|2[0-3])(-[12])?/, mm)) curmdc=mm[1] mm[2];
     m=fields(raw,A);
     if(m==0) continue;
-    N++; PG[N]=page; NC[N]=m; MD[N]=curmdc;
+    N++; PG[N]=page; NC[N]=m; MD[N]=curmdc; LI[N]=IND;
     for(i=1;i<=m;i++) F[N,i]=A[i];
     W[N]=jf(N,1,m);
   }
@@ -255,11 +256,12 @@ function sev_line(i,m,   j,pos,a,rest){
   for(j=1;j<=m;j++) if(F[i,j] ~ /^[A-Z][0-9]{5}$/){ pos=j; break }
   if(m>=1 && F[i,1] ~ /^[A-Z][0-9]{4}$/){
     sev_flush();
-    sa=F[i,1]; sn=(pos>1? jf(i,2,pos-1) : jf(i,2,m)); snr=0;
+    sa=F[i,1]; sn=(pos>1? jf(i,2,pos-1) : jf(i,2,m)); snr=0; sleft=LI[i];
   } else if(pos>1 && sa!=""){
     sn=sn" "jf(i,1,pos-1);
   } else if(pos==0 && sa!=""){
-    if(snr>0) SR2[snr]=SR2[snr]" "w; else sn=sn" "w;
+    # DRG 6자리가 없는 이어지는 줄 — 왼쪽에서 시작하면 명칭, 오른쪽(기준 칸)이면 구분 기준이다
+    if(snr>0 && LI[i]>sleft+25) SR2[snr]=SR2[snr]" "W[i]; else sn=sn" "W[i];
     return;
   }
   if(pos>0){ snr++; SR1[snr]=F[i,pos]; SR2[snr]=jf(i,pos+1,m) }
