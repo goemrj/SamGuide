@@ -98,8 +98,11 @@ function kind(i,   m,f1,f2,w){
   # 시술 행 — 보험코드 · 시술코드 · 명칭. 칸 사이가 한 칸뿐인 줄도 있어 줄 전체로 본다.
   if(rowsplit(w)) return "ROW";
   if(w ~ /^(시술명|주진단명|부가코드|기타진단|기타진단명|주진단명 또는 기타진단명)[0-9]*( ?table ?[0-9]*)?$/) return "TBLNAME";
-  # MDC 08 끝에 붙어 있는 부위별 진단 표 (Diagnosis table1(슬관절 질환) …)
+  # MDC 전체가 함께 쓰는 진단 표
+  #   MDC 08  Diagnosis table1(슬관절 질환) … 부위별 11개
+  #   MDC 15  신생아의 주요 문제(table 1)
   if(w ~ /^Diagnosis[ \t]*[Tt]able[ \t]*[0-9]+[ \t]*\([^)]*\)$/) return "DXTBL";
+  if(w ~ /\([Tt]able[ \t]*[0-9]+\)$/) return "DXTBL";
   if(w ~ /(시술명|주진단명|부가코드|인공호흡|주진단|기타진단)/ && w ~ /( and | or |not |\(|table)/) return "DEF";
   # 시술·진단 표를 가리키지 않는 조건식 (예: 입원시 체중 < 750g · 재원기간 < 5일 · Any OR Procedures)
   if(w ~ /(입원시|재원기간|퇴원유형|인공호흡|연령|체중|Any OR|모든 주진단|주진단명|출생시)/) return "DEF";

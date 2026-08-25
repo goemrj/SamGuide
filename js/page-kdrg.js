@@ -19,8 +19,10 @@
    그래서 CC edit 을 적용하기 **전** PCCL 을 함께 보여 주되 — 실제보다 높게 나올 수 있어 —
    6자리는 부표2의 후보만 늘어놓고 명세서에 적힌 번호와 **앞 5자리로 대조**한다.
 
-   정의식은 참·거짓·**모름** 세 값으로 따진다. 체중 · 인공호흡시간 · 재원기간처럼
-   SAM 파일에서 읽을 수 없는 조건은 모름이고, 모름이 섞이면 「확인 필요」로 내놓는다.
+   정의식은 참·거짓·**모름** 세 값으로 따진다. 파일에서 읽을 수 있는 조건은 다 읽는다 —
+   재원기간(입원일수) · 퇴원경로(진료결과) · 연령(주민등록번호) ·
+   **신생아체중(특정내역 MS004)** · **인공호흡시간(특정내역 MT026)**.
+   그래도 못 읽는 조건(신생아 「주요 문제」 목록 등)은 모름이고, 모름이 섞이면 「확인 필요」로 내놓는다.
    추측해서 하나로 찍지 않는다.
    ------------------------------------------------------------------------ */
 
@@ -42,6 +44,12 @@ KDRG_ADRG.forEach(a => { KG_ADRG[a.c] = a; });
 
 const KG_DEF_MDC = {};                      // MDC → 질병군 정의들
 KDRG_DEF.forEach(d => { (KG_DEF_MDC[d.mdc] = KG_DEF_MDC[d.mdc] || []).push(d); });
+
+/* 그룹 머리에 걸린 공통 조건 — 신생아 그룹(P60 · P65 · P66 · P67)은 그룹 줄에 체중 조건이 있고
+   그 아래 질병군(P651…)의 정의식에는 체중이 다시 적혀 있지 않다. 그룹 줄은 ADRG 목록에 없다.
+   그래서 「ADRG 목록에 없는 그룹+0 정의」를 그 그룹 전체의 앞조건으로 삼는다. */
+const KG_GRPPRE = {};
+KDRG_DEF.forEach(d => { if (d.def && d.c === d.grp + '0' && !KG_ADRG[d.c]) KG_GRPPRE[d.grp] = d; });
 
 const KG_PRIO = {};                         // MDC → { ADRG: 순위 }
 KDRG_PRIO.forEach(p => { (KG_PRIO[p.mdc] = KG_PRIO[p.mdc] || {})[p.a] = p.r; });
@@ -96,6 +104,18 @@ function kgAnd(a, b){ if (a === false || b === false) return false; if (a === nu
 function kgOr(a, b){ if (a === true || b === true) return true; if (a === null || b === null) return null; return false; }
 function kgNot(a){ return a === null ? null : !a; }
 
+/* 숫자 조건 하나 — 값이 없으면 모름(null). 책이 반각·전각 부등호를 섞어 쓴다. */
+function kgCmp(v, op, n){
+  if (v === null || v === undefined || isNaN(v)) return null;
+  switch (op){
+    case '<': return v < n;
+    case '>': case '＞': return v > n;
+    case '≤': return v <= n;
+    case '≥': return v >= n;
+    default:  return v === n;
+  }
+}
+
 /* 낱말로 쪼갠다.
    · 표 이름에 붙은 괄호(Diagnosis Table6(견부 질환))는 묶음 괄호가 아니라 이름의 일부다 —
      번호로 찾으니 괄호 안을 떼어 낸다. 그러지 않으면 이름이 낱말 여러 개로 찢어진다.
@@ -148,16 +168,8 @@ function kgTerm(word, ctx){
     }
   }
   // 재원기간 · 퇴원경로 — 명세서에서 읽을 수 있다
-  const los = /^재원기간\s*(<|>|≤|≥|=)\s*(\d+)\s*일?$/.exec(w);
-  if (los){
-    if (ctx.los === null || ctx.los === undefined) return null;
-    const n = +los[2];
-    switch (los[1]){
-      case '<': return ctx.los < n;   case '>': return ctx.los > n;
-      case '≤': return ctx.los <= n;  case '≥': return ctx.los >= n;
-      default:  return ctx.los === n;
-    }
-  }
+  const los = /^재원(기간|일수)\s*(<|>|≤|≥|=)\s*(\d+)\s*일?$/.exec(w);
+  if (los) return kgCmp(ctx.los, los[2], +los[3]);
   if (/^퇴원(경로|유형)\s*=\s*사망 혹은 전원$/.test(w)){
     if (!ctx.result) return null;
     return ctx.result === '4' || ctx.result === '2' || ctx.result === '3';   // 사망 · 이송 · 회송
@@ -168,11 +180,31 @@ function kgTerm(word, ctx){
   }
   // 정의식에 직접 적힌 연령 조건 (질병군 이름에 적힌 것과 같은 방식으로 따진다)
   if (/^연령/.test(w)){ const c = kgAgeCond(w); if (c) return kgAgeOk(c, ctx.age); }
+  // 인공호흡 시간 — 특정내역 MT026(인공호흡시간, 시간 단위)
+  const vent = /^인공호흡\s*(＞|>|≥|≤|<)\s*(\d+)\s*hours?$/i.exec(w);
+  if (vent) return kgCmp(ctx.vent, vent[1], +vent[2]);
+  // 입원시 체중 — 특정내역 MS004(신생아체중, 그램 단위)
+  const wr = /^입원시\s*체중\s*(\d+)\s*[-~]\s*(\d+)\s*g$/.exec(w);
+  if (wr) return ctx.wt === null || ctx.wt === undefined ? null : (ctx.wt >= +wr[1] && ctx.wt <= +wr[2]);
+  const wc = /^입원시\s*체중\s*(＞|>|≥|≤|<)\s*(\d+)\s*g$/.exec(w);
+  if (wc) return kgCmp(ctx.wt, wc[1], +wc[2]);
+  // age > 27 days · age < 366 days · age > 0 year — 생년월일과 입원개시일로 낸 일수
+  const ad = /^age\s*(?:\(=date of admission - date of birth\))?\s*(＞|>|≥|≤|<)\s*(\d+)\s*(day|year)s?$/i.exec(w);
+  if (ad) return kgCmp(ctx.ageDays, ad[1], +ad[2] * (/year/i.test(ad[3]) ? 365 : 1));
   // At least 2 procedures in 시술명 table1 — 그 표에 든 코드가 몇 개인지 센다
   const cnt = /^At least (\d+) procedures? in (.+)$/i.exec(w);
   if (cnt){
     const t = (KG_TBL[ctx.ts] || {})[kgNorm(cnt[2])];
     if (t && t.rows) return t.rows.filter(r => ctx.codes.has(r[1])).length >= +cnt[1];
+  }
+  // 신생아의 주요 문제 — 책 829쪽. 주요 문제 = 「Diagnosis in table 1」,
+  // 다발성 주요 문제 = 「at least 2 diagnoses in table 1」 (MDC 15 의 표 하나를 함께 쓴다)
+  if (/^(다발성 )?주요 문제$/.test(w)){
+    const g = KG_DXTBL[ctx.mdc + '|1'];
+    if (g){
+      const n = ctx.dx.filter(d => g.set.has(d)).length;
+      return /^다발성/.test(w) ? n >= 2 : n >= 1;
+    }
   }
   // MDC 08 의 부위별 진단 표 — 주진단이나 기타진단이 그 부위에 들면 참
   const dt = /^Diagnosis\s*table\s*(\d+)/i.exec(w);
@@ -260,9 +292,16 @@ function kgGroup(pt){
 
   for (const mdc of mdcs){
     for (const d of (KG_DEF_MDC[mdc] || [])){
+      const pre = KG_GRPPRE[d.grp];
+      if (pre && pre.c === d.c) continue;      // 그룹 앞조건 줄 자체는 질병군이 아니다
       const ctx = {ts: d.ts, mdc: mdc, codes: pt.codes, dx: pt.dx, mainDx: pt.mainDx,
-                   los: pt.los, result: pt.result, age: pt.age, unknown: []};
+                   los: pt.los, result: pt.result, age: pt.age,
+                   ageDays: pt.ageDays, wt: pt.wt, vent: pt.vent, unknown: []};
       let v = d.def ? kgParse(kgLex(d.def), ctx) : null;
+      if (pre){                                 // 그룹 머리의 공통 조건을 함께 따진다
+        const pctx = Object.assign({}, ctx, {ts: pre.ts, unknown: ctx.unknown});
+        v = kgAnd(kgParse(kgLex(pre.def), pctx), v);
+      }
       const ac = kgAgeCond(d.n);
       if (ac){ const a = kgAgeOk(ac, pt.age); v = a === null ? (v === false ? false : null) : (a ? v : false); }
       if (v === false) continue;
@@ -353,6 +392,14 @@ const KG_F = {
       code: kgPos('B', '상병분류기호'), open: kgPos('B', '당월요양개시일'), cn: kgPos('B', '청구번호')},
   C: {seq: kgPos('C', '명세서일련번호'), kind: kgPos('C', '내역구분'), hang: kgPos('C', '항'),
       mok: kgPos('C', '목'), code: kgPos('C', '코드'), cn: kgPos('C', '청구번호')},
+  E: {seq: kgPos('E', '명세서일련번호'), kind: kgPos('E', '내역구분'), unit: kgPos('E', '발생단위'),
+      div: kgPos('E', '특정내역구분'), val: kgPos('E', '특정내역'), cn: kgPos('E', '청구번호')},
+};
+
+/* 분류에 쓰는 명세서단위 특정내역 (세부작성요령 Ⅸ) — 분류집 정의식의 체중·인공호흡 조건이 여기서 온다 */
+const KG_SP = {
+  'MS004': {name: '신생아체중', unit: 'g',     desc: '출생(또는 신생아 입원) 당시 체중을 그램 단위로 기재'},
+  'MT026': {name: '인공호흡시간', unit: 'hours', desc: '동일 입원기간 중 총 인공호흡 시간을 시간 단위로 기재'},
 };
 
 /* 주민등록번호 뒷자리 첫 글자 → 성별 (홀수 남 · 짝수 여) */
@@ -362,6 +409,25 @@ function kgSex(jumin){
   const s = +j[6];
   if (!s) return 'F';
   return s % 2 ? 'M' : 'F';
+}
+
+/* 특정내역 값은 앞자리를 0 으로 채워 적는다(MT026 은 9(5) 라 00009) — 숫자로 읽는다 */
+function kgNum(v){
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  const n = Number(String(v).replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+/* 주민등록번호 · 입원개시일 → 생후 일수 (age > 27 days 같은 신생아 조건에 쓴다) */
+function kgAgeDays(jumin, ymd8){
+  const j = String(jumin || '').replace(/\D/g, '');
+  if (j.length < 7 || !/^\d{8}$/.test(ymd8 || '')) return null;
+  const s = +j[6];
+  const cen = (s === 1 || s === 2 || s === 5 || s === 6) ? 1900 : (s === 9 || s === 0) ? 1800 : 2000;
+  const b = Date.UTC(cen + (+j.slice(0, 2)), (+j.slice(2, 4)) - 1, +j.slice(4, 6));
+  const a = Date.UTC(+ymd8.slice(0, 4), (+ymd8.slice(4, 6)) - 1, +ymd8.slice(6, 8));
+  if (isNaN(b) || isNaN(a)) return null;
+  return Math.floor((a - b) / 86400000);
 }
 
 /* 주민등록번호 → 만 나이 (기준일이 없으면 오늘) */
@@ -387,10 +453,10 @@ function kgReadFiles(list){
     for (const b of kgSplitLines(f.bytes)){
       if (!b.length) continue;
       const kind = kgCut(b, KG_F.A.kind);
-      if (kind !== 'A' && kind !== 'B' && kind !== 'C') continue;
+      if (kind !== 'A' && kind !== 'B' && kind !== 'C' && kind !== 'E') continue;
       const key = kgCut(b, KG_F[kind].cn) + '|' + kgCut(b, KG_F[kind].seq);
       let r = map.get(key);
-      if (!r){ r = {key: key, file: f.name, seq: kgCut(b, KG_F[kind].seq), dx: [], mainDx: '', codes: [], form: ''}; map.set(key, r); }
+      if (!r){ r = {key: key, file: f.name, seq: kgCut(b, KG_F[kind].seq), dx: [], mainDx: '', codes: [], sp: {}, form: ''}; map.set(key, r); }
       if (kind === 'A'){
         r.form = kgCut(b, KG_F.A.form);
         r.drg = kgCut(b, KG_F.A.drg);
@@ -404,11 +470,17 @@ function kgReadFiles(list){
         if (!c) continue;
         if (kgCut(b, KG_F.B.gubun) === '1') r.mainDx = c; else r.dx.push(c);
         if (!r.start) r.start = kgCut(b, KG_F.B.open);
-      } else {
+      } else if (kind === 'C'){
         const hang = kgCut(b, KG_F.C.hang), mok = kgCut(b, KG_F.C.mok);
         if (hang !== 'L') continue;
         if (!(mok >= '51' && mok <= '56')) continue;
         r.codes.push({mok: mok, code: kgCut(b, KG_F.C.code)});
+      } else {
+        // 특정내역 — 분류에 쓰는 것(신생아체중 · 인공호흡시간)만 담는다. 명세서단위(발생단위 '1')다.
+        const div = kgCut(b, KG_F.E.div);
+        if (!KG_SP[div]) continue;
+        const v = kgCut(b, KG_F.E.val);
+        if (r.sp[div] === undefined) r.sp[div] = v;
       }
     }
   }
@@ -416,9 +488,16 @@ function kgReadFiles(list){
   recs.forEach(r => {
     r.age = kgAge(r.jumin, r.start);
     r.sex = kgSex(r.jumin);
+    r.ageDays = kgAgeDays(r.jumin, r.start);
+    r.wt = kgNum(r.sp['MS004']);
+    r.vent = kgNum(r.sp['MT026']);
+    // MT026 은 「인공호흡을 실시한 경우」에만 적는다(세부작성요령) — 없으면 안 한 것으로 보고 0시간.
+    // MS004 는 신생아·분만 명세서면 반드시 적게 되어 있어, 없으면 0 이 아니라 **모름**으로 둔다.
+    r.ventUsed = r.vent === null ? 0 : r.vent;
     const set = new Set(r.codes.map(c => c.code));
     r.res2 = kgGroup({mainDx: r.mainDx, dx: [r.mainDx].concat(r.dx), codes: set, age: r.age, sex: r.sex,
-                      los: r.los === '' ? null : +r.los, result: r.res});
+                      los: r.los === '' ? null : +r.los, result: r.res,
+                      ageDays: r.ageDays, wt: r.wt, vent: r.ventUsed});
     const part = r.res2.pick || r.res2.maybe[0];
     const p4 = part ? part.d.c.slice(0, 4) : '';
     const surgical = !!(KG_ADRG[p4] && KG_ADRG[p4].p === 'S');
@@ -442,7 +521,8 @@ function kgCompare(r){
   for (const d of r.dx){
     const g = kgGroup({mainDx: d, dx: [d].concat([r.mainDx]).concat(r.dx.filter(x => x !== d)),
                        codes: new Set(r.codes.map(c => c.code)), age: r.age, sex: r.sex,
-                       los: r.los === '' ? null : +r.los, result: r.res});
+                       los: r.los === '' ? null : +r.los, result: r.res,
+                       ageDays: r.ageDays, wt: r.wt, vent: r.ventUsed});
     if (g.aadrg === want) return {k: 'alt', t: '기타진단으로 일치', by: d, g: g};
   }
   if (r.res2.hit.length === 0) return {k: 'warn', t: '확인 필요'};
@@ -520,6 +600,8 @@ function kgRenderDetail(){
   let h = '<div class="card"><div class="meta-bar">' +
     '<span>명일련 <b>' + esc(r.seq) + '</b></span>' +
     '<span>' + esc(r.name || '') + '</span>' +
+    (r.wt !== null ? '<span>신생아체중 <b>' + r.wt + 'g</b> <span class="kg-dim">MS004</span></span>' : '') +
+    (r.vent !== null ? '<span>인공호흡 <b>' + r.vent + '시간</b> <span class="kg-dim">MT026</span></span>' : '') +
     '<span class="meta-note">' + esc(r.file) + '</span></div>';
 
   /* 분류 과정 */
