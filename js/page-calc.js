@@ -423,6 +423,24 @@ if ($('d-start')){
     if (e.key === 'Enter'){ e.preventDefault(); dcCommitStart(); }
   });
 }
+/* 칸에 들어가면 적혀 있던 값을 통째로 고른다 — 엑셀처럼 그냥 새로 치면 바뀌게.
+   (이게 없으면 「2026-08-25」 뒤에 「8/23」이 이어 붙어 「2026-08-258/23」이 된다.) */
+['d-start', 'd-days'].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  const all = () => { try { el.select(); } catch (e) {} };
+  // focus 로 한 번 고르고, 마우스로 눌러 들어온 경우 mouseup 이 그 선택을 풀어 버리므로 다시 고른다
+  el.addEventListener('focus', () => { el.dataset.pick = '1'; setTimeout(() => { if (el.dataset.pick) all(); }, 0); });
+  el.addEventListener('mouseup', e => {
+    if (!el.dataset.pick) return;                 // 이미 들어와 있던 칸이면 커서를 옮기게 둔다
+    delete el.dataset.pick;
+    e.preventDefault();
+    all();
+  });
+  el.addEventListener('keydown', () => { delete el.dataset.pick; });
+  el.addEventListener('blur', () => { delete el.dataset.pick; });
+});
+
 if ($('d-clear')) $('d-clear').addEventListener('click', () => {
   dateCalc = { start:'', days:0 };
   $('d-start').value = '';
