@@ -137,7 +137,7 @@ SamGuide/
   data/drg-scores.js  질병군(DRG) 점수 93건 — 「일자별수가」 붙임1_DRG별 점수.xlsx (자동 생성)
   data/ndrg-scores.js 신포괄 질병군 점수 RDRG 1,850건 — 지침 별표4 + KDRG 1.6 질병군명칭.xlsx (자동 생성)
   data/kdrg-adrg.js   KDRG 분류집 1.6 — ADRG 목록 749 · 질병군 정의 866 · 외과 우선순위 457 (자동 생성)
-  data/kdrg-tbl.js    KDRG 분류집 1.6 — 정의가 가리키는 시술표 · 진단표 825개(시술 12,000여 행) (자동 생성)
+  data/kdrg-tbl.js    KDRG 분류집 1.6 — 정의가 가리키는 시술표 · 진단표 825개(시술 12,054행) (자동 생성)
   data/kdrg-mdcdx.js  KDRG 분류집 1.6 — MDC별 KCD 주진단 목록 · HIV 표 · MDC 전체가 쓰는 진단표 12개 (자동 생성)
   data/kdrg-sev.js    KDRG 분류집 1.6 — (부표1) 기타진단 중증도 점수 3,861 · (부표2) AADRG별 중증도 구분 860 (자동 생성)
   tools/              고시 PDF · hwpx → data/ 로 바꾸는 변환 스크립트
