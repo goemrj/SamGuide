@@ -1034,6 +1034,11 @@ powershell -ExecutionPolicy Bypass -File tools/kdrg-grouper.ps1 "…P020.GHP" [�
   **`finally` 에서 무슨 일이 있어도 되돌려 놓는다.**
 - 그루퍼 폴더는 스스로 찾는다(`D:\Documents\Downloads\npo_kdrg_setup` · `내 다운로드\npo_kdrg_setup` ·
   프로젝트 안 `npo_kdrg_setup`). 못 찾으면 `-GrouperDir "폴더경로"` 로 알려 준다.
+- **창 안으로 끌어다 놓아도 된다**(2026-08-26). `.bat` **아이콘 위에** 놓는 것과, 그냥 두 번 눌러 열린
+  **까만 창 안으로** 놓는 것은 다르다 — 뒤쪽은 윈도우가 경로를 *글자로만* 붙여 준다. 처음 판은 그럴 때
+  "끌어다 놓으세요" 하고 닫혀 버려서 **아무 일도 일어나지 않았다.** 지금은 파일 없이 열리면 경로를
+  받아 준다(여러 개를 한 번에 놓아도 되고, 빈 줄에서 엔터를 누르면 시작한다).
+  붙여넣은 경로에 따옴표나 눈에 안 보이는 BOM 이 섞여 들어오기도 해서 먼저 털어낸다.
 - **인자는 `param()` 에 맡기지 않고 직접 읽는다.** 파일을 여러 개 끌어다 놓으면 `.bat` 가 하나씩 따로
   넘기는데, `param()` 의 자리(Position) 규칙과 `ValueFromRemainingArguments` 가 얽혀 **두 번째 파일이
   `-GrouperDir` 자리로 들어가** 버렸다(그루퍼를 못 찾는다고 멈췄다).

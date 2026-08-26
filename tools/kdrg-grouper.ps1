@@ -64,16 +64,35 @@ $gin = Join-Path $GrouperDir "Npo_kdrg11.in"
 $gout = Join-Path $GrouperDir "Npo_kdrg11.out"
 
 # ---------- 넣을 파일 ----------
+# 끌어다 놓지 않고 그냥 연 경우 — 여기서 경로를 받는다.
+# **열린 창 안으로** 파일을 끌어다 놓으면 윈도우가 경로를 글자로 붙여 준다. 그것도 그대로 받는다
+# (2026-08-26 — 사용자가 실제로 그렇게 했고, 예전 판은 그냥 닫혀 버렸다).
 if (-not $Files -or $Files.Count -eq 0) {
-  Say "SAM 신포괄 명세서 파일을 「그루퍼 돌리기.bat」 위에 끌어다 놓으세요."
-  Read-Host "엔터를 누르면 닫힙니다" | Out-Null
-  exit 0
+  Say "SAM 신포괄 명세서 파일을 이 창 안으로 끌어다 놓고 엔터를 누르세요."
+  Say "  · 여러 개면 한 번에 놓아도 되고, 한 줄에 하나씩 놓아도 됩니다."
+  Say "  · 다 놓았으면 아무것도 없이 엔터를 누르면 시작합니다."
+  Say "  · 「그루퍼 돌리기.bat」 아이콘 위에 바로 끌어다 놓으면 이 과정이 없습니다."
+  Say ""
+  while ($true) {
+    $ln = Read-Host "파일"
+    if (-not $ln -or $ln.Trim() -eq "") { break }
+    # 공백이 든 경로는 윈도우가 따옴표로 묶어 준다 — 따옴표 단위로 먼저 끊고 나머지는 공백으로 끊는다
+    foreach ($tok in [regex]::Matches($ln, '"[^"]+"|\S+')) { $Files += $tok.Value.Trim('"') }
+  }
+  Say ""
+  if (-not $Files -or $Files.Count -eq 0) { exit 0 }
 }
 $targets = @()
 foreach ($f in $Files) {
-  if (Test-Path $f -PathType Container) { $targets += (Get-ChildItem $f -File -Include *.GHP, *.ghp -Recurse).FullName }
-  elseif (Test-Path $f) { $targets += (Resolve-Path $f).Path }
-  else { Say "  건너뜀 (없는 파일): $f" }
+  # 붙여넣은 경로에는 따옴표 · 눈에 안 보이는 BOM(U+FEFF) 이 섞여 들어오기도 한다 — 먼저 털어낸다.
+  $f = $f.Trim().Trim('"').Trim([char]0xFEFF).Trim()
+  if ($f -eq "") { continue }
+  try {
+    if (Test-Path $f -PathType Container) { $targets += (Get-ChildItem $f -File -Include *.GHP, *.ghp -Recurse).FullName }
+    elseif (Test-Path $f) { $targets += (Resolve-Path $f).Path }
+    else { Say "  건너뜀 (없는 파일): $f" }
+  }
+  catch { Say "  건너뜀 (경로를 읽을 수 없음): $f" }
 }
 if ($targets.Count -eq 0) { Die "읽을 파일이 없습니다." }
 
