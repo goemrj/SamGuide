@@ -83,7 +83,7 @@ const COLW_DEFAULTS = {
   "ndrg|paneW": 700,
   "ndrg|tableW": 1600,
   "page-calc#0#5": [123,206,98,166,89],
-  "page-kdrg#2#5": [106,68,658,545,70],
+  "page-kdrg#2#5": [106,68,603,600,70],
   "page-kdrg#3#2": [110,1337],
   "page-kdrg#4#5": [181,93,194,901,260],
   "page-layout#0#5": [108,66,105,169,1180],
