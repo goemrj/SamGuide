@@ -728,9 +728,12 @@ function kgRender(){
   const ok = KG.recs.filter(r => r.cmp.k === 'ok').length;
   const alt = KG.recs.filter(r => r.cmp.k === 'alt').length;
   const bad = n - ok - alt;
+  // 그루퍼로 검산했으면 대조가 **둘**이다 — 어느 쪽 숫자인지 이름을 붙여 준다(2026-08-26)
+  const two = !!KG_GR.done;
   $('kg-sum').innerHTML = !KG.list.length ? '' :
     '<span>파일 <b>' + KG.list.length + '</b></span>' +
     '<span>신포괄 명세서 <b>' + n + '</b></span>' +
+    (two ? '<span class="meta-note">파일 대조 —</span>' : '') +
     '<span>일치 <b>' + ok + '</b></span>' +
     (alt ? '<span>기타진단으로 일치 <b>' + alt + '</b></span>' : '') +
     (bad ? '<span class="kg-bad">다름 · 확인 필요 <b>' + bad + '</b></span>' : '') +
@@ -743,8 +746,9 @@ function kgRender(){
       if (!KG_GR.done) return '';
       const same = KG.recs.filter(r => r.grCmp === 'ok').length;
       const diff = KG.recs.filter(r => r.grCmp === 'diff').length;
-      return '<span>그루퍼와 같음 <b>' + same + '</b></span>' +
-             (diff ? '<span class="kg-bad">그루퍼와 다름 <b>' + diff + '</b></span>' : '');
+      return '<span class="meta-note">그루퍼 대조 —</span>' +
+             '<span>같음 <b>' + same + '</b></span>' +
+             (diff ? '<span class="kg-bad">다름 <b>' + diff + '</b></span>' : '');
     })() +
     '<span class="meta-note">앞 5자리(AADRG)로 대조</span>';
 
@@ -753,7 +757,12 @@ function kgRender(){
   gb.style.display = (KG_GR.on && KG.recs.length) ? '' : 'none';
   gb.disabled = KG_GR.busy;
   gb.textContent = KG_GR.busy ? '그루퍼 도는 중…' : (KG_GR.done ? '그루퍼 다시 돌리기' : '그루퍼로 검산');
-  gn.innerHTML = !KG_GR.on ? '' : KG_GR.note ? '<span class="kg-bad">' + esc(KG_GR.note) + '</span>'
+  // 그루퍼가 없을 때도 왜 없는지는 알려 준다 — 더블클릭·깃허브 페이지에서는 원리상 안 된다.
+  // (2026-08-26 물어보셨다. .exe 는 이 PC 에 깔린 프로그램이라 정적 호스팅에서는 못 돌린다.)
+  gn.innerHTML = !KG_GR.on
+      ? (KG.recs.length ? '<span class="meta-note">심평원 그루퍼로 검산하려면 <b>serve.ps1</b> 로 여세요 ' +
+          '(localhost:8392) — 그루퍼는 이 PC 에 깔린 프로그램이라 파일을 두 번 눌러 열거나 깃허브 페이지에서는 돌릴 수 없습니다</span>' : '')
+    : KG_GR.note ? '<span class="kg-bad">' + esc(KG_GR.note) + '</span>'
     : KG_GR.done ? '<span class="meta-note">심평원 그루퍼 ' + esc(KG_GR.ver) + ' 로 ' + KG_GR.done + '건 대조했습니다</span>'
     : '<span class="meta-note">심평원 그루퍼 ' + esc(KG_GR.ver) + ' 가 이 PC 에 있습니다</span>';
 
@@ -777,10 +786,11 @@ function kgSeqHit(r, q){
 function kgRenderList(){
   if (!KG.recs.length){ $('kg-list').innerHTML = ''; return; }
   const q = KG.seq.trim();
-  // 「다른 것만 보기」에는 **그루퍼만 다르게 본 것**도 함께 띄운다 — 파일과 도출이 맞았는데
-  // 그루퍼가 다른 답을 내면 그게 제일 볼 만한 줄이다(분류집에 없는 규칙이 걸린 자리).
-  // 「기타진단으로 일치」는 여기서도 빼 둔다 — 이미 맞는 것으로 보기로 했다(2026-08-26 요청).
-  const worth = r => !kgSettled(r) || (r.grCmp === 'diff' && r.cmp.k === 'ok');
+  // 「다른 것만 보기」는 **두 가지 대조를 각각** 본다.
+  //   · 파일 대조 — 「기타진단으로 일치」는 뺀다(맞는 것으로 보기로 했다, 2026-08-26 요청).
+  //   · 그루퍼 대조 — **다르면 무조건 띄운다.** 파일 대조에서 뺀 것과는 별개 축이다.
+  //     (2026-08-26 — 처음엔 파일 대조가 「일치」인 것만 띄웠더니 10건 중 1건만 보였다.)
+  const worth = r => !kgSettled(r) || r.grCmp === 'diff';
   const rows = KG.recs.filter(r => (q ? kgSeqHit(r, q) : (!KG.onlyBad || worth(r))));
   let h = '<div class="card"><div class="meta-bar" id="kg-listmeta">' +
     '<span>명세서 <b>' + rows.length + '</b>' + (rows.length !== KG.recs.length ? ' / ' + KG.recs.length : '') + '</span>' +
@@ -800,8 +810,9 @@ function kgRenderList(){
     '<th style="width:78px;">명일련</th><th style="width:88px;">수진자</th><th style="width:64px;">주진단</th>' +
     '<th style="width:52px;">나이</th><th style="width:64px;">입원일수</th>' +
     '<th style="width:86px;">파일 번호</th><th style="width:86px;">도출 5자리</th>' +
-    (gcol ? '<th style="width:86px;">그루퍼</th>' : '') +
-    '<th style="width:70px;">대조</th><th>질병군</th></tr></thead><tbody>';
+    (gcol ? '<th style="width:96px;">그루퍼</th>' : '') +
+    // 「대조」가 무엇 대 무엇인지 이름에 적는다 — 그루퍼 칸이 생기면서 헷갈렸다(2026-08-26)
+    '<th style="width:70px;">' + (gcol ? '파일 대조' : '대조') + '</th><th>질병군</th></tr></thead><tbody>';
   for (const r of rows){
     const i = KG.recs.indexOf(r);
     const src = r.res2.pick || r.res2.maybe[0];
@@ -812,8 +823,11 @@ function kgRenderList(){
       '<td>' + (r.age === null ? '—' : r.age) + '</td><td>' + esc(r.los || '') + '</td>' +
       '<td class="kg-code">' + (q ? hilite(r.drg || '—', q) : esc(r.drg || '—')) + '</td>' +
       '<td class="kg-code">' + (r.res2.aadrg ? esc(r.res2.aadrg) : '—') + '</td>' +
+      // 그루퍼 답은 6자리다. 도출(5자리)과 다르면 칸 안에서 바로 「다름」이라고 못을 박는다 —
+      // 옆의 「파일 대조」와 다른 대조라서 색만으로는 알아보기 어렵다(2026-08-26).
       (gcol ? '<td class="kg-code' + (r.grCmp === 'diff' ? ' kg-bad' : '') + '">' +
-                (r.gr ? esc(r.gr.drg) : '—') + '</td>' : '') +
+                (r.gr ? esc(r.gr.drg) : '—') +
+                (r.grCmp === 'diff' ? ' <span class="kg-tag kg-bad">다름</span>' : '') + '</td>' : '') +
       '<td><span class="kg-tag kg-' + r.cmp.k + '">' + esc(r.cmp.t) + '</span></td>' +
       '<td>' + (src ? esc(src.d.n) : '<span class="saved-note">' + esc(r.res2.note) + '</span>') + '</td></tr>';
   }
@@ -921,7 +935,7 @@ function kgRenderDetail(){
   } else h += '<span class="saved-note">부표2 에 이 AADRG 가 없습니다</span>';
   h += '</td></tr>';
 
-  h += '<tr><th>대조</th><td>파일 <b class="kg-code">' + esc(r.drg || '—') + '</b> · 도출 <b class="kg-code">' +
+  h += '<tr><th>' + (r.gr ? '파일 대조' : '대조') + '</th><td>파일 <b class="kg-code">' + esc(r.drg || '—') + '</b> · 도출 <b class="kg-code">' +
        esc(g.aadrg || '—') + '</b> → <span class="kg-tag kg-' + r.cmp.k + '">' + esc(r.cmp.t) + '</span>' +
        (r.cmp.k === 'alt'
          ? '<div class="saved-note">기타진단 <b class="kg-code">' + esc(r.cmp.by) + '</b> 을 주진단 자리에 놓으면 ' +
@@ -932,12 +946,17 @@ function kgRenderDetail(){
 
   /* 심평원 그루퍼로 검산했으면 그 답도 나란히 놓는다 */
   if (r.gr)
-    h += '<tr><th>심평원 그루퍼</th><td><b class="kg-code">' + esc(r.gr.drg) + '</b> ' +
+    h += '<tr><th>그루퍼 대조</th><td>도출 <b class="kg-code">' + esc(g.aadrg || '—') + '</b> · 그루퍼 <b class="kg-code">' + esc(r.gr.drg) + '</b> ' +
          '<span class="kg-dim">MDC ' + esc(r.gr.mdc) + ' · ADRG ' + esc(r.gr.adrg) + ' · PCCL ' + esc(r.gr.pccl) + '</span> ' +
          (r.grCmp === 'ok' ? '<span class="kg-tag kg-ok">도출과 같음</span>'
                            : '<span class="kg-tag kg-bad">도출과 다름</span>') +
          (r.grCmp === 'diff'
-           ? '<div class="saved-note">화면은 <b>분류집만으로</b> 분류합니다. 그루퍼는 분류집에 없는 ' +
+           ? // 도출과 다를 때 **그루퍼가 파일 편인지**가 제일 중요하다 — 그러면 도출 쪽이 틀린 것이다.
+             (r.gr.drg.slice(0, 5) === (r.drg || '').slice(0, 5)
+               ? '<div class="saved-note"><b>그루퍼는 파일에 적힌 번호와 같습니다</b> — 청구된 번호가 맞고 ' +
+                 '<b>도출 쪽이 분류집만으로는 여기까지 못 간 것</b>입니다.</div>'
+               : '<div class="saved-note"><b>그루퍼가 파일과도 다릅니다</b> — 청구된 번호를 다시 볼 자리입니다.</div>') +
+             '<div class="saved-note">화면은 <b>분류집만으로</b> 분류합니다. 그루퍼는 분류집에 없는 ' +
              '<b>이원분류표(Npo_Tdag_ast)</b>와 <b>CC edit(Npo_Tccedit)</b>을 함께 갖고 있어, 어긋나면 대개 그 둘 때문입니다.</div>'
            : '') + '</td></tr>';
   h += '</tbody></table>';
