@@ -26,6 +26,10 @@
    추측해서 하나로 찍지 않는다.
    ------------------------------------------------------------------------ */
 
+/* 「기타진단으로 일치」도 결국 맞은 것이라 「다른 것만 보기」에서는 빼고 본다(2026-08-26 요청).
+   요약 줄에는 그대로 몇 건인지 적어 둔다 — 왜 그렇게 봤는지는 알아야 하니까. */
+function kgSettled(r){ return r.cmp.k === 'ok' || r.cmp.k === 'alt'; }
+
 /* onlyBad — 처음부터 「다른 것만 보기」로 연다. 맞은 것을 훑으려고 이 화면을 열지는 않는다. */
 const KG = { list: [], recs: [], sel: 0, q: '', seq: '', onlyBad: true, ROWS: 10 };
 
@@ -618,7 +622,7 @@ function kgSeqHit(r, q){
 function kgRenderList(){
   if (!KG.recs.length){ $('kg-list').innerHTML = ''; return; }
   const q = KG.seq.trim();
-  const rows = KG.recs.filter(r => (q ? kgSeqHit(r, q) : (!KG.onlyBad || r.cmp.k !== 'ok')));
+  const rows = KG.recs.filter(r => (q ? kgSeqHit(r, q) : (!KG.onlyBad || !kgSettled(r))));
   let h = '<div class="card"><div class="meta-bar" id="kg-listmeta">' +
     '<span>명세서 <b>' + rows.length + '</b>' + (rows.length !== KG.recs.length ? ' / ' + KG.recs.length : '') + '</span>' +
     (q ? '<span class="meta-note">「' + esc(q) + '」 찾는 중 — 「다른 것만 보기」는 잠시 접었습니다</span>' : '') +
@@ -627,7 +631,7 @@ function kgRenderList(){
   if (!rows.length){
     h += '<div class="empty">' +
       (q ? '「' + esc(q) + '」 에 걸리는 명세서가 없습니다.'
-         : KG.onlyBad ? '모두 일치합니다 — 전체를 보려면 「다른 것만 보기」를 꺼 주세요.'
+         : KG.onlyBad ? '모두 맞습니다 — 전체를 보려면 「다른 것만 보기」를 꺼 주세요.'
          : '명세서가 없습니다.') + '</div></div>';
     $('kg-list').innerHTML = h;
     return;
