@@ -608,7 +608,10 @@ function kgReadFiles(list){
         const hang = kgCut(b, KG_F.C.hang), mok = kgCut(b, KG_F.C.mok);
         if (hang !== 'L') continue;
         if (!(mok >= '51' && mok <= '56')) continue;
-        r.codes.push({mok: mok, code: kgCut(b, KG_F.C.code)});
+        // 분류에 쓰이는 코드는 모두 5자리다. 일부 명세서에 8자리로 잘못 들어온 것이 있어
+        // **앞 5자리만 쓴다**(2026-08-26 사용자 확인). 원래 적힌 값은 raw 에 남겨 화면에 보여 준다.
+        const raw = kgCut(b, KG_F.C.code);
+        r.codes.push({mok: mok, code: raw.slice(0, 5), raw: raw});
       } else {
         // 특정내역 — 분류에 쓰는 것(신생아체중 · 인공호흡시간)만 담는다. 명세서단위(발생단위 '1')다.
         const div = kgCut(b, KG_F.E.div);
@@ -913,7 +916,10 @@ function kgRenderDetail(){
     const at = w.at.filter(a => !g.mdc || a.mdc === g.mdc);
     const rest = w.at.length - at.length;
     h += '<tr><td>' + esc(c.mok) + ' ' + esc(KG_MOK[c.mok] || '') + '</td>' +
-         '<td class="kg-code">' + esc(c.code) + '</td><td>' + esc(w.ins) + '</td>' +
+         '<td class="kg-code">' + esc(c.code) +
+           (c.raw && c.raw !== c.code ? '<span class="kg-dim" title="파일에는 ' + esc(c.raw) +
+             ' 로 적혀 있습니다 — 분류코드는 5자리라 앞 5자리만 씁니다">' + esc(c.raw.slice(5)) + '</span>' : '') +
+         '</td><td>' + esc(w.ins) + '</td>' +
          '<td>' + (w.name ? esc(w.name) : '<span class="saved-note">분류집에 없음 (분류에 쓰이지 않는 코드)</span>') + '</td>' +
          '<td>' + (at.length ? at.map(a => '<span class="kg-chip">' + esc(a.c) + '</span>').join(' ')
                              : dagger ? '<span class="saved-note">‡ OR procedure 아님</span>'
