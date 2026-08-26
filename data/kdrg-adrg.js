@@ -776,7 +776,7 @@ var KDRG_DEF = [
   { c:"A070", mdc:"00", grp:"A07", n:"소장 이식술", e:"SMALL BOWEL TRANSPLANT", def:"시술명", ts:7 },
   { c:"A080", mdc:"00", grp:"A08", n:"사지 이식", e:"EXTREMITIES TRANSPLANT", def:"시술명", ts:8 },
   { c:"A090", mdc:"00", grp:"A09", n:"신장 이식", e:"KIDNEY TRANSPLANT", def:"시술명", ts:9 },
-  { c:"A500", mdc:"00", grp:"A09", n:"체외순환막형산화요법(ECMO), 개심술 미동반", e:"EXTRA CORPOREAL MEMBRANE OXYGENATION(ECMO) WITHOUT CARDIAC SURGERY", def:"시술명 table1 without 시술명 table2", ts:10 },
+  { c:"A500", mdc:"00", grp:"A09", n:"체외순환막형산화요법(ECMO), 개심술 미동반", e:"EXTRA CORPOREAL MEMBRANE OXYGENATION(ECMO) WITHOUT CARDIAC SURGERY", def:"시술명 table1 without 시술명 table2 963 연령/체중과 일치하지 않는 신생아 주진단", ts:10 },
   { c:"B011", mdc:"01", grp:"B01", n:"뇌기저부 수술(외상 제외)", e:"Skull Base Operation except Trauma", def:"시술명", ts:11 },
   { c:"B0121", mdc:"01", grp:"B01", n:"주요 두개내 혈관수술(외상 제외), 연령 ＜65세", e:"Major Intracranial Vascular Procedure except Trauma, Age ＜65", def:"시술명", ts:12 },
   { c:"B0122", mdc:"01", grp:"B01", n:"주요 두개내 혈관수술(외상 제외), 연령 ≥65세", e:"Major Intracranial Vascular Procedure except Trauma, Age ≥65", def:"시술명", ts:12 },

@@ -119,7 +119,9 @@ function kind(i,   m,f1,f2,w){
   if(w ~ /\([Tt]able[ \t]*[0-9]+\)$/) return "DXTBL";
   if(w ~ /(시술명|주진단명|부가코드|인공호흡|주진단|기타진단)/ && w ~ /( and | or |not |\(|table)/) return "DEF";
   # 시술·진단 표를 가리키지 않는 조건식 (예: 입원시 체중 < 750g · 재원기간 < 5일 · Any OR Procedures)
-  if(w ~ /(입원시|재원기간|퇴원유형|인공호흡|연령|체중|Any OR|모든 주진단|주진단명|출생시)/) return "DEF";
+  # 「Any Other OR Procedures」처럼 Any 와 OR 사이에 낱말이 끼는 것도 있다(Q02)
+  if(w ~ /(입원시|재원기간|퇴원유형|인공호흡|연령|체중|모든 주진단|주진단명|출생시)/) return "DEF";
+  if(w ~ /[Aa]ny([ \t]+[A-Za-z]+)?[ \t]+OR[ \t]+[Pp]rocedure/) return "DEF";
   # 「At least 2 procedures in the following table」 — 바로 뒤의 표에서 둘 이상 (G102 복수 항문 수술)
   if(w ~ /^[Aa]t least [0-9]+ (procedures?|diagnos)/) return "DEF";
   return "TXT";
@@ -206,6 +208,11 @@ END{
       # MDC별 KCD 주진단 목록
       if(w ~ /분류(된|되는) KCD 주진단명/){ defs_flush(); dxmode=1; dxmdc=mdc; dxpart=""; ndx=0; continue }
       k=kind(i);
+      # 다음 줄이 **코드만 있는 줄**이면 이 줄은 그 코드의 이름이다 — 정의식이 아니다.
+      # 질병군 이름에 「연령」·「체중」이 들어가 정의식으로 잘못 읽히던 것을 막는다
+      #   「적혈구 질환, 연령 세 >17」 다음 줄에 「Q6102」 — 이름이지 조건식이 아니다.
+      nextlone = (i<N && NC[i+1]==1 && F[i+1,1] ~ /^[A-Z][0-9]{2,4}$/);
+      if(k=="DEF" && nextlone && w ~ /[가-힣]/ && w !~ /(시술명|주진단명|부가코드|기타진단|[Tt]able)/) k="TXT";
       # 판에 따라 **한글명이 코드보다 앞줄에** 찍힌다(1.5 · 1.4). 코드만 있는 줄이면 앞줄에서 이름을 가져온다.
       #     골반적출술, 근치적 자궁절제술 …    ← 한글명
       #   N01                                ← 코드 (혼자)
@@ -325,12 +332,18 @@ function dx_emit(   j,s){
 }
 
 # 부표2 — 왼쪽에 AADRG(4자리)+명칭, 오른쪽에 DRG(6자리)+중증도 구분 기준
-function sev_line(i,m,   j,pos,a,rest){
+function sev_line(i,m,   j,pos,a,rest,mm){
   pos=0;
   for(j=1;j<=m;j++) if(F[i,j] ~ /^[A-Z][0-9]{5}$/){ pos=j; break }
-  if(m>=1 && F[i,1] ~ /^[A-Z][0-9]{4}$/){
+  # AADRG 와 명칭 사이가 **한 칸뿐인 줄**도 있다 — 「Q6102 Red Blood Cell Disorders, Age >17」.
+  # 칸으로 나누면 한 칸에 붙어 나오므로 앞머리에서 코드를 떼어 낸다.
+  if(m>=1 && match(F[i,1], /^([A-Z][0-9]{4})([ \t]+(.*))?$/, mm)){
     sev_flush();
-    sa=F[i,1]; sn=(pos>1? jf(i,2,pos-1) : jf(i,2,m)); snr=0; sleft=LI[i];
+    sa=mm[1];
+    sn=mm[3];
+    rest=(pos>1? jf(i,2,pos-1) : jf(i,2,m));
+    if(rest!="") sn=(sn==""? rest : sn" "rest);
+    snr=0; sleft=LI[i];
   } else if(pos>1 && sa!=""){
     sn=sn" "jf(i,1,pos-1);
   } else if(pos==0 && sa!=""){
