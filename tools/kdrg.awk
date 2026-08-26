@@ -97,7 +97,7 @@ function kind(i,   m,f1,f2,w){
   if(m>=2 && f1 ~ /^[A-Z][0-9]{3,4}$/ && f2 ~ /[가-힣]/) return "DRG";
   # 시술 행 — 보험코드 · 시술코드 · 명칭. 칸 사이가 한 칸뿐인 줄도 있어 줄 전체로 본다.
   if(rowsplit(w)) return "ROW";
-  if(w ~ /^(시술명|주진단명|부가코드|기타진단|기타진단명|주진단명 또는 기타진단명)[0-9]*( ?table ?[0-9]*)?$/) return "TBLNAME";
+  if(w ~ /^(시술명|주진단명|부가코드|기타진단|기타진단명|주진단명 또는 기타진단명)[0-9]*( ?[Tt]able ?[0-9]*)?$/) return "TBLNAME";
   # MDC 전체가 함께 쓰는 진단 표
   #   MDC 08  Diagnosis table1(슬관절 질환) … 부위별 11개
   #   MDC 15  신생아의 주요 문제(table 1)
@@ -208,7 +208,11 @@ END{
       if(k=="TBLNAME"){
         # 다음 줄이 표의 행이면 표 머리, 아니면 정의식
         nx=i+1; nk=(nx<=N? kind(nx) : "TXT");
-        if(nk=="ROW" || (nx<=N && w ~ /(주진단명|기타진단)/ && haskcd(nx)) || (nx<=N && w ~ /부가코드/ && F[nx,1]=="부가코드")){
+        # 진단표 머리인지 보려고 다음 줄에 KCD 가 있나 보는데, 질병군 머리줄(B666 …)도 KCD 처럼 생겼다.
+        # 그래서 다음 줄이 GRP·DRG 면 표 머리가 아니라 정의식으로 본다.
+        dxhead = (nx<=N && nk!="GRP" && nk!="DRG" && w ~ /(주진단명|기타진단)/ && haskcd(nx));
+        adchead = (nx<=N && w ~ /부가코드/ && F[nx,1]=="부가코드");
+        if(nk=="ROW" || dxhead || adchead){
           if(nd==0 && grp!=""){ defs_add(grp "0", mdc, grp, grpn); DE[nd]=grpe }
           TENT=0; tbl_open(w);
         } else {

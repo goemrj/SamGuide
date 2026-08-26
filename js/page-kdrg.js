@@ -26,7 +26,8 @@
    추측해서 하나로 찍지 않는다.
    ------------------------------------------------------------------------ */
 
-const KG = { list: [], recs: [], sel: 0, q: '', onlyBad: false };
+/* onlyBad — 처음부터 「다른 것만 보기」로 연다. 맞은 것을 훑으려고 이 화면을 열지는 않는다. */
+const KG = { list: [], recs: [], sel: 0, q: '', onlyBad: true, ROWS: 10 };
 
 /* ---------- 분류집 색인 ---------- */
 /* 표 이름을 맞출 때 쓰는 다듬기 — 책이 「시술명 table2」와 「시술명 table 2」를 섞어 쓴다 */
@@ -152,6 +153,12 @@ function kgParse(tokens, ctx){
   return expr();
 }
 
+/* 본문 코드(3~5자리) → AADRG 5자리. 4자리면 뒤에 0 을 붙인다.
+   **부표2(KDRG_SEV)에 있는 번호만 진짜 질병군이다.** 본문에는 갈림길의 머리줄도 코드로 적혀 있어서
+   (E804 성인의 세균 폐렴 → 그 아래 E8041 18세<연령<65세 · E8042 연령 ≥65세),
+   그대로 두면 있지도 않은 E8040 이 답으로 나온다. 그래서 후보를 모을 때 부표2로 걸러 낸다. */
+function kgAadrg(c){ return c.length >= 5 ? c.slice(0, 5) : (c.length === 4 ? c + '0' : c + '00'); }
+
 /* 정의식이 몇 가지 조건을 걸고 있나 — 같은 표묶음 안에서 어느 쪽이 더 좁은 정의인지 가리는 데 쓴다 */
 function kgSpec(def){
   let n = 0, run = false;
@@ -239,7 +246,11 @@ function kgTerm(word, ctx){
 /* ---------- 연령 조건 ----------
    질병군 이름에 적힌 「연령 ≤18세」 「연령 ＜65세」 「연령 0-18세」 로 가른다. */
 const KG_AGE_RE = /연령\s*(≤|≥|＜|＞|<|>)?\s*(\d+)\s*(?:[-~]\s*(\d+)\s*)?세/;
+/* 「18세< 연령 <65세」처럼 양쪽에서 조이는 것도 있다 (E8041 성인의 세균 폐렴) */
+const KG_AGE_BETWEEN = /(\d+)\s*세\s*(≤|<|＜)\s*연령\s*(≤|<|＜)\s*(\d+)\s*세/;
 function kgAgeCond(name){
+  const bt = KG_AGE_BETWEEN.exec(name || '');
+  if (bt) return {lo: +bt[1] + (bt[2] === '≤' ? 0 : 1), hi: +bt[4] - (bt[3] === '≤' ? 0 : 1)};
   const m = KG_AGE_RE.exec(name || '');
   if (!m) return null;
   if (m[3] !== undefined) return {lo: +m[2], hi: +m[3]};
@@ -304,6 +315,7 @@ function kgGroup(pt){
     for (const d of (KG_DEF_MDC[mdc] || [])){
       const pre = KG_GRPPRE[d.grp];
       if (pre && pre.c === d.c) continue;      // 그룹 앞조건 줄 자체는 질병군이 아니다
+      if (!KG_SEVMAP[kgAadrg(d.c)]) continue;  // 부표2에 없는 번호는 청구할 수 있는 질병군이 아니다
       const ctx = {ts: d.ts, mdc: mdc, codes: pt.codes, dx: pt.dx, mainDx: pt.mainDx,
                    los: pt.los, result: pt.result, age: pt.age,
                    ageDays: pt.ageDays, wt: pt.wt, vent: pt.vent, unknown: []};
@@ -335,12 +347,17 @@ function kgGroup(pt){
      이라 복강경을 했으면 둘 다 참이 되는데, 우선순위는 H034(16)가 H032(17)보다 앞이라
      순위로 고르면 거꾸로 간다. 부가코드가 붙은 좁은 쪽이 답이다.
      우선순위표는 **서로 다른 그룹의 시술**끼리 겨룰 때 쓰는 것이다. */
-  const prune = list => list.filter(it =>
-    !list.some(o => o !== it && o.d.ts === it.d.ts && o.d.grp === it.d.grp &&
-                    kgSpec(o.d.def) > kgSpec(it.d.def)));
+  /* 더 세분된 코드가 이긴다 — E80(성인의 세균 폐렴)은 머리줄 E804 아래에
+     E8041(18세< 연령 <65세) · E8042(연령 ≥65세) 가 있고 정의식은 셋 다 「주진단명」이다.
+     갈림은 정의식이 아니라 **이름의 연령**에 있어서, 조건 개수만 세면 가려지지 않는다.
+     그래서 앞자리가 같으면서 더 긴 코드(E8042)가 참이면 머리줄(E804)은 물린다. */
+  const narrower = (o, it) =>
+    o !== it && o.d.ts === it.d.ts && o.d.grp === it.d.grp &&
+    (kgSpec(o.d.def) > kgSpec(it.d.def) ||
+     (o.d.c.length > it.d.c.length && o.d.c.indexOf(it.d.c) === 0));
+  const prune = list => list.filter(it => !list.some(o => narrower(o, it)));
   out.hit = prune(out.hit);
-  out.maybe = prune(out.maybe.filter(it =>
-    !out.hit.some(o => o.d.ts === it.d.ts && o.d.grp === it.d.grp && kgSpec(o.d.def) > kgSpec(it.d.def))));
+  out.maybe = prune(out.maybe.filter(it => !out.hit.some(o => narrower(o, it))));
 
   out.hit.sort((a, b) => rank(a) - rank(b));
   out.maybe.sort((a, b) => rank(a) - rank(b));
@@ -356,8 +373,7 @@ function kgGroup(pt){
   }
 
   const src = out.pick || out.maybe[0];
-  const c = src.d.c;
-  out.aadrg = c.length >= 5 ? c.slice(0, 5) : (c.length === 4 ? c + '0' : c + '00');
+  out.aadrg = kgAadrg(src.d.c);
   out.sev = KG_SEVMAP[out.aadrg] || null;
   return out;
 }
@@ -593,8 +609,14 @@ function kgRenderList(){
   const rows = KG.recs.filter(r => !KG.onlyBad || r.cmp.k !== 'ok');
   let h = '<div class="card"><div class="meta-bar" id="kg-listmeta">' +
     '<span>명세서 <b>' + rows.length + '</b>' + (KG.onlyBad ? ' / ' + KG.recs.length : '') + '</span>' +
-    '<span class="meta-note">줄을 누르면 아래에 분류 과정이 펼쳐집니다</span></div>' +
-    '<table class="fields kg-tb"><thead><tr>' +
+    '<span class="meta-note">' + (rows.length > KG.ROWS ? KG.ROWS + '줄씩 보이고 나머지는 표 안에서 스크롤합니다 · ' : '') +
+    '줄을 누르면 아래에 분류 과정이 펼쳐집니다</span></div>';
+  if (!rows.length){
+    h += '<div class="empty">' + (KG.onlyBad ? '모두 일치합니다 — 전체를 보려면 「다른 것만 보기」를 꺼 주세요.' : '명세서가 없습니다.') + '</div></div>';
+    $('kg-list').innerHTML = h;
+    return;
+  }
+  h += '<div class="kg-listbox"><table class="fields kg-tb"><thead><tr>' +
     '<th style="width:78px;">명일련</th><th style="width:88px;">수진자</th><th style="width:64px;">주진단</th>' +
     '<th style="width:52px;">나이</th><th style="width:64px;">입원일수</th>' +
     '<th style="width:86px;">파일 번호</th><th style="width:86px;">도출 5자리</th>' +
@@ -610,11 +632,27 @@ function kgRenderList(){
       '<td><span class="kg-tag kg-' + r.cmp.k + '">' + esc(r.cmp.t) + '</span></td>' +
       '<td>' + (src ? esc(src.d.n) : '<span class="saved-note">' + esc(r.res2.note) + '</span>') + '</td></tr>';
   }
-  h += '</tbody></table></div>';
+  h += '</tbody></table></div></div>';
   $('kg-list').innerHTML = h;
   $('kg-list').querySelectorAll('.kg-row').forEach(tr => tr.addEventListener('click', () => {
     KG.sel = +tr.dataset.i; kgRenderList(); kgRenderDetail();
   }));
+  kgFitList();
+}
+
+/* 목록은 10줄까지만 펼치고 나머지는 표 안에서 스크롤한다.
+   줄 높이를 그때그때 재서 잡는다 — 글자 크기·여백을 나중에 손봐도 따라간다.
+   (표를 감싸는 요소에 overflow 를 주면 머리줄이 페이지가 아니라 그 상자에 붙으므로
+    .kg-listbox 안에서는 th{top:0} 으로 되돌린다 — css/style.css 참조.) */
+function kgFitList(){
+  const box = $('kg-list').querySelector('.kg-listbox');
+  if (!box) return;
+  const head = box.querySelector('thead');
+  const rows = box.querySelectorAll('tbody tr');
+  if (rows.length <= KG.ROWS){ box.style.maxHeight = ''; return; }
+  let h = head ? head.offsetHeight : 0;
+  for (let i = 0; i < KG.ROWS; i++) h += rows[i].offsetHeight;
+  box.style.maxHeight = h + 'px';
 }
 
 function kgWhere(code){
