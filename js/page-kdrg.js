@@ -320,7 +320,15 @@ function kgTerm(word, ctx){
     if (t.rows) return t.rows.some(r => ctx.codes.has(r[1]));
     if (t.kcd){
       const set = new Set(t.kcd);
-      if (/기타진단/.test(w)) return ctx.dx.some(d => set.has(d));         // 주진단 또는 기타진단
+      // 「주진단명 또는 기타진단명」과 「기타진단명」은 **다른 조건이다.**
+      //   주진단명 또는 기타진단명 → 주진단·기타진단 아무 데나 있으면 참
+      //   기타진단명              → **기타진단에만** 있어야 참 (주진단은 안 본다)
+      // 둘을 같이 취급해서 O641「심각한 복잡 진단을 동반하는 산전 질환」이 잘못 참이 됐다 —
+      // 주진단 O140(경증 자간전증)이 O641 의 「기타진단명 table2」에 들어 있어서,
+      // 기타진단이 하나도 없는 명세서까지 O641 로 갔다(2026-08-26, P431.GHP).
+      // ctx.dx 는 **주진단이 반드시 첫 자리**다(kgClassify · kgCompare · kgHints 모두).
+      if (/주진단명\s*또는\s*기타진단/.test(w)) return ctx.dx.some(d => set.has(d));
+      if (/기타진단/.test(w)) return ctx.dx.slice(1).some(d => set.has(d));
       return set.has(ctx.mainDx);
     }
   }
