@@ -31,7 +31,7 @@
 function kgSettled(r){ return r.cmp.k === 'ok' || r.cmp.k === 'alt'; }
 
 /* onlyBad — 처음부터 「다른 것만 보기」로 연다. 맞은 것을 훑으려고 이 화면을 열지는 않는다. */
-const KG = { list: [], recs: [], sel: 0, q: '', seq: '', onlyBad: true, ROWS: 10 };
+const KG = { list: [], recs: [], sel: 0, q: '', seq: '', onlyBad: false, ROWS: 10 };
 
 /* ---------- 분류집 색인 ---------- */
 /* 표 이름을 맞출 때 쓰는 다듬기 — 책이 「시술명 table2」와 「시술명 table 2」를 섞어 쓴다 */
@@ -810,11 +810,8 @@ function kgRender(){
   gb.style.display = (KG_GR.on && KG.recs.length) ? '' : 'none';
   gb.disabled = KG_GR.busy;
   gb.textContent = KG_GR.busy ? '그루퍼 도는 중…' : (KG_GR.done ? '그루퍼 다시 돌리기' : '그루퍼로 검산');
-  // 그루퍼가 없을 때도 왜 없는지는 알려 준다 — 더블클릭·깃허브 페이지에서는 원리상 안 된다.
-  // (2026-08-26 물어보셨다. .exe 는 이 PC 에 깔린 프로그램이라 정적 호스팅에서는 못 돌린다.)
-  gn.innerHTML = !KG_GR.on
-      ? (KG.recs.length ? '<span class="meta-note">심평원 그루퍼로 검산하려면 <b>serve.ps1</b> 로 여세요 ' +
-          '(localhost:8392) — 그루퍼는 이 PC 에 깔린 프로그램이라 파일을 두 번 눌러 열거나 깃허브 페이지에서는 돌릴 수 없습니다</span>' : '')
+  // 그루퍼가 없으면 아무 말도 하지 않는다 — 단추가 없는 것으로 충분하다(2026-08-26 요청).
+  gn.innerHTML = !KG_GR.on ? ''
     : KG_GR.note ? '<span class="kg-bad">' + esc(KG_GR.note) + '</span>'
     : KG_GR.done ? '<span class="meta-note">심평원 그루퍼 ' + esc(KG_GR.ver) + ' 로 ' + KG_GR.done + '건 대조했습니다</span>'
     : '<span class="meta-note">심평원 그루퍼 ' + esc(KG_GR.ver) + ' 가 이 PC 에 있습니다</span>';
@@ -1094,7 +1091,10 @@ function kgRenderFind(){
    **파일에는 수진자 이름과 주민등록번호가 들어 있다.** 이 브라우저 안에만 남고 어디로도 보내지 않지만,
    디스크에 남는 것은 맞다. 「비우기」를 누르면 지운다.
    담기·꺼내기가 안 되는 브라우저(사생활 보호 모드 등)에서도 화면은 그대로 돌아간다 — 조용히 넘어간다. */
-const KG_DB = 'samguide-kdrg', KG_STORE = 'files', KG_VIEW = 'samguide_kdrg_view';
+// KG_VIEW 뒤의 숫자는 「담아 둔 설정을 한 번 버릴」 때 올린다 — 2 로 올린 이유는
+// 「다른 것만 보기」 기본값을 켜짐에서 꺼짐으로 바꿨는데(2026-08-26 요청), 예전에 켜진 채로
+// 담긴 값이 남아 있으면 바뀐 기본값이 보이지 않기 때문이다. 담아 둔 파일(IndexedDB)은 그대로 둔다.
+const KG_DB = 'samguide-kdrg', KG_STORE = 'files', KG_VIEW = 'samguide_kdrg_view2';
 
 function kgIdb(){
   return new Promise((res, rej) => {

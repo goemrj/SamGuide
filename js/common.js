@@ -532,7 +532,15 @@ function colwDefaultsText(){
     if (typeof v === 'number' && isFinite(v)) extra[k] = Math.round(v);
   });
   const merged = Object.assign({}, D, COLW, extra);   // 이 브라우저의 지금 값이 이긴다
-  const keys = Object.keys(merged).sort();
+  /* 옛 열쇠는 버린다 (2026-08-26).
+     본인부담금 규칙 표의 열쇠는 예전엔 `제목#표번호` 였는데 지금은 앞에 탭이 붙어
+     `hi-in|제목#표번호` 다. 옛 열쇠가 브라우저에 남아 있으면 굳힐 때마다 파일에 딸려 들어오는데,
+     화면은 탭이 붙은 열쇠로 찾으므로 **아무 데도 안 먹는 죽은 항목**이 된다.
+     (실제로 그렇게 23개가 쌓여 「굳혔는데 안 바뀐다」가 됐다.)
+     같은 이름에 탭만 붙은 열쇠가 이미 있으면 옛 것은 안 담는다. */
+  const keys = Object.keys(merged).sort().filter(k =>
+    k.indexOf('|') >= 0 || !/#\d+$/.test(k) ||
+    !Object.keys(merged).some(o => o !== k && o.endsWith('|' + k)));
   const head = [
     '/* ---------- 열 너비 기본값 (자동 생성 — 「열 너비 기본값으로 굳히기」가 다시 쓴다) ----------',
     '   끌어서 바꾼 너비를 소스에 박아 둔 것이다. 깃에 올라가므로 브라우저 데이터를 지우든',
