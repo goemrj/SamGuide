@@ -694,7 +694,7 @@ function kgRenderList(){
   h += '</tbody></table></div></div>';
   $('kg-list').innerHTML = h;
   $('kg-list').querySelectorAll('.kg-row').forEach(tr => tr.addEventListener('click', () => {
-    KG.sel = +tr.dataset.i; kgRenderList(); kgRenderDetail();
+    KG.sel = +tr.dataset.i; kgRenderList(); kgRenderDetail(); kgKeepView();
   }));
   kgFitList();
 }
@@ -865,6 +865,55 @@ function kgRenderFind(){
   $('kg-find').innerHTML = h;
 }
 
+/* ---------- 놓은 파일 기억하기 (2026-08-26 요청) ----------
+   새로고침해도 파일이 날아가지 않게 **원본 바이트를 IndexedDB 에 담아 둔다.**
+   localStorage 는 몇 MB 에서 막혀 SAM 파일(20MB 넘는 것도 있다)을 못 담는다.
+   담아 두는 것은 파일 그대로다 — 다시 열 때 지금 코드로 새로 읽으므로 분류 규칙을 고치면 그대로 따라간다.
+
+   **파일에는 수진자 이름과 주민등록번호가 들어 있다.** 이 브라우저 안에만 남고 어디로도 보내지 않지만,
+   디스크에 남는 것은 맞다. 「비우기」를 누르면 지운다.
+   담기·꺼내기가 안 되는 브라우저(사생활 보호 모드 등)에서도 화면은 그대로 돌아간다 — 조용히 넘어간다. */
+const KG_DB = 'samguide-kdrg', KG_STORE = 'files', KG_VIEW = 'samguide_kdrg_view';
+
+function kgIdb(){
+  return new Promise((res, rej) => {
+    const q = indexedDB.open(KG_DB, 1);
+    q.onupgradeneeded = () => q.result.createObjectStore(KG_STORE);
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+async function kgKeep(list){
+  try {
+    const db = await kgIdb();
+    await new Promise((res, rej) => {
+      const t = db.transaction(KG_STORE, 'readwrite'), s = t.objectStore(KG_STORE);
+      if (list && list.length) s.put(list.map(f => ({name: f.name, bytes: f.bytes})), 'list');
+      else s.delete('list');
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    });
+    db.close();
+  } catch (e) { /* 담아 두지 못해도 지금 화면은 그대로 쓴다 */ }
+}
+async function kgKept(){
+  try {
+    const db = await kgIdb();
+    const v = await new Promise((res, rej) => {
+      const r = db.transaction(KG_STORE, 'readonly').objectStore(KG_STORE).get('list');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    db.close();
+    return v || null;
+  } catch (e) { return null; }
+}
+/* 보고 있던 자리(고른 줄 · 찾던 번호 · 필터)는 작아서 localStorage 로 충분하다 */
+function kgKeepView(){
+  try { localStorage.setItem(KG_VIEW, JSON.stringify({sel: KG.sel, seq: KG.seq, onlyBad: KG.onlyBad})); } catch (e) {}
+}
+function kgKeptView(){
+  try { return JSON.parse(localStorage.getItem(KG_VIEW) || 'null'); } catch (e) { return null; }
+}
+
 /* ---------- 파일 받기 ---------- */
 async function kgTakeFiles(fileList){
   const list = [];
@@ -876,6 +925,7 @@ async function kgTakeFiles(fileList){
   KG.sel = 0;
   KG.seq = ''; $('kg-seq').value = '';        // 새 파일을 놓으면 찾던 번호는 지운다
   kgRender();
+  kgKeep(list); kgKeepView();
 }
 
 $('kg-pick').addEventListener('click', () => $('kg-file').click());
@@ -883,8 +933,9 @@ $('kg-file').addEventListener('change', e => { if (e.target.files.length) kgTake
 $('kg-clear').addEventListener('click', () => {
   KG.list = []; KG.recs = []; KG.sel = 0; KG.seq = '';
   $('kg-file').value = ''; $('kg-seq').value = ''; kgRender();
+  kgKeep(null); kgKeepView();               // 담아 둔 파일도 함께 지운다
 });
-$('kg-only').addEventListener('change', e => { KG.onlyBad = e.target.checked; kgRenderList(); });
+$('kg-only').addEventListener('change', e => { KG.onlyBad = e.target.checked; kgRenderList(); kgKeepView(); });
 $('kg-seq').addEventListener('input', e => {
   KG.seq = e.target.value;
   // 찾은 것이 있으면 첫 줄을 골라 아래 분류 과정까지 바로 보여 준다
@@ -893,7 +944,7 @@ $('kg-seq').addEventListener('input', e => {
     const i = KG.recs.findIndex(r => kgSeqHit(r, q));
     if (i >= 0) KG.sel = i;
   }
-  kgRenderList(); kgRenderDetail();
+  kgRenderList(); kgRenderDetail(); kgKeepView();
 });
 $('kg-search').addEventListener('input', e => { KG.q = e.target.value; kgRenderFind(); });
 
@@ -915,3 +966,19 @@ document.addEventListener('drop', e => {
 });
 
 kgRender();
+
+/* 지난번에 놓은 파일이 있으면 다시 읽는다 — 새로고침해도 그대로 이어 본다.
+   파일 그대로 담아 두었다가 지금 코드로 새로 읽으므로, 분류 규칙을 고치면 결과도 따라 바뀐다. */
+(async function kgResume(){
+  const kept = await kgKept();
+  if (!kept || !kept.length) return;
+  KG.list = kept.map(f => ({name: f.name, bytes: new Uint8Array(f.bytes)}));
+  KG.recs = kgReadFiles(KG.list);
+  const v = kgKeptView() || {};
+  if (v.onlyBad !== undefined) KG.onlyBad = !!v.onlyBad;
+  KG.seq = v.seq || '';
+  KG.sel = (v.sel >= 0 && v.sel < KG.recs.length) ? v.sel : 0;
+  $('kg-only').checked = KG.onlyBad;
+  $('kg-seq').value = KG.seq;
+  kgRender();
+})();
