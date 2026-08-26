@@ -879,7 +879,9 @@ function kgRenderDetail(){
     '<span>요양개시 <b>' + esc(ymd(r.start) || '—') + '</b></span>' +
     '<span>분류집 <b>V' + esc(r.ver) + '</b>' +
       (r.verWant && r.verWant.v !== r.ver
-        ? ' <span class="kg-bad">(진료일은 V' + esc(r.verWant.v) + ' 인데 그 판 자료가 없어 V' + esc(r.ver) + ' 로 봤습니다)</span>'
+        // 화면에는 V1.4~1.6 세 판만 있다. 그루퍼는 요양개시일로 옛 판까지 골라 주므로 그쪽을 권한다.
+        ? ' <span class="kg-bad">(진료일은 V' + esc(r.verWant.v) + ' 인데 그 판 자료가 없어 V' + esc(r.ver) + ' 로 봤습니다' +
+          (KG_GR.on ? ' — <b>그루퍼로 검산</b>하면 그때 판으로 돌려 줍니다' : ' — 그루퍼는 그때 판으로 돌려 줍니다') + ')</span>'
         : '') + '</span>' +
     (r.wt !== null ? '<span>신생아체중 <b>' + r.wt + 'g</b> <span class="kg-dim">MS004</span></span>' : '') +
     (r.vent !== null ? '<span>인공호흡 <b>' + r.vent + '시간</b> <span class="kg-dim">MT026</span></span>' : '') +
