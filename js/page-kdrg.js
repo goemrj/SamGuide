@@ -36,8 +36,10 @@ const KG = { list: [], recs: [], sel: 0, q: '', seq: '', onlyBad: true, ROWS: 10
 /* ---------- 분류집 색인 ---------- */
 /* 표 이름을 맞출 때 쓰는 다듬기 — 책이 「시술명 table2」와 「시술명 table 2」를 섞어 쓴다 */
 function kgNorm(s){
-  return String(s).replace(/([가-힣])(table\d)/gi, '$1 $2')
+  return String(s).replace(/([가-힣])([Tt]able\d)/g, '$1 $2')
                   .replace(/table\s*(\d+)/gi, 'table$1')
+                  // 책이 표를 가리킬 때 「주진단table1」처럼 「명」을 빠뜨린 데가 있다(F079 · 책 273·286쪽)
+                  .replace(/주진단(?!명)(?=\s*[Tt]able)/g, '주진단명')
                   .replace(/\s+/g, ' ').trim();
 }
 
@@ -163,15 +165,23 @@ function kgParse(tokens, ctx){
    그대로 두면 있지도 않은 E8040 이 답으로 나온다. 그래서 후보를 모을 때 부표2로 걸러 낸다. */
 function kgAadrg(c){ return c.length >= 5 ? c.slice(0, 5) : (c.length === 4 ? c + '0' : c + '00'); }
 
-/* 정의식이 몇 가지 조건을 걸고 있나 — 같은 표묶음 안에서 어느 쪽이 더 좁은 정의인지 가리는 데 쓴다 */
-function kgSpec(def){
-  let n = 0, run = false;
-  for (const t of kgLex(def || '')){
-    if (t === '(' || t === ')' || KG_OPS.has(t)){ run = false; continue; }
-    if (!run){ n++; run = true; }
-  }
-  return n;
+/* a 가 b 에 조건을 **더 붙인** 정의인가 — 같은 그룹 안에서 어느 쪽이 좁은지 가린다.
+   책은 갈림길의 「아닌 쪽」을 조건 없이 적는다.
+     H032 = 시술명 table1 **and 부가코드**   (복강경)
+     H034 = 시술명 table1                    (기타 — 복강경이 아니라는 말은 안 적혀 있다)
+   그래서 H032 가 H034 를 덮는다. 「(A) and B」처럼 앞을 묶어 적은 것도 같이 본다(P651). */
+function kgExtends(a, b){
+  const A = kgNorm(a || ''), B = kgNorm(b || '');
+  if (!A || !B || A === B) return false;
+  const q = B.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('^\\(?' + q + '\\)?\\s+(and|without)\\s').test(A);
 }
+
+/* 책에 적힌 차례 — 조건이 서로 겹치기만 하고 어느 쪽도 상대를 덮지 않으면(나란한 갈래) 앞에 적힌 것이 이긴다.
+   E63(호흡기 신생물)이 그 예다. E631 방사선치료 · E632 전신화학요법 · E633 둘 다 아님 순으로 적혀 있고,
+   둘 다 받은 환자는 앞의 E631 로 간다. */
+const KG_ORD = {};
+KDRG_DEF.forEach((d, i) => { if (KG_ORD[d.c] === undefined) KG_ORD[d.c] = i; });
 
 /* 낱말 하나(항목)를 따진다. 분류집의 표를 가리키면 환자 값과 맞춰 보고, 아니면 모름. */
 function kgTerm(word, ctx){
@@ -357,14 +367,16 @@ function kgGroup(pt){
      그래서 앞자리가 같으면서 더 긴 코드(E8042)가 참이면 머리줄(E804)은 물린다. */
   const narrower = (o, it) =>
     o !== it && o.d.ts === it.d.ts && o.d.grp === it.d.grp &&
-    (kgSpec(o.d.def) > kgSpec(it.d.def) ||
+    (kgExtends(o.d.def, it.d.def) ||
      (o.d.c.length > it.d.c.length && o.d.c.indexOf(it.d.c) === 0));
   const prune = list => list.filter(it => !list.some(o => narrower(o, it)));
   out.hit = prune(out.hit);
   out.maybe = prune(out.maybe.filter(it => !out.hit.some(o => narrower(o, it))));
 
-  out.hit.sort((a, b) => rank(a) - rank(b));
-  out.maybe.sort((a, b) => rank(a) - rank(b));
+  // 순위가 같으면(내과계처럼 우선순위표에 없는 것들) 책에 적힌 차례를 따른다
+  const cmp = (a, b) => (rank(a) - rank(b)) || ((KG_ORD[a.d.c] || 0) - (KG_ORD[b.d.c] || 0));
+  out.hit.sort(cmp);
+  out.maybe.sort(cmp);
 
   if (out.hit.length){
     out.pick = out.hit[0];
@@ -581,9 +593,34 @@ function kgHints(r){
   if (!KG_ADRG[want4] && !KG_ERR[want4.slice(0, 3)])
     out.push('파일의 <b class="kg-code">' + esc(want4) + '</b> 는 이 판(Version 1.6)의 ADRG 목록에 없습니다 — ' +
              '다른 판(1.4 · 1.5 등)으로 분류된 명세서일 수 있습니다.');
-  else if (KG_ADRG[want4] && KG_ADRG[want4].p === 'S' && !r.codes.some(c => KG_OR.has(c.code)))
-    out.push('파일은 <b>외과 질병군</b>(' + esc(KG_ADRG[want4].n) + ')인데 L항 51~56목에 <b>OR procedure 코드가 하나도 없습니다</b> — ' +
-             '질병군 분류내역이 빠졌는지 확인해 보세요.');
+  else {
+    const codes = new Set(r.codes.map(c => c.code));
+    const ds = KDRG_DEF.filter(d => d.c === want4 || d.c.slice(0, 4) === want4);
+    const miss = [], unk = [];
+    for (const d of ds){
+      if (!d.def) continue;
+      const def = kgNorm(d.def), t = KG_TBL[d.ts] || {};
+      // 이 정의가 가리키는 시술 표 가운데 환자 코드가 하나도 없는 것
+      for (const k of Object.keys(t)){
+        if (!/시술명/.test(k) || !t[k].rows || def.indexOf(kgNorm(k)) < 0) continue;
+        if (!t[k].rows.some(x => codes.has(x[1])) && !miss.some(m => m.k === k))
+          miss.push({k: k, eg: t[k].rows[0]});
+      }
+      // 파일에서 따져 볼 수 없는 조건
+      const ctx = {ts: d.ts, mdc: d.mdc, codes: codes, dx: [r.mainDx].concat(r.dx), mainDx: r.mainDx,
+                   los: r.los === '' ? null : +r.los, result: r.res, age: r.age,
+                   ageDays: r.ageDays, wt: r.wt, vent: r.ventUsed, unknown: []};
+      kgParse(kgLex(d.def), ctx);
+      ctx.unknown.forEach(u => { if (unk.indexOf(u) < 0) unk.push(u); });
+    }
+    if (miss.length)
+      out.push('파일의 <b class="kg-code">' + esc(want4) + '</b>(' + esc((KG_ADRG[want4] || {}).n || '') + ')은 ' +
+               miss.map(m => '「' + esc(m.k) + '」(' + esc(m.eg[2]) + ' 등)').join(' · ') +
+               ' 가 있어야 하는데 L항 51~56목에 그 표의 코드가 <b>없습니다</b> — 질병군 분류내역이 빠졌는지 확인해 보세요.');
+    if (unk.length)
+      out.push('파일의 <b class="kg-code">' + esc(want4) + '</b> 는 ' + unk.map(u => '「' + esc(u) + '」').join(' · ') +
+               ' 조건을 걸고 있는데 <b>여기서는 따져 볼 수 없습니다</b> — 다른 질병군을 가리키는 조건이라 분류집만으로는 풀리지 않습니다.');
+  }
   return out;
 }
 
