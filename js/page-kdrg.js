@@ -27,7 +27,7 @@
    ------------------------------------------------------------------------ */
 
 /* onlyBad — 처음부터 「다른 것만 보기」로 연다. 맞은 것을 훑으려고 이 화면을 열지는 않는다. */
-const KG = { list: [], recs: [], sel: 0, q: '', onlyBad: true, ROWS: 10 };
+const KG = { list: [], recs: [], sel: 0, q: '', seq: '', onlyBad: true, ROWS: 10 };
 
 /* ---------- 분류집 색인 ---------- */
 /* 표 이름을 맞출 때 쓰는 다듬기 — 책이 「시술명 table2」와 「시술명 table 2」를 섞어 쓴다 */
@@ -604,15 +604,31 @@ function kgRender(){
   setStickTop();
 }
 
+/* 명일련번호로 찾기 — 파일에는 00123 처럼 앞을 0 으로 채워 적혀 있어서 「123」으로 쳐도 걸리게 한다.
+   수진자 이름 · 파일의 질병군번호 · 주진단으로도 걸린다. 찾는 말이 있으면 「다른 것만 보기」는 잠시 접는다 —
+   번호를 짚어 찾는데 맞은 명세서라고 안 보이면 못 찾는 것과 같다. */
+function kgSeqHit(r, q){
+  if (!q) return true;
+  const seq = String(r.seq || '').replace(/^0+/, '');
+  // 숫자만 쳤으면 명일련번호로만 본다 — 질병군번호·주진단에 든 숫자까지 걸리면 너무 넓어진다
+  if (/^[0-9]+$/.test(q)) return seq.indexOf(q.replace(/^0+/, '')) === 0;
+  return sgHit((r.seq || '') + ' ' + (r.name || '') + ' ' + (r.drg || '') + ' ' + (r.mainDx || ''), q);
+}
+
 function kgRenderList(){
   if (!KG.recs.length){ $('kg-list').innerHTML = ''; return; }
-  const rows = KG.recs.filter(r => !KG.onlyBad || r.cmp.k !== 'ok');
+  const q = KG.seq.trim();
+  const rows = KG.recs.filter(r => (q ? kgSeqHit(r, q) : (!KG.onlyBad || r.cmp.k !== 'ok')));
   let h = '<div class="card"><div class="meta-bar" id="kg-listmeta">' +
-    '<span>명세서 <b>' + rows.length + '</b>' + (KG.onlyBad ? ' / ' + KG.recs.length : '') + '</span>' +
+    '<span>명세서 <b>' + rows.length + '</b>' + (rows.length !== KG.recs.length ? ' / ' + KG.recs.length : '') + '</span>' +
+    (q ? '<span class="meta-note">「' + esc(q) + '」 찾는 중 — 「다른 것만 보기」는 잠시 접었습니다</span>' : '') +
     '<span class="meta-note">' + (rows.length > KG.ROWS ? KG.ROWS + '줄씩 보이고 나머지는 표 안에서 스크롤합니다 · ' : '') +
     '줄을 누르면 아래에 분류 과정이 펼쳐집니다</span></div>';
   if (!rows.length){
-    h += '<div class="empty">' + (KG.onlyBad ? '모두 일치합니다 — 전체를 보려면 「다른 것만 보기」를 꺼 주세요.' : '명세서가 없습니다.') + '</div></div>';
+    h += '<div class="empty">' +
+      (q ? '「' + esc(q) + '」 에 걸리는 명세서가 없습니다.'
+         : KG.onlyBad ? '모두 일치합니다 — 전체를 보려면 「다른 것만 보기」를 꺼 주세요.'
+         : '명세서가 없습니다.') + '</div></div>';
     $('kg-list').innerHTML = h;
     return;
   }
@@ -625,9 +641,11 @@ function kgRenderList(){
     const i = KG.recs.indexOf(r);
     const src = r.res2.pick || r.res2.maybe[0];
     h += '<tr class="kg-row' + (i === KG.sel ? ' on' : '') + '" data-i="' + i + '">' +
-      '<td>' + esc(r.seq) + '</td><td>' + esc(r.name || '') + '</td><td class="kg-code">' + esc(r.mainDx) + '</td>' +
+      '<td>' + (q ? hilite(r.seq, q) : esc(r.seq)) + '</td>' +
+      '<td>' + (q ? hilite(r.name || '', q) : esc(r.name || '')) + '</td>' +
+      '<td class="kg-code">' + esc(r.mainDx) + '</td>' +
       '<td>' + (r.age === null ? '—' : r.age) + '</td><td>' + esc(r.los || '') + '</td>' +
-      '<td class="kg-code">' + esc(r.drg || '—') + '</td>' +
+      '<td class="kg-code">' + (q ? hilite(r.drg || '—', q) : esc(r.drg || '—')) + '</td>' +
       '<td class="kg-code">' + (r.res2.aadrg ? esc(r.res2.aadrg) : '—') + '</td>' +
       '<td><span class="kg-tag kg-' + r.cmp.k + '">' + esc(r.cmp.t) + '</span></td>' +
       '<td>' + (src ? esc(src.d.n) : '<span class="saved-note">' + esc(r.res2.note) + '</span>') + '</td></tr>';
@@ -815,15 +833,27 @@ async function kgTakeFiles(fileList){
   KG.list = list;
   KG.recs = kgReadFiles(list);
   KG.sel = 0;
+  KG.seq = ''; $('kg-seq').value = '';        // 새 파일을 놓으면 찾던 번호는 지운다
   kgRender();
 }
 
 $('kg-pick').addEventListener('click', () => $('kg-file').click());
 $('kg-file').addEventListener('change', e => { if (e.target.files.length) kgTakeFiles(e.target.files); });
 $('kg-clear').addEventListener('click', () => {
-  KG.list = []; KG.recs = []; KG.sel = 0; $('kg-file').value = ''; kgRender();
+  KG.list = []; KG.recs = []; KG.sel = 0; KG.seq = '';
+  $('kg-file').value = ''; $('kg-seq').value = ''; kgRender();
 });
 $('kg-only').addEventListener('change', e => { KG.onlyBad = e.target.checked; kgRenderList(); });
+$('kg-seq').addEventListener('input', e => {
+  KG.seq = e.target.value;
+  // 찾은 것이 있으면 첫 줄을 골라 아래 분류 과정까지 바로 보여 준다
+  const q = KG.seq.trim();
+  if (q){
+    const i = KG.recs.findIndex(r => kgSeqHit(r, q));
+    if (i >= 0) KG.sel = i;
+  }
+  kgRenderList(); kgRenderDetail();
+});
 $('kg-search').addEventListener('input', e => { KG.q = e.target.value; kgRenderFind(); });
 
 function kgDropOn(){ return $('page-kdrg').classList.contains('on'); }
