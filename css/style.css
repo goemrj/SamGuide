@@ -1043,6 +1043,8 @@ table.fields.sc-fields th{position:relative; top:auto; z-index:auto;}
 .kg-tag.kg-none{background:var(--group-tint);  color:var(--text-4);   box-shadow:inset 0 0 0 1px var(--line);}
 .kg-tag.kg-bad {background:transparent;        color:var(--minus);    box-shadow:inset 0 0 0 1px var(--minus);}
 .kg-bad b{color:var(--minus);}
+/* 목록의 「그루퍼」 칸 — 도출과 다르면 그 칸만 빨갛게 (꼬리표를 하나 더 늘리지 않는다) */
+td.kg-bad{color:var(--minus); font-weight:700;}
 .kg-cand{margin:0;}
 .kg-cand tr.kg-pick{background:var(--accent-tint);}
 .kg-cand tr.kg-pick td{font-weight:600;}

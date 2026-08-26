@@ -521,7 +521,7 @@ const KG_F = {
   A: {seq: kgPos('A', '명세서일련번호'), kind: kgPos('A', '내역구분'), form: kgPos('A', '서식번호'),
       drg: kgPos('A', '질병군번호'), name: kgPos('A', '수진자성명'), jumin: kgPos('A', '수진자주민등록번호'),
       los: kgPos('A', '입원일수'), start: kgPos('A', '최초입원개시일'), res: kgPos('A', '진료결과'),
-      cn: kgPos('A', '청구번호')},
+      inst: kgPos('A', '요양기관기호'), cn: kgPos('A', '청구번호')},
   B: {seq: kgPos('B', '명세서일련번호'), kind: kgPos('B', '내역구분'), gubun: kgPos('B', '상병분류구분'),
       code: kgPos('B', '상병분류기호'), open: kgPos('B', '당월요양개시일'), cn: kgPos('B', '청구번호')},
   C: {seq: kgPos('C', '명세서일련번호'), kind: kgPos('C', '내역구분'), hang: kgPos('C', '항'),
@@ -599,6 +599,7 @@ function kgReadFiles(list){
         r.los = kgCut(b, KG_F.A.los).replace(/^0+/, '');
         r.start = kgCut(b, KG_F.A.start);
         r.res = kgCut(b, KG_F.A.res);
+        r.inst = kgCut(b, KG_F.A.inst);
       } else if (kind === 'B'){
         const c = kgCut(b, KG_F.B.code);
         if (!c) continue;
@@ -738,7 +739,24 @@ function kgRender(){
       const ks = Object.keys(c).sort().reverse();
       return ks.length ? '<span>분류집 ' + ks.map(k => 'V' + k + (ks.length > 1 ? ' ' + c[k] : '')).join(' · ') + '</span>' : '';
     })() +
+    (function(){                       // 그루퍼로 검산했으면 그 결과도 한 줄에 같이
+      if (!KG_GR.done) return '';
+      const same = KG.recs.filter(r => r.grCmp === 'ok').length;
+      const diff = KG.recs.filter(r => r.grCmp === 'diff').length;
+      return '<span>그루퍼와 같음 <b>' + same + '</b></span>' +
+             (diff ? '<span class="kg-bad">그루퍼와 다름 <b>' + diff + '</b></span>' : '');
+    })() +
     '<span class="meta-note">앞 5자리(AADRG)로 대조</span>';
+
+  /* 그루퍼 단추 — serve.ps1 로 열었고 이 PC 에 그루퍼가 있을 때만 나타난다 */
+  const gb = $('kg-gr'), gn = $('kg-grnote');
+  gb.style.display = (KG_GR.on && KG.recs.length) ? '' : 'none';
+  gb.disabled = KG_GR.busy;
+  gb.textContent = KG_GR.busy ? '그루퍼 도는 중…' : (KG_GR.done ? '그루퍼 다시 돌리기' : '그루퍼로 검산');
+  gn.innerHTML = !KG_GR.on ? '' : KG_GR.note ? '<span class="kg-bad">' + esc(KG_GR.note) + '</span>'
+    : KG_GR.done ? '<span class="meta-note">심평원 그루퍼 ' + esc(KG_GR.ver) + ' 로 ' + KG_GR.done + '건 대조했습니다</span>'
+    : '<span class="meta-note">심평원 그루퍼 ' + esc(KG_GR.ver) + ' 가 이 PC 에 있습니다</span>';
+
   kgRenderList();
   kgRenderDetail();
   kgRenderFind();
@@ -759,7 +777,11 @@ function kgSeqHit(r, q){
 function kgRenderList(){
   if (!KG.recs.length){ $('kg-list').innerHTML = ''; return; }
   const q = KG.seq.trim();
-  const rows = KG.recs.filter(r => (q ? kgSeqHit(r, q) : (!KG.onlyBad || !kgSettled(r))));
+  // 「다른 것만 보기」에는 **그루퍼만 다르게 본 것**도 함께 띄운다 — 파일과 도출이 맞았는데
+  // 그루퍼가 다른 답을 내면 그게 제일 볼 만한 줄이다(분류집에 없는 규칙이 걸린 자리).
+  // 「기타진단으로 일치」는 여기서도 빼 둔다 — 이미 맞는 것으로 보기로 했다(2026-08-26 요청).
+  const worth = r => !kgSettled(r) || (r.grCmp === 'diff' && r.cmp.k === 'ok');
+  const rows = KG.recs.filter(r => (q ? kgSeqHit(r, q) : (!KG.onlyBad || worth(r))));
   let h = '<div class="card"><div class="meta-bar" id="kg-listmeta">' +
     '<span>명세서 <b>' + rows.length + '</b>' + (rows.length !== KG.recs.length ? ' / ' + KG.recs.length : '') + '</span>' +
     (q ? '<span class="meta-note">「' + esc(q) + '」 찾는 중 — 「다른 것만 보기」는 잠시 접었습니다</span>' : '') +
@@ -773,10 +795,12 @@ function kgRenderList(){
     $('kg-list').innerHTML = h;
     return;
   }
+  const gcol = !!KG_GR.done;                 // 그루퍼로 검산했을 때만 그 칸을 낸다
   h += '<div class="kg-listbox"><table class="fields kg-tb"><thead><tr>' +
     '<th style="width:78px;">명일련</th><th style="width:88px;">수진자</th><th style="width:64px;">주진단</th>' +
     '<th style="width:52px;">나이</th><th style="width:64px;">입원일수</th>' +
     '<th style="width:86px;">파일 번호</th><th style="width:86px;">도출 5자리</th>' +
+    (gcol ? '<th style="width:86px;">그루퍼</th>' : '') +
     '<th style="width:70px;">대조</th><th>질병군</th></tr></thead><tbody>';
   for (const r of rows){
     const i = KG.recs.indexOf(r);
@@ -788,6 +812,8 @@ function kgRenderList(){
       '<td>' + (r.age === null ? '—' : r.age) + '</td><td>' + esc(r.los || '') + '</td>' +
       '<td class="kg-code">' + (q ? hilite(r.drg || '—', q) : esc(r.drg || '—')) + '</td>' +
       '<td class="kg-code">' + (r.res2.aadrg ? esc(r.res2.aadrg) : '—') + '</td>' +
+      (gcol ? '<td class="kg-code' + (r.grCmp === 'diff' ? ' kg-bad' : '') + '">' +
+                (r.gr ? esc(r.gr.drg) : '—') + '</td>' : '') +
       '<td><span class="kg-tag kg-' + r.cmp.k + '">' + esc(r.cmp.t) + '</span></td>' +
       '<td>' + (src ? esc(src.d.n) : '<span class="saved-note">' + esc(r.res2.note) + '</span>') + '</td></tr>';
   }
@@ -903,6 +929,17 @@ function kgRenderDetail(){
            '별표 진단으로 분류된 경우일 수 있습니다. 분류집에 이원분류 대응표가 없어 규칙으로 삼지 않았습니다.</div>'
          : '') +
        kgHints(r).map(t => '<div class="saved-note">' + t + '</div>').join('') + '</td></tr>';
+
+  /* 심평원 그루퍼로 검산했으면 그 답도 나란히 놓는다 */
+  if (r.gr)
+    h += '<tr><th>심평원 그루퍼</th><td><b class="kg-code">' + esc(r.gr.drg) + '</b> ' +
+         '<span class="kg-dim">MDC ' + esc(r.gr.mdc) + ' · ADRG ' + esc(r.gr.adrg) + ' · PCCL ' + esc(r.gr.pccl) + '</span> ' +
+         (r.grCmp === 'ok' ? '<span class="kg-tag kg-ok">도출과 같음</span>'
+                           : '<span class="kg-tag kg-bad">도출과 다름</span>') +
+         (r.grCmp === 'diff'
+           ? '<div class="saved-note">화면은 <b>분류집만으로</b> 분류합니다. 그루퍼는 분류집에 없는 ' +
+             '<b>이원분류표(Npo_Tdag_ast)</b>와 <b>CC edit(Npo_Tccedit)</b>을 함께 갖고 있어, 어긋나면 대개 그 둘 때문입니다.</div>'
+           : '') + '</td></tr>';
   h += '</tbody></table>';
 
   /* L항 51~56 */
@@ -1024,6 +1061,104 @@ function kgKeptView(){
   try { return JSON.parse(localStorage.getItem(KG_VIEW) || 'null'); } catch (e) { return null; }
 }
 
+/* ---------- 심평원 그루퍼로 검산 (2026-08-26) ----------
+   화면은 **분류집만으로** 분류한다. 분류집에 없는 규칙(이원분류 †/* · CC edit)이 있어서
+   심평원 그루퍼와 어긋날 때가 있는데, 그걸 여기서 바로 대조한다.
+
+   **브라우저는 .exe 를 못 돌린다.** 그래서 `serve.ps1` 로 열었을 때만 이 기능이 붙는다 —
+   화면이 그루퍼 입력줄을 만들어 localhost 로 보내면 서버가 Npo_kdrg11.exe 를 대신 돌리고
+   결과(.out)를 그대로 돌려준다. **바깥으로 나가는 것은 없다.**
+   index.html 을 두 번 눌러 연 경우에는 단추가 아예 나타나지 않고 나머지는 그대로 돌아간다.
+
+   입력 자리는 「NPO Grouper Program Manual」 붙임1 그대로다 — `tools/kdrg-in.awk` 와 같은 서식이다. */
+
+const KG_GR = {on: false, ver: '', dir: '', busy: false, note: '', done: 0};
+
+function kgPad(s, n){ s = String(s === null || s === undefined ? '' : s).slice(0, n); return s + ' '.repeat(n - s.length); }
+function kgPadL(s, n){ s = String(s === null || s === undefined ? '' : s).slice(0, n); return ' '.repeat(n - s.length) + s; }
+
+/* 명세서 하나 → 그루퍼 입력 한 줄(405칸).
+   **주민번호 뒷자리는 매뉴얼대로 가린다** — 앞 7자리만 두고 나머지를 9 로 채운다.
+   그루퍼는 나이·성별만 보므로 이걸로 충분하고, 주민번호가 그대로 나가지 않는다. */
+function kgInLine(r){
+  const many = (arr, cnt, len) => { let t = ''; for (let i = 0; i < cnt; i++) t += kgPad(arr[i] || '', len); return t; };
+  const by = {'51': [], '52': [], '53': [], '54': [], '55': [], '56': []};
+  let ncv = '';
+  for (const c of r.codes){
+    if (c.code.length !== 5) continue;
+    if (/^NCV/.test(c.code)){ ncv = c.code; continue; }   // 알콜·약물중독 재활은 어느 목에 적히든 제 칸으로
+    if (by[c.mok]) by[c.mok].push(c.code);
+  }
+  const j = String(r.jumin || '').replace(/\D/g, '');
+  const dx = [r.mainDx].concat(r.dx).filter(Boolean).slice(0, 10);   // 주진단이 반드시 첫 자리
+  let s = '';
+  s += kgPad(r.inst, 8);                                //   1 요양기관기호
+  s += kgPad(j.slice(0, 7) + '999999', 13);             //   9 주민번호 (뒷자리를 가린다)
+  s += kgPad(r.start, 8);                               //  22 요양개시일
+  s += kgPadL(r.los || '', 3);                          //  30 입원일수
+  s += kgPad(r.res || '', 1);                           //  33 진료결과
+  s += many(dx, 10, 6);                                 //  34 진단 10개
+  s += many(by['53'], 10, 5);                           //  94 시술 10개
+  s += many(by['54'], 5, 5);                            // 144 검사
+  s += many(by['55'], 5, 5);                            // 169 방사선
+  s += many(by['51'], 5, 5);                            // 194 주사 및 혈액제제
+  s += many(by['52'], 5, 5);                            // 219 마취 및 호흡치료
+  s += kgPad(ncv, 5);                                   // 244 알콜 및 약물중독 재활
+  s += many(by['56'], 5, 5);                            // 249 부가코드
+  s += kgPadL(r.wt === null ? '' : r.wt, 5);            // 274 입원시체중(g)
+  s += kgPadL(r.vent === null ? '' : r.vent, 5);        // 279 인공호흡시간(hour)
+  s += kgPad('', 22);                                   // 284 MDC·ADRG·PCCL·DRG·판 — 그루퍼가 채운다
+  s += kgPad(r.seq, 100);                               // 306 공란 — 되짚을 열쇠로 명일련을 적어 둔다
+  return s.replace(/ +$/, '');
+}
+
+/* serve.ps1 로 열었는지 · 이 PC 에 그루퍼가 있는지 확인한다. 없으면 조용히 넘어간다. */
+async function kgGrouperProbe(){
+  try {
+    const res = await fetch('grouper', {cache: 'no-store'});
+    if (!res.ok) return;
+    const j = await res.json();
+    if (!j || !j.ok) return;
+    KG_GR.on = true; KG_GR.ver = j.version || ''; KG_GR.dir = j.dir || '';
+    kgRender();
+  } catch (e) { /* file:// 로 열었거나 serve.ps1 이 아니면 없는 기능이 된다 */ }
+}
+
+async function kgRunGrouper(){
+  if (!KG_GR.on || KG_GR.busy || !KG.recs.length) return;
+  KG_GR.busy = true; KG_GR.note = ''; kgRender();
+  try {
+    const body = KG.recs.map(kgInLine).join('\r\n') + '\r\n';
+    const res = await fetch('grouper', {method: 'POST', headers: {'Content-Type': 'text/plain'}, body: body});
+    if (!res.ok){ KG_GR.note = (await res.text()) || ('그루퍼가 답하지 않았습니다 (' + res.status + ')'); return; }
+    const out = await res.text();
+    const bySeq = {};
+    for (const line of out.split(/\r?\n/)){
+      if (line.length < 310) continue;
+      bySeq[line.slice(305, 310).trim()] = {
+        mdc: line.slice(283, 286).trim(), adrg: line.slice(286, 290).trim(),
+        pccl: line.slice(290, 291).trim(), drg: line.slice(291, 297).trim(),
+      };
+    }
+    let n = 0;
+    for (const r of KG.recs){
+      const g = bySeq[r.seq];
+      if (!g || !g.drg){ r.gr = null; continue; }
+      r.gr = g;
+      // 화면은 5자리(AADRG)까지만 낸다 — 중증도 한 자리는 CC edit 규정이 분류집에 없어 내지 않는다.
+      // 그루퍼는 6자리를 내므로 **앞 5자리로 견준다.**
+      r.grCmp = g.drg.slice(0, 5) === (r.res2.aadrg || '') ? 'ok' : 'diff';
+      n++;
+    }
+    KG_GR.done = n;
+    if (!n) KG_GR.note = '그루퍼가 분류한 명세서가 없습니다.';
+  } catch (e) {
+    KG_GR.note = '그루퍼를 부르지 못했습니다 — ' + e.message;
+  } finally {
+    KG_GR.busy = false; kgRender();
+  }
+}
+
 /* ---------- 파일 받기 ---------- */
 async function kgTakeFiles(fileList){
   const list = [];
@@ -1034,16 +1169,18 @@ async function kgTakeFiles(fileList){
   KG.recs = kgReadFiles(list);
   await kgLoadNeeded(KG.recs);
   kgClassify(KG.recs);
+  KG_GR.done = 0; KG_GR.note = '';            // 새 파일이니 지난번 그루퍼 결과는 버린다
   KG.sel = 0;
   KG.seq = ""; $("kg-seq").value = "";        // 새 파일을 놓으면 찾던 번호는 지운다
   kgRender();
   kgKeep(list); kgKeepView();
 }
 
+$('kg-gr').addEventListener('click', kgRunGrouper);
 $('kg-pick').addEventListener('click', () => $('kg-file').click());
 $('kg-file').addEventListener('change', e => { if (e.target.files.length) kgTakeFiles(e.target.files); });
 $('kg-clear').addEventListener('click', () => {
-  KG.list = []; KG.recs = []; KG.sel = 0; KG.seq = '';
+  KG.list = []; KG.recs = []; KG.sel = 0; KG.seq = ''; KG_GR.done = 0; KG_GR.note = '';
   $('kg-file').value = ''; $('kg-seq').value = ''; kgRender();
   kgKeep(null); kgKeepView();               // 담아 둔 파일도 함께 지운다
 });
@@ -1078,6 +1215,7 @@ document.addEventListener('drop', e => {
 });
 
 kgRender();
+kgGrouperProbe();       // serve.ps1 로 열었으면 「그루퍼로 검산」 단추가 붙는다
 
 /* 지난번에 놓은 파일이 있으면 다시 읽는다 — 새로고침해도 그대로 이어 본다.
    파일 그대로 담아 두었다가 지금 코드로 새로 읽으므로, 분류 규칙을 고치면 결과도 따라 바뀐다. */
