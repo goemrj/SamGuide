@@ -51,7 +51,7 @@ function kgNorm(s){
 var KDRG_OLD = {};
 const KG_VERS = [
   {v: '1.6', from: '20260101'},
-  {v: '1.5', from: '20240101'},
+  {v: '1.5', from: '20240701'},        // 분류집 1.5 표지에 「2024. 7. 1.」 — 1.1. 이 아니다
   {v: '1.4', from: '20220101'},
   {v: '1.3', from: '20210101', none: true},
   {v: '1.2', from: '20160101', none: true},
