@@ -109,4 +109,6 @@ NR==1 { next }                                    # 첫 줄은 청구서(H)
     if(d=="MT026" && vent=="") vent=cut($0,40,5)+0;
   }
 }
-END{ flush(); printf "명세서 %d 건\n", n > "/dev/stderr" }
+# -v QUIET=1 이면 건수를 알리지 않는다 — PowerShell 5.1 은 네이티브 프로그램의 stderr 를
+# 오류로 감싸 버려서(NativeCommandError) 실행기에서 부를 때는 조용해야 한다.
+END{ flush(); if(!QUIET) printf "명세서 %d 건\n", n > "/dev/stderr" }
