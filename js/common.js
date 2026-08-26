@@ -309,13 +309,16 @@ function headCells(table){
   return [...r.cells];
 }
 /* 표를 가리키는 이름. 스스로 data-k 를 달아 둔 표(① 카드들 · 특정내역)는 그것을 쓰고,
-   나머지는 "화면id#표순서#열수" 로 만든다. */
+   나머지는 "화면id|머리글자" 로 만든다.
+   **표 순서로 만들면 안 된다** — 화면에 표가 늘고 주는 곳(신포괄 분류번호는 파일을 불러오면
+   목록 표가 하나 더 생긴다)에서는 같은 표의 번호가 밀려 저장해 둔 너비를 못 찾는다.
+   머리글자는 내용이 바뀌어도 그대로라 안정적이다. */
 function colwKey(table){
   if (table.dataset.k) return table.dataset.k;
   const page = table.closest('.page');
-  const all = [...(page || document).querySelectorAll('table')];
-  return (page ? page.id : 'x') + '#' + all.indexOf(table) +
-         '#' + (headCells(table) || []).length;
+  const head = headCells(table) || [];
+  const sig = head.map(c => c.textContent.replace(/\s+/g, ' ').trim()).join('/');
+  return (page ? page.id : 'x') + '|' + sig;
 }
 const COLW_MIN = 48;
 /* 이 행 수까지는 끌 때 표가 바로 따라 움직이고, 넘으면 안내선만 움직인다.
