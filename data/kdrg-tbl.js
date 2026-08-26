@@ -1,6 +1,6 @@
 /* ---------- KDRG 분류집 (신포괄지불제도용 Version 1.6) — 자동 생성 파일 (손으로 고치지 않는다) ----------
-   만든 것: tools/kdrg.awk → tools/kdrg-js.awk
-   원본:    「KDRG 분류집 (신포괄지불제도용 Version 1.6)」 (심평원, G000EV3-2025-175)
+   만든 것: tools/kdrg.awk → tools/kdrg-js.awk -v VER=1.6
+   원본:    「KDRG 분류집 (신포괄지불제도용 Version 1.6)」 (심평원)
 
    KDRG_TBL  질병군 정의가 가리키는 표
      ts    표묶음 번호 (KDRG_DEF.ts 와 짝)      name  표 이름 (시술명 table1 · 부가코드2 …)

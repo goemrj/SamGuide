@@ -13,10 +13,16 @@
 # ------------------------------------------------------------------
 BEGIN{
   if(OUT=="") OUT="data";
-  A=OUT "/kdrg-adrg.js"; T=OUT "/kdrg-tbl.js"; M=OUT "/kdrg-mdcdx.js"; S=OUT "/kdrg-sev.js";
-  hd="/* ---------- KDRG 분류집 (신포괄지불제도용 Version 1.6) — 자동 생성 파일 (손으로 고치지 않는다) ----------\n"\
-     "   만든 것: tools/kdrg.awk → tools/kdrg-js.awk\n"\
-     "   원본:    「KDRG 분류집 (신포괄지불제도용 Version 1.6)」 (심평원, G000EV3-2025-175)\n";
+  if(VER=="") VER="1.6";
+  # 지금 판(1.6)은 늘 올라와 있으므로 이름 그대로 쓴다.
+  # 옛 판은 필요할 때만 불러오므로 이름 뒤에 판을 붙이고(KDRG_ADRG_V15 …) 맨 끝에 KDRG_OLD 에 등록한다.
+  OLD=(VER!="1.6");
+  SFX=""; PFX="kdrg-";
+  if(OLD){ v=VER; gsub(/\./,"",v); SFX="_V" v; PFX="kdrg-v" v "-" }
+  A=OUT "/" PFX "adrg.js"; T=OUT "/" PFX "tbl.js"; M=OUT "/" PFX "mdcdx.js"; S=OUT "/" PFX "sev.js";
+  hd="/* ---------- KDRG 분류집 (신포괄지불제도용 Version " VER ") — 자동 생성 파일 (손으로 고치지 않는다) ----------\n"\
+     "   만든 것: tools/kdrg.awk → tools/kdrg-js.awk -v VER=" VER "\n"\
+     "   원본:    「KDRG 분류집 (신포괄지불제도용 Version " VER ")」 (심평원)\n";
   print hd "\n   KDRG_ADRG  ADRG 목록 — c 코드(4자리) · p Partition(S 외과 · M 내과 · O 기타) · mdc · n 한글명\n"\
        "   KDRG_DEF   본문 질병군 정의 — c(3~5자리) · mdc · grp 그룹 · n 한글명 · e 영문명\n"\
        "              def 정의식 · ts 정의식이 가리키는 표묶음 번호\n"\
@@ -43,10 +49,10 @@ BEGIN{
        "   그래서 여기 값으로 낸 PCCL 은 CC edit 을 적용하기 전 값이다 — 실제보다 높게 나올 수 있다.\n"\
        "-------------------------------------------------------------------------- */" > S;
 
-  print "\nvar KDRG_ADRG = [" > A;
-  print "\nvar KDRG_TBL = [" > T;
-  print "\nvar KDRG_MDCDX = {" > M;
-  print "\nvar KDRG_CCL = {" > S;
+  print "\nvar KDRG_ADRG" SFX " = [" > A;
+  print "\nvar KDRG_TBL" SFX " = [" > T;
+  print "\nvar KDRG_MDCDX" SFX " = {" > M;
+  print "\nvar KDRG_CCL" SFX " = {" > S;
   na=0; nt=0; nm=0; nc=0;
 }
 
@@ -91,13 +97,13 @@ function arr(s,k,   m){ if(match(s, "\"" k "\":(\\[.*\\])", m)) return m[1]; ret
 
 END{
   print "\n];" >> A;
-  print "\nvar KDRG_DEF = [" >> A;
+  print "\nvar KDRG_DEF" SFX " = [" >> A;
   for(i=1;i<=nd;i++)
     printf "%s  { c:\"%s\", mdc:\"%s\", grp:\"%s\", n:\"%s\", e:\"%s\", def:\"%s\", ts:%s }",
       (i>1?",\n":""), fld(DEF[i],"c"), fld(DEF[i],"mdc"), fld(DEF[i],"grp"), fld(DEF[i],"n"),
       fld(DEF[i],"e"), fld(DEF[i],"def"), num(DEF[i],"ts") >> A;
   print "\n];" >> A;
-  print "\nvar KDRG_PRIO = [" >> A;
+  print "\nvar KDRG_PRIO" SFX " = [" >> A;
   for(i=1;i<=np;i++)
     printf "%s  { mdc:\"%s\", r:%s, a:\"%s\", e:\"%s\" }",
       (i>1?",\n":""), fld(PRI[i],"mdc"), num(PRI[i],"r"), fld(PRI[i],"a"), fld(PRI[i],"e") >> A;
@@ -108,21 +114,29 @@ END{
   print "\n};" >> M;
   print "\n/* MDC 18-1(HIV) 은 조건이 「HIV 주진단명 table1 or (HIV 관련 주진단명 table2 and HIV 기타진단명 table3)」 이다.\n"\
         "   KDRG_MDCDX['18-1'] 에는 주진단 목록(table1 + table2)만 들어 있다. */" >> M;
-  printf "var KDRG_HIV = {\n  t1: %s,\n  t2: %s,\n  t3: %s\n};\n", HIV1, HIV2, HIV3 >> M;
+  printf "var KDRG_HIV" SFX " = {\n  t1: %s,\n  t2: %s,\n  t3: %s\n};\n", HIV1, HIV2, HIV3 >> M;
   print "\n/* MDC 08 끝에 붙어 있는 부위별 진단 표 — 어느 질병군에도 매이지 않고 MDC 전체가 함께 쓴다.\n"\
         "   정의식에서 「Diagnosis Table6(견부 질환)」처럼 이름으로 부른다. */" >> M;
-  print "var KDRG_DXTBL = [" >> M;
+  print "var KDRG_DXTBL" SFX " = [" >> M;
   for(i=1;i<=nx;i++)
     printf "%s  { mdc:\"%s\", name:\"%s\", kcd:%s }", (i>1?",\n":""),
       fld(DXT[i],"mdc"), fld(DXT[i],"name"), arr(DXT[i],"kcd") >> M;
   print "\n];" >> M;
   print "\n};" >> S;
-  print "\nvar KDRG_SEV = [" >> S;
+  print "\nvar KDRG_SEV" SFX " = [" >> S;
   for(i=1;i<=ns;i++)
     printf "%s  { a:\"%s\", n:\"%s\", rows:%s }",
       (i>1?",\n":""), fld(SEV[i],"a"), fld(SEV[i],"n"), arr(SEV[i],"rows") >> S;
   print "\n];" >> S;
 
-  printf "ADRG %d · 질병군정의 %d · 우선순위 %d · 표 %d · MDC주진단 %d · 중증도점수 %d · 중증도구분 %d\n",
-    na, nd, np, nt, nm, nc, ns > "/dev/stderr";
+  # 옛 판은 마지막 파일 끝에서 KDRG_OLD 에 등록한다 — 네 파일을 차례로 읽은 뒤 화면이 이걸 집어 간다.
+  if(OLD){
+    print "\n/* 이 판을 KDRG_OLD 에 등록한다 — js/page-kdrg.js 가 진료일에 맞는 판을 여기서 집어 간다.\n"\
+          "   네 파일(adrg · tbl · mdcdx · sev)을 차례로 읽어야 하고, 이 줄은 맨 마지막에 와야 한다. */" >> S;
+    printf "KDRG_OLD[\"%s\"] = { ADRG:KDRG_ADRG%s, DEF:KDRG_DEF%s, PRIO:KDRG_PRIO%s, TBL:KDRG_TBL%s,\n"\
+           "  MDCDX:KDRG_MDCDX%s, HIV:KDRG_HIV%s, DXTBL:KDRG_DXTBL%s, CCL:KDRG_CCL%s, SEV:KDRG_SEV%s };\n",
+      VER, SFX, SFX, SFX, SFX, SFX, SFX, SFX, SFX, SFX >> S;
+  }
+  printf "v%s — ADRG %d · 질병군정의 %d · 우선순위 %d · 표 %d · MDC주진단 %d · 중증도점수 %d · 중증도구분 %d\n",
+    VER, na, nd, np, nt, nm, nc, ns > "/dev/stderr";
 }

@@ -1,6 +1,6 @@
 /* ---------- KDRG 분류집 (신포괄지불제도용 Version 1.6) — 자동 생성 파일 (손으로 고치지 않는다) ----------
-   만든 것: tools/kdrg.awk → tools/kdrg-js.awk
-   원본:    「KDRG 분류집 (신포괄지불제도용 Version 1.6)」 (심평원, G000EV3-2025-175)
+   만든 것: tools/kdrg.awk → tools/kdrg-js.awk -v VER=1.6
+   원본:    「KDRG 분류집 (신포괄지불제도용 Version 1.6)」 (심평원)
 
    KDRG_MDCDX  MDC별 KCD 주진단 목록 — 주진단이 어느 MDC 로 가는지 정한다.
    MDC 18-1(HIV)은 원본에서 표 세 개로 나뉘어 있고 조건이

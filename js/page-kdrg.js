@@ -43,53 +43,101 @@ function kgNorm(s){
                   .replace(/\s+/g, ' ').trim();
 }
 
-const KG_TBL = {};                          // 표묶음번호 → { 표이름: 표 }
-KDRG_TBL.forEach(t => { (KG_TBL[t.ts] = KG_TBL[t.ts] || {})[kgNorm(t.name)] = t; });
+/* ---------- 판 (Version) ----------
+   「표2. 신포괄지불제도용 KDRG V1.X 분류 이력」의 적용일이다. 명세서의 **요양개시일**로 판을 고른다.
+   1.6 은 늘 올라와 있고(data/kdrg-*.js), 옛 판은 그 판이 필요한 명세서가 있을 때만 불러온다
+   (data/kdrg-v1x-*.js 네 파일 → KDRG_OLD 에 등록).
+   1.3 이하는 자료가 없다 — PDF 가 글자를 못 뽑는 판이라 그대로는 읽히지 않는다. */
+var KDRG_OLD = {};
+const KG_VERS = [
+  {v: '1.6', from: '20260101'},
+  {v: '1.5', from: '20240101'},
+  {v: '1.4', from: '20220101'},
+  {v: '1.3', from: '20210101', none: true},
+  {v: '1.2', from: '20160101', none: true},
+  {v: '1.1', from: '20110701', none: true},
+  {v: '1.0', from: '20100701', none: true},
+];
+function kgVerOf(ymd8){
+  if (!/^\d{8}$/.test(ymd8 || '')) return KG_VERS[0];
+  for (const s of KG_VERS) if (ymd8 >= s.from) return s;
+  return KG_VERS[KG_VERS.length - 1];
+}
+const KG_LOADING = {};
+function kgLoadVer(ver){
+  if (ver === '1.6' || KDRG_OLD[ver]) return Promise.resolve(true);
+  const spec = KG_VERS.find(x => x.v === ver);
+  if (!spec || spec.none) return Promise.resolve(false);
+  if (!KG_LOADING[ver]) KG_LOADING[ver] = (async () => {
+    const tag = 'data/kdrg-v' + ver.replace('.', '') + '-';
+    // 네 파일을 **차례로** 읽는다 — 마지막(sev)이 앞의 전역들을 모아 KDRG_OLD 에 등록한다
+    for (const part of ['adrg', 'tbl', 'mdcdx', 'sev'])
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = tag + part + '.js'; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    return !!KDRG_OLD[ver];
+  })().catch(() => false);
+  return KG_LOADING[ver];
+}
 
-const KG_ADRG = {};                         // ADRG 4자리 → 목록 줄
-KDRG_ADRG.forEach(a => { KG_ADRG[a.c] = a; });
+/* ---------- 분류집 색인 (판마다 한 벌) ---------- */
+const KG_IDX = {};
+function kgIdx(ver){
+  if (KG_IDX[ver]) return KG_IDX[ver];
+  const D = ver === '1.6'
+    ? {ADRG: KDRG_ADRG, DEF: KDRG_DEF, PRIO: KDRG_PRIO, TBL: KDRG_TBL,
+       MDCDX: KDRG_MDCDX, HIV: KDRG_HIV, DXTBL: KDRG_DXTBL, CCL: KDRG_CCL, SEV: KDRG_SEV}
+    : KDRG_OLD[ver];
+  if (!D) return null;
+  const X = {ver: ver, MDCDX: D.MDCDX, HIV: D.HIV, CCL: D.CCL, DEF: D.DEF,
+             TBL: {}, ADRG: {}, DEF_MDC: {}, GRPPRE: {}, PRIO: {}, DX2MDC: {},
+             CODE: {}, SEVMAP: {}, OR: new Set(), DXTBL: {}, ORD: {}};
 
-const KG_DEF_MDC = {};                      // MDC → 질병군 정의들
-KDRG_DEF.forEach(d => { (KG_DEF_MDC[d.mdc] = KG_DEF_MDC[d.mdc] || []).push(d); });
+  D.TBL.forEach(t => { (X.TBL[t.ts] = X.TBL[t.ts] || {})[kgNorm(t.name)] = t; });
+  D.ADRG.forEach(a => { X.ADRG[a.c] = a; });
+  D.DEF.forEach((d, i) => {
+    (X.DEF_MDC[d.mdc] = X.DEF_MDC[d.mdc] || []).push(d);
+    if (X.ORD[d.c] === undefined) X.ORD[d.c] = i;
+  });
+  /* 그룹 머리에 걸린 공통 조건 — 신생아 그룹(P60 · P65 · P66 · P67)은 그룹 줄에 체중 조건이 있고
+     그 아래 질병군(P651…)의 정의식에는 체중이 다시 적혀 있지 않다. 그룹 줄은 ADRG 목록에 없다. */
+  D.DEF.forEach(d => { if (d.def && d.c === d.grp + '0' && !X.ADRG[d.c]) X.GRPPRE[d.grp] = d; });
+  D.PRIO.forEach(p => { (X.PRIO[p.mdc] = X.PRIO[p.mdc] || {})[p.a] = p.r; });
+  Object.keys(D.MDCDX).forEach(m => {
+    D.MDCDX[m].forEach(c => { (X.DX2MDC[c] = X.DX2MDC[c] || []).push(m); });
+  });
+  D.TBL.forEach(t => {
+    if (!t.rows) return;
+    t.rows.forEach(r => {
+      (X.CODE[r[1]] = X.CODE[r[1]] || []).push({ts: t.ts, name: t.name, row: r});
+      // OR procedure — 「분류에 이용되지만 OR procedure 는 아닌 시술」은 보험코드 뒤에 ‡ 가 붙는다(책 xviii쪽)
+      if (/시술명/.test(t.name) && !/‡/.test(r[0])) X.OR.add(r[1]);
+    });
+  });
+  D.SEV.forEach(s => { X.SEVMAP[s.a] = s; });
+  // MDC 전체가 함께 쓰는 진단 표 — 이름의 번호로만 찾는다(대·소문자와 칸 띄우기가 섞여 있다)
+  (D.DXTBL || []).forEach(t => {
+    const m = /table\s*(\d+)/i.exec(t.name);
+    if (m) X.DXTBL[t.mdc + '|' + m[1]] = {set: new Set(t.kcd), name: t.name};
+  });
+  return KG_IDX[ver] = X;
+}
 
-/* 그룹 머리에 걸린 공통 조건 — 신생아 그룹(P60 · P65 · P66 · P67)은 그룹 줄에 체중 조건이 있고
-   그 아래 질병군(P651…)의 정의식에는 체중이 다시 적혀 있지 않다. 그룹 줄은 ADRG 목록에 없다.
-   그래서 「ADRG 목록에 없는 그룹+0 정의」를 그 그룹 전체의 앞조건으로 삼는다. */
-const KG_GRPPRE = {};
-KDRG_DEF.forEach(d => { if (d.def && d.c === d.grp + '0' && !KG_ADRG[d.c]) KG_GRPPRE[d.grp] = d; });
-
-const KG_PRIO = {};                         // MDC → { ADRG: 순위 }
-KDRG_PRIO.forEach(p => { (KG_PRIO[p.mdc] = KG_PRIO[p.mdc] || {})[p.a] = p.r; });
-
-const KG_DX2MDC = {};                       // KCD 주진단 → MDC (여럿이면 배열)
-Object.keys(KDRG_MDCDX).forEach(m => {
-  KDRG_MDCDX[m].forEach(c => { (KG_DX2MDC[c] = KG_DX2MDC[c] || []).push(m); });
-});
-
-const KG_CODE = {};                         // 시술코드 → [{ts, name, row}]
-KDRG_TBL.forEach(t => {
-  if (!t.rows) return;
-  t.rows.forEach(r => { (KG_CODE[r[1]] = KG_CODE[r[1]] || []).push({ts: t.ts, name: t.name, row: r}); });
-});
-
-const KG_SEVMAP = {};                       // AADRG 5자리 → 부표2 줄
-KDRG_SEV.forEach(s => { KG_SEVMAP[s.a] = s; });
-
-/* OR procedure — 분류집이 「분류에 이용되지만 OR procedure 는 아닌 시술」의 보험코드 뒤에 ‡ 를 붙였다
-   (책 xviii쪽). ‡ 없이 시술명 표에 든 코드가 OR procedure 다. */
-const KG_OR = new Set();
-KDRG_TBL.forEach(t => {
-  if (!t.rows || !/시술명/.test(t.name)) return;
-  t.rows.forEach(r => { if (!/‡/.test(r[0])) KG_OR.add(r[1]); });
-});
-
-/* MDC 08 의 부위별 진단 표 — 정의식이 「Diagnosis Table6(견부 질환)」처럼 이름으로 부른다.
-   책이 대·소문자와 칸 띄우기를 섞어 써서(Diagnosis Table6 · Diagnosis table6) 번호로만 찾는다. */
-const KG_DXTBL = {};                        // MDC|번호 → Set(KCD)
-KDRG_DXTBL.forEach(t => {
-  const m = /table\s*(\d+)/i.exec(t.name);
-  if (m) KG_DXTBL[t.mdc + '|' + m[1]] = {set: new Set(t.kcd), name: t.name};
-});
+/* 지금 따지고 있는 판의 색인. 명세서마다 kgUse() 로 바꿔 끼운다. */
+let KG_VER = '', KG_TBL, KG_ADRG, KG_DEF, KG_DEF_MDC, KG_GRPPRE, KG_PRIO,
+    KG_DX2MDC, KG_CODE, KG_SEVMAP, KG_OR, KG_DXTBL, KG_ORD, KG_MDCDX, KG_HIV, KG_CCL;
+function kgUse(ver){
+  const X = kgIdx(ver);
+  if (!X) return false;
+  KG_VER = X.ver; KG_TBL = X.TBL; KG_ADRG = X.ADRG; KG_DEF = X.DEF; KG_DEF_MDC = X.DEF_MDC;
+  KG_GRPPRE = X.GRPPRE; KG_PRIO = X.PRIO; KG_DX2MDC = X.DX2MDC; KG_CODE = X.CODE;
+  KG_SEVMAP = X.SEVMAP; KG_OR = X.OR; KG_DXTBL = X.DXTBL; KG_ORD = X.ORD;
+  KG_MDCDX = X.MDCDX; KG_HIV = X.HIV; KG_CCL = X.CCL;
+  return true;
+}
+kgUse('1.6');
 
 /* KDRG 에 규정된 Error DRGs (책 xiv쪽) — 분류집 본문 밖에 있어 여기 적어 둔다 */
 const KG_ERR = {
@@ -177,11 +225,10 @@ function kgExtends(a, b){
   return new RegExp('^\\(?' + q + '\\)?\\s+(and|without)\\s').test(A);
 }
 
-/* 책에 적힌 차례 — 조건이 서로 겹치기만 하고 어느 쪽도 상대를 덮지 않으면(나란한 갈래) 앞에 적힌 것이 이긴다.
-   E63(호흡기 신생물)이 그 예다. E631 방사선치료 · E632 전신화학요법 · E633 둘 다 아님 순으로 적혀 있고,
-   둘 다 받은 환자는 앞의 E631 로 간다. */
-const KG_ORD = {};
-KDRG_DEF.forEach((d, i) => { if (KG_ORD[d.c] === undefined) KG_ORD[d.c] = i; });
+/* KG_ORD — 책에 적힌 차례. 조건이 서로 겹치기만 하고 어느 쪽도 상대를 덮지 않으면(나란한 갈래)
+   앞에 적힌 것이 이긴다. E63(호흡기 신생물)이 그 예다 — E631 방사선치료 · E632 전신화학요법 ·
+   E633 둘 다 아님 순으로 적혀 있고, 둘 다 받은 환자는 앞의 E631 로 간다.
+   판마다 다르므로 kgIdx() 에서 만든다. */
 
 /* 낱말 하나(항목)를 따진다. 분류집의 표를 가리키면 환자 값과 맞춰 보고, 아니면 모름. */
 function kgTerm(word, ctx){
@@ -214,12 +261,12 @@ function kgTerm(word, ctx){
   const ex = /^(.+?)의\s*(주진단명(?: table\d+)?)을 제외한 MDC\s*([0-9-]+)의 주진단명$/.exec(w);
   if (ex){
     const mdc = ex[3].length === 1 ? '0' + ex[3] : ex[3];
-    if ((KDRG_MDCDX[mdc] || []).indexOf(ctx.mainDx) < 0) return false;
+    if ((KG_MDCDX[mdc] || []).indexOf(ctx.mainDx) < 0) return false;
     const want = kgNorm(ex[2]);
     for (const ref of ex[1].split(/\s*(?:및|,|·|and)\s*/)){
       const g = ref.trim();
       if (!g) continue;
-      for (const d of KDRG_DEF){
+      for (const d of KG_DEF){
         if (d.grp !== g && d.c !== g) continue;
         const t = (KG_TBL[d.ts] || {})[want];
         if (t && t.kcd && t.kcd.indexOf(ctx.mainDx) >= 0) return false;
@@ -286,7 +333,14 @@ function kgTerm(word, ctx){
 const KG_AGE_RE = /연령\s*(≤|≥|＜|＞|<|>)?\s*(\d+)\s*(?:[-~]\s*(\d+)\s*)?세/;
 /* 「18세< 연령 <65세」처럼 양쪽에서 조이는 것도 있다 (E8041 성인의 세균 폐렴) */
 const KG_AGE_BETWEEN = /(\d+)\s*세\s*(≤|<|＜)\s*연령\s*(≤|<|＜)\s*(\d+)\s*세/;
+/* 1.4 는 「세」가 숫자 앞으로 밀려 나온다 — 「연령 세 0-17」 = 0~17세, 「연령 세 >64」 = >64세 */
+const KG_AGE_SEFIRST = /연령\s*세\s*(≤|≥|＜|＞|<|>)?\s*(\d+)(?:\s*[-~]\s*(\d+))?/;
 function kgAgeCond(name){
+  const sf = KG_AGE_SEFIRST.exec(name || '');
+  if (sf){
+    if (sf[3] !== undefined) return {lo: +sf[2], hi: +sf[3]};
+    return {op: sf[1] || '=', n: +sf[2]};
+  }
   const bt = KG_AGE_BETWEEN.exec(name || '');
   if (bt) return {lo: +bt[1] + (bt[2] === '≤' ? 0 : 1), hi: +bt[4] - (bt[3] === '≤' ? 0 : 1)};
   const m = KG_AGE_RE.exec(name || '');
@@ -318,14 +372,14 @@ function kgPickMdc(pt, out){
 
   // 18-1(HIV) — HIV 주진단(table1) 이거나, HIV 관련 주진단(table2) + HIV 기타진단(table3)
   if (ms.includes('18-1')){
-    const t1 = new Set(KDRG_HIV.t1), t2 = new Set(KDRG_HIV.t2), t3 = new Set(KDRG_HIV.t3);
+    const t1 = new Set(KG_HIV.t1), t2 = new Set(KG_HIV.t2), t3 = new Set(KG_HIV.t3);
     const ok = t1.has(pt.mainDx) || (t2.has(pt.mainDx) && pt.dx.some(d => t3.has(d)));
     if (!ok) ms = ms.filter(m => m !== '18-1');
   }
   // 21-1(다발성 외상) — 결정에서는 뺀다. 다발성 외상은 「서로 다른 신체부위」의 중요 외상이 둘 이상일 때인데
   // 그 부위 구분표가 분류집에 없어 여기서 확정할 수 없다. 진단이 둘 이상 걸리면 알려만 준다.
   if (ms.includes('21-1')){
-    const t = new Set(KDRG_MDCDX['21-1']);
+    const t = new Set(KG_MDCDX['21-1']);
     const n = pt.dx.filter(d => t.has(d)).length;
     ms = ms.filter(m => m !== '21-1');
     if (n >= 2) out.note21 = '중요 외상 진단이 ' + n + '건입니다 — 서로 다른 신체부위면 MDC 21-1(다발성 외상)이 됩니다. ' +
@@ -424,7 +478,7 @@ function kgGroup(pt){
 function kgPccl(others, surgical, adrg){
   const rows = [];
   for (const d of others){
-    const v = KDRG_CCL[d];
+    const v = KG_CCL[d];
     rows.push({dx: d, ccl: v ? (surgical ? v[0] : v[1]) : 0, known: !!v});
   }
   const vals = rows.map(r => r.ccl).filter(v => v > 0).sort((a, b) => b - a);
@@ -565,6 +619,18 @@ function kgReadFiles(list){
     }
   }
   const recs = Array.from(map.values()).filter(r => r.form === 'P020' || r.form === 'P030');
+  recs.sort((a, b) => a.seq.localeCompare(b.seq));
+  return recs;
+}
+
+/* 명세서마다 쓸 판을 미리 불러온다 — 옛 판은 그 판이 필요한 명세서가 있을 때만 읽는다 */
+function kgLoadNeeded(recs){
+  const want = {};
+  recs.forEach(r => { want[kgVerOf(r.start).v] = 1; });
+  return Promise.all(Object.keys(want).map(kgLoadVer));
+}
+
+function kgClassify(recs){
   recs.forEach(r => {
     r.age = kgAge(r.jumin, r.start);
     r.sex = kgSex(r.jumin);
@@ -574,6 +640,9 @@ function kgReadFiles(list){
     // MT026 은 「인공호흡을 실시한 경우」에만 적는다(세부작성요령) — 없으면 안 한 것으로 보고 0시간.
     // MS004 는 신생아·분만 명세서면 반드시 적게 되어 있어, 없으면 0 이 아니라 **모름**으로 둔다.
     r.ventUsed = r.vent === null ? 0 : r.vent;
+    // 요양개시일로 판을 고른다. 그 판 자료가 없으면(1.3 이하) 지금 판으로 보고 그 사실을 알린다.
+    r.verWant = kgVerOf(r.start);
+    r.ver = kgUse(r.verWant.v) ? r.verWant.v : (kgUse('1.6'), '1.6');
     const set = new Set(r.codes.map(c => c.code));
     r.res2 = kgGroup({mainDx: r.mainDx, dx: [r.mainDx].concat(r.dx), codes: set, age: r.age, sex: r.sex,
                       los: r.los === '' ? null : +r.los, result: r.res,
@@ -584,7 +653,6 @@ function kgReadFiles(list){
     r.sevInfo = kgPccl(r.dx, surgical, p4);
     r.cmp = kgCompare(r);
   });
-  recs.sort((a, b) => a.seq.localeCompare(b.seq));
   return recs;
 }
 
@@ -619,7 +687,7 @@ function kgHints(r){
              '다른 판(1.4 · 1.5 등)으로 분류된 명세서일 수 있습니다.');
   else {
     const codes = new Set(r.codes.map(c => c.code));
-    const ds = KDRG_DEF.filter(d => d.c === want4 || d.c.slice(0, 4) === want4);
+    const ds = KG_DEF.filter(d => d.c === want4 || d.c.slice(0, 4) === want4);
     const miss = [], unk = [];
     for (const d of ds){
       if (!d.def) continue;
@@ -662,7 +730,12 @@ function kgRender(){
     '<span>일치 <b>' + ok + '</b></span>' +
     (alt ? '<span>기타진단으로 일치 <b>' + alt + '</b></span>' : '') +
     (bad ? '<span class="kg-bad">다름 · 확인 필요 <b>' + bad + '</b></span>' : '') +
-    '<span class="meta-note">KDRG 분류집 Version 1.6 · 앞 5자리(AADRG)로 대조</span>';
+    (function(){                       // 어느 판으로 봤는지 — 진료일이 여러 달이면 판이 섞인다
+      const c = {}; KG.recs.forEach(r => { c[r.ver] = (c[r.ver] || 0) + 1; });
+      const ks = Object.keys(c).sort().reverse();
+      return ks.length ? '<span>분류집 ' + ks.map(k => 'V' + k + (ks.length > 1 ? ' ' + c[k] : '')).join(' · ') + '</span>' : '';
+    })() +
+    '<span class="meta-note">앞 5자리(AADRG)로 대조</span>';
   kgRenderList();
   kgRenderDetail();
   kgRenderFind();
@@ -742,7 +815,7 @@ function kgWhere(code){
   const hits = KG_CODE[code] || [];
   const seen = [];
   for (const h of hits){
-    for (const d of KDRG_DEF){
+    for (const d of KG_DEF){
       if (d.ts !== h.ts) continue;
       if (!seen.some(s => s.c === d.c)) seen.push({c: d.c, n: d.n, mdc: d.mdc, tbl: h.name});
     }
@@ -753,12 +826,18 @@ function kgWhere(code){
 function kgRenderDetail(){
   const r = KG.recs[KG.sel];
   if (!r){ $('kg-detail').innerHTML = ''; return; }
+  kgUse(r.ver || '1.6');            // 이 명세서를 분류할 때 쓴 판으로 맞춰 놓고 그린다
   const g = r.res2;
   const src = g.pick || g.maybe[0];
 
   let h = '<div class="card"><div class="meta-bar">' +
     '<span>명일련 <b>' + esc(r.seq) + '</b></span>' +
     '<span>' + esc(r.name || '') + '</span>' +
+    '<span>요양개시 <b>' + esc(ymd(r.start) || '—') + '</b></span>' +
+    '<span>분류집 <b>V' + esc(r.ver) + '</b>' +
+      (r.verWant && r.verWant.v !== r.ver
+        ? ' <span class="kg-bad">(진료일은 V' + esc(r.verWant.v) + ' 인데 그 판 자료가 없어 V' + esc(r.ver) + ' 로 봤습니다)</span>'
+        : '') + '</span>' +
     (r.wt !== null ? '<span>신생아체중 <b>' + r.wt + 'g</b> <span class="kg-dim">MS004</span></span>' : '') +
     (r.vent !== null ? '<span>인공호흡 <b>' + r.vent + '시간</b> <span class="kg-dim">MT026</span></span>' : '') +
     '<span class="meta-note">' + esc(r.file) + '</span></div>';
@@ -864,6 +943,7 @@ function kgRenderDetail(){
 function kgRenderFind(){
   const q = KG.q.trim().toUpperCase();
   if (!q){ $('kg-find').innerHTML = ''; return; }
+  kgUse('1.6');                     // 코드 찾기는 늘 지금 판으로 본다
   const rows = [];
   for (const code of Object.keys(KG_CODE)){
     const hits = KG_CODE[code];
@@ -946,8 +1026,10 @@ async function kgTakeFiles(fileList){
   }
   KG.list = list;
   KG.recs = kgReadFiles(list);
+  await kgLoadNeeded(KG.recs);
+  kgClassify(KG.recs);
   KG.sel = 0;
-  KG.seq = ''; $('kg-seq').value = '';        // 새 파일을 놓으면 찾던 번호는 지운다
+  KG.seq = ""; $("kg-seq").value = "";        // 새 파일을 놓으면 찾던 번호는 지운다
   kgRender();
   kgKeep(list); kgKeepView();
 }
@@ -998,6 +1080,8 @@ kgRender();
   if (!kept || !kept.length) return;
   KG.list = kept.map(f => ({name: f.name, bytes: new Uint8Array(f.bytes)}));
   KG.recs = kgReadFiles(KG.list);
+  await kgLoadNeeded(KG.recs);
+  kgClassify(KG.recs);
   const v = kgKeptView() || {};
   if (v.onlyBad !== undefined) KG.onlyBad = !!v.onlyBad;
   KG.seq = v.seq || '';
