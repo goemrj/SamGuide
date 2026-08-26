@@ -361,6 +361,56 @@ function kgAgeOk(cond, age){
   }
 }
 
+/* ---------- 이름에 「… 이외의 …」 가 박힌 질병군 (2026-08-26) ----------
+   연령과 같은 자리다 — **조건이 정의식이 아니라 이름에 있다.**
+
+   책 전체에 네 곳뿐이고 V1.4·1.5·1.6 이 모두 같다.
+     F500 심도자술을 시행한 급성 심근경색 **이외의** 순환기 질환(복잡 진단 동반)
+            ⟨주진단명 또는 기타진단명 table1 and 시술명 table2⟩
+     F510 심도자술을 시행한 급성 심근경색 **이외의** 순환기 질환(복잡 진단 미동반)  ⟨시술명⟩
+     N031 · N032 (난소 및 자궁부속기 **이외의** 악성종양)  ⟨주진단명 table1 and …⟩
+   영문명도 「CIRCULATORY DISORDERS **EXCEPT AMI**, WITH CARDIAC CATH …」 라고 못을 박는다.
+
+   **F510 만 구멍이다.** 정의식이 「시술명」 하나뿐이라 급성 심근경색 환자가 심도자술을 받으면
+   참이 되어 버린다. 나머지 셋은 정의식에 진단 조건이 있어 이미 걸러진다.
+   (책 287쪽 원문을 확인했다 — 파서가 진단표를 흘린 것이 아니고 정말 「시술명」 한 줄이다.)
+
+   **제외할 진단 목록도 책 안에 있다** — 같은 MDC 에서 이름에 그 말을 담고 「이외」가 없으며
+   **정의식이 진단 조건 하나뿐인** 질병군의 진단표다. F510 의 「급성 심근경색」 →
+   F610「주요 합병증이 없는 급성 심근경색을 동반한 순환기 질환」⟨주진단명 또는 기타진단명⟩
+   의 표 = I21·I22·I23 **18개**. 짝을 못 찾으면 아무것도 제외하지 않는다(N031·N032 가 그렇다).
+
+   주진단만이 아니라 **기타진단까지** 본다 — 짝인 F610 의 정의식이 「주진단명 또는 기타진단명」이라
+   급성 심근경색이 기타진단에 있어도 그쪽으로 가기 때문이다.
+   심평원 그루퍼로 검산해 맞춘 규칙이다(README 참조). */
+const KG_EXCL = {};
+function kgExclDx(d){
+  const key = KG_VER + '|' + d.c;
+  if (KG_EXCL[key] !== undefined) return KG_EXCL[key];
+  let set = null;
+  const m = /(.+?)\s*이외의/.exec(d.n || '');
+  if (m){
+    // 「심도자술을 시행한 급성 심근경색」처럼 앞말이 길게 붙는다 — 뒤 낱말부터 좁혀 가며 짝을 찾는다
+    const words = m[1].trim().split(/\s+/);
+    const pure = def => def && /주진단명/.test(def) && !/(^|[^가-힣])(and|or|without)([^가-힣]|$)/.test(def);
+    for (let i = 0; i < words.length && !set; i++){
+      const term = words.slice(i).join(' ');
+      const donors = KG_DEF.filter(o => o.mdc === d.mdc && o !== d &&
+        !/이외/.test(o.n || '') && (o.n || '').indexOf(term) >= 0 && pure(o.def));
+      if (!donors.length) continue;
+      const codes = new Set();
+      for (const o of donors){
+        const tb = KG_TBL[o.ts] || {};
+        for (const nm of Object.keys(tb))
+          if (/주진단명/.test(nm) && tb[nm].kcd) tb[nm].kcd.forEach(c => codes.add(c));
+      }
+      if (codes.size) set = {term: term, by: donors.map(o => o.c), dx: codes};
+    }
+  }
+  KG_EXCL[key] = set;
+  return set;
+}
+
 /* ---------- MDC 고르기 ----------
    주진단 하나가 여러 MDC 목록에 드는 것이 14,101 중 2,007 건인데, 그 겹침은 거의 전부
    **18-1(HIV)과 21-1(다발성 외상)** 이다. 둘은 주진단이 곧장 가는 곳이 아니라 조건이 맞을 때만
@@ -418,8 +468,11 @@ function kgGroup(pt){
       }
       const ac = kgAgeCond(d.n);
       if (ac){ const a = kgAgeOk(ac, pt.age); v = a === null ? (v === false ? false : null) : (a ? v : false); }
+      // 이름에 「… 이외의」 가 있으면 그 진단이 붙은 명세서는 여기로 오지 않는다
+      const ex = kgExclDx(d);
+      if (ex && pt.dx.some(x => ex.dx.has(x))) v = false;
       if (v === false) continue;
-      const item = {d: d, unknown: ctx.unknown.slice(), age: ac};
+      const item = {d: d, unknown: ctx.unknown.slice(), age: ac, excl: ex};
       if (v === true) out.hit.push(item); else out.maybe.push(item);
     }
   }
