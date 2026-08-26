@@ -106,6 +106,8 @@ function kind(i,   m,f1,f2,w){
   if(w ~ /(시술명|주진단명|부가코드|인공호흡|주진단|기타진단)/ && w ~ /( and | or |not |\(|table)/) return "DEF";
   # 시술·진단 표를 가리키지 않는 조건식 (예: 입원시 체중 < 750g · 재원기간 < 5일 · Any OR Procedures)
   if(w ~ /(입원시|재원기간|퇴원유형|인공호흡|연령|체중|Any OR|모든 주진단|주진단명|출생시)/) return "DEF";
+  # 「At least 2 procedures in the following table」 — 바로 뒤의 표에서 둘 이상 (G102 복수 항문 수술)
+  if(w ~ /^[Aa]t least [0-9]+ (procedures?|diagnos)/) return "DEF";
   return "TXT";
 }
 function haskcd(i,   j){ for(j=1;j<=NC[i];j++) if(F[i,j] ~ /^[A-Z][0-9]{2,5}$/) return 1; return 0 }
@@ -117,7 +119,9 @@ function rowsplit(w,   mm){
     if(mm[1] ~ /^[A-Z][0-9]{2,4}$/) return 0;          # ADRG 머리줄이다
     R1=mm[1]; R2=mm[2]; R3=mm[3]; return 1;
   }
-  if(match(w, /^([A-Z]{1,3}[0-9]{2,4})[ \t]+([^A-Z].*)$/, mm)){
+  # 보험코드 칸이 빈 행 — 시술 표를 읽는 중일 때만 본다.
+  # 아무 데서나 보면 「N02 및 N03의 주진단명 …」 같은 정의식이 시술 행으로 잘못 읽힌다(N041).
+  if(tname ~ /시술명|부가코드/ && match(w, /^([A-Z]{1,3}[0-9]{2,4})[ \t]+([^A-Z].*)$/, mm)){
     R1=""; R2=mm[1]; R3=mm[2]; return 1;
   }
   return 0;
@@ -157,6 +161,19 @@ function defs_flush(   j,d){
   nd=0; ntbl=0; TENT=0; TS++;
 }
 function defs_add(c,mdc,grp,n){ nd++; DC[nd]=c; DM[nd]=mdc; DG[nd]=grp; DN[nd]=n; DE[nd]=""; DD[nd]="" }
+
+# 정의식 한 줄을 건다.
+#   책은 **연령만 다른 질병군을 줄줄이 적고 정의식을 그 뒤에 한 번만** 적는다.
+#     G0951 … 연령 ≤7세 / G0952 … 7세＜연령＜70세 / G0953 … 연령 ≥70세
+#     시술명 table1 and 부가코드1        ← 셋이 함께 쓰는 정의식
+#   그래서 마지막 하나가 아니라 **아직 정의식이 없는 것 모두**에 건다.
+#   질병군마다 정의식이 따로 붙는 곳(E631 · E632 …)은 자기 것이 붙을 때 하나만 비어 있어 그대로 맞다.
+#   앞줄에서 이어지는 정의식은 마지막 것에 잇는다.
+function def_put(w,   z){
+  if(nd==0) return;
+  if(lastwas=="DEF" && DD[nd]!=""){ DD[nd]=DD[nd]" "w; return }
+  for(z=1; z<=nd; z++) if(DD[z]=="") DD[z]=w;
+}
 
 END{
   for(i=1;i<=N;i++){
@@ -216,14 +233,14 @@ END{
           if(nd==0 && grp!=""){ defs_add(grp "0", mdc, grp, grpn); DE[nd]=grpe }
           TENT=0; tbl_open(w);
         } else {
-          if(nd>0) DD[nd]=(DD[nd]==""? w : DD[nd]" "w);
+          def_put(w);
         }
         lastwas=k; continue;
       }
       if(k=="DEF"){
         # 그룹 머리 바로 뒤의 정의식이면 그룹 자체가 질병군이다 (예: R04 → R040)
         if(nd==0 && grp!=""){ defs_add(grp "0", mdc, grp, grpn); DE[nd]=grpe }
-        if(nd>0) DD[nd]=(DD[nd]==""? w : DD[nd]" "w);
+        def_put(w);
         TENT=0; lastwas="DEF"; continue;
       }
       if(tname!="" && tname ~ /(주진단명|기타진단)/){ if(haskcd(i)) tbl_kcd(i); lastwas="KCD"; continue }

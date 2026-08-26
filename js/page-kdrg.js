@@ -209,6 +209,24 @@ function kgTerm(word, ctx){
     if (!ctx.result) return null;
     return ctx.result === '2';
   }
+  /* 「N02 및 N03의 주진단명 table1을 제외한 MDC13의 주진단명」 — 다른 질병군의 진단표를 빼고 본다.
+     주진단이 그 MDC 목록에 들면서, 빼라고 한 표에는 없어야 참이다. */
+  const ex = /^(.+?)의\s*(주진단명(?: table\d+)?)을 제외한 MDC\s*([0-9-]+)의 주진단명$/.exec(w);
+  if (ex){
+    const mdc = ex[3].length === 1 ? '0' + ex[3] : ex[3];
+    if ((KDRG_MDCDX[mdc] || []).indexOf(ctx.mainDx) < 0) return false;
+    const want = kgNorm(ex[2]);
+    for (const ref of ex[1].split(/\s*(?:및|,|·|and)\s*/)){
+      const g = ref.trim();
+      if (!g) continue;
+      for (const d of KDRG_DEF){
+        if (d.grp !== g && d.c !== g) continue;
+        const t = (KG_TBL[d.ts] || {})[want];
+        if (t && t.kcd && t.kcd.indexOf(ctx.mainDx) >= 0) return false;
+      }
+    }
+    return true;
+  }
   // 정의식에 직접 적힌 연령 조건 (질병군 이름에 적힌 것과 같은 방식으로 따진다)
   if (/^연령/.test(w)){ const c = kgAgeCond(w); if (c) return kgAgeOk(c, ctx.age); }
   // 인공호흡 시간 — 특정내역 MT026(인공호흡시간, 시간 단위)
@@ -222,10 +240,16 @@ function kgTerm(word, ctx){
   // age > 27 days · age < 366 days · age > 0 year — 생년월일과 입원개시일로 낸 일수
   const ad = /^age\s*(?:\(=date of admission - date of birth\))?\s*(＞|>|≥|≤|<)\s*(\d+)\s*(day|year)s?$/i.exec(w);
   if (ad) return kgCmp(ctx.ageDays, ad[1], +ad[2] * (/year/i.test(ad[3]) ? 365 : 1));
-  // At least 2 procedures in 시술명 table1 — 그 표에 든 코드가 몇 개인지 센다
+  /* 「At least 2 procedures in 시술명 table1」 — 그 표에 든 코드가 몇 개인지 센다.
+     표 이름 대신 「the following table」이라 적힌 데도 있다(G102 복수 항문 수술) — 그 묶음의 시술표를 본다. */
   const cnt = /^At least (\d+) procedures? in (.+)$/i.exec(w);
   if (cnt){
-    const t = (KG_TBL[ctx.ts] || {})[kgNorm(cnt[2])];
+    const tabs = KG_TBL[ctx.ts] || {};
+    let t = tabs[kgNorm(cnt[2])];
+    if (!t && /following table/i.test(cnt[2])){
+      const k = Object.keys(tabs).filter(x => /시술명/.test(x) && tabs[x].rows);
+      if (k.length === 1) t = tabs[k[0]];
+    }
     if (t && t.rows) return t.rows.filter(r => ctx.codes.has(r[1])).length >= +cnt[1];
   }
   // 신생아의 주요 문제 — 책 829쪽. 주요 문제 = 「Diagnosis in table 1」,
