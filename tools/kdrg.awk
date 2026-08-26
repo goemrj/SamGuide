@@ -26,15 +26,19 @@
 # 그림이 보여 주는 조건(Age >18 등)은 ADRG 정의(이름과 정의식)에 그대로 들어 있어
 # 빠뜨리는 규칙은 없다.
 # ------------------------------------------------------------------
-BEGIN{
-  RS="\f"; FS="\n";
-  # 쪽 범위 — 이 판(Version 1.6) PDF 의 쪽번호. 판이 바뀌면 여기만 고친다.
-  if(!P_ADRG_S) P_ADRG_S=25;   if(!P_ADRG_E) P_ADRG_E=55;
-  if(!P_BODY_S) P_BODY_S=57;   if(!P_BODY_E) P_BODY_E=1176;
-  if(!P_PRIO_S) P_PRIO_S=1179; if(!P_PRIO_E) P_PRIO_E=1192;
-  if(!P_CCL_S)  P_CCL_S=1197;  if(!P_CCL_E)  P_CCL_E=1218;
-  if(!P_SEV_S)  P_SEV_S=1219;
-  TS=0;
+BEGIN{ RS="\f"; FS="\n"; TS=0 }
+
+# ---------- 0차: 쪽 범위를 스스로 찾는다 ----------
+# 판마다 쪽번호가 다르다(1.4 · 1.5 · 1.6 이 다 다르다). 머리글로 구간을 잡는다.
+# -v P_ADRG_S=… 처럼 넘기면 그 값이 이긴다.
+function ranges(   ){
+  if(!P_ADRG_S) P_ADRG_S=M_ADRG_S;   if(!P_ADRG_E) P_ADRG_E=M_ADRG_E;
+  if(!P_BODY_S) P_BODY_S=P_ADRG_E+1; if(!P_BODY_E) P_BODY_E=M_PRIO_S-1;
+  if(!P_PRIO_S) P_PRIO_S=M_PRIO_S;   if(!P_PRIO_E) P_PRIO_E=M_PRIO_E;
+  if(!P_CCL_S)  P_CCL_S=M_CCL_S;     if(!P_CCL_E)  P_CCL_E=M_SEV_S-1;
+  if(!P_SEV_S)  P_SEV_S=M_SEV_S;
+  printf "쪽 범위 — ADRG목록 %d~%d · 본문 %d~%d · 우선순위 %d~%d · 부표1 %d~%d · 부표2 %d~\n",
+    P_ADRG_S,P_ADRG_E,P_BODY_S,P_BODY_E,P_PRIO_S,P_PRIO_E,P_CCL_S,P_CCL_E,P_SEV_S > "/dev/stderr";
 }
 
 # ---------- 줄 다듬기 ----------
@@ -72,7 +76,14 @@ function jf(i,from,to,   j,s){ s=""; for(j=from;j<=to;j++){ if(F[i,j]=="") conti
 # ---------- 1차: 쪽을 읽어 줄을 모은다 ----------
 {
   page=NR;
-  KEEPNUM=(page>=P_PRIO_S && page<=P_PRIO_E);
+  # 구간 표시 — 쪽 전체를 보고 찾는다
+  if($0 ~ /Partition/){ if(!M_ADRG_S) M_ADRG_S=page; M_ADRG_E=page }
+  if($0 ~ /외과적/ && $0 ~ /소분류/){ if(!M_PRIO_S) M_PRIO_S=page; M_PRIO_E=page }
+  if($0 ~ /기타 *진단의 *중증도 *점수 *규정/ && !M_CCL_S) M_CCL_S=page;
+  if($0 ~ /\(부표 *2\)/ && $0 ~ /중증도 *구분 *기준/ && !M_SEV_S) M_SEV_S=page;
+
+  # 우선순위 쪽에서는 맨 앞 칸이 순위 숫자라 여백 장식으로 지우면 안 된다
+  KEEPNUM=($0 ~ /외과적/ && $0 ~ /소분류/);
   nl=split($0,L,"\n");
   for(li=1;li<=nl;li++){
     raw=L[li]; gsub(/\r/,"",raw); t=raw; gsub(/^[ \t]+|[ \t]+$/,"",t);
@@ -101,7 +112,10 @@ function kind(i,   m,f1,f2,w){
   # MDC 전체가 함께 쓰는 진단 표
   #   MDC 08  Diagnosis table1(슬관절 질환) … 부위별 11개
   #   MDC 15  신생아의 주요 문제(table 1)
-  if(w ~ /^Diagnosis[ \t]*[Tt]able[ \t]*[0-9]+[ \t]*\([^)]*\)$/) return "DXTBL";
+  # 판에 따라 한글과 영문이 뒤섞여 나온다 — 1.6 「Diagnosis table1(슬관절 질환)」,
+  # 1.5 「Diagnosis 슬관절 table1( 질환)」. 앞이 Diagnosis 이고 tableN 이 있으면 표 이름으로 본다
+  # (정의식은 「Diagnosis table9(족부 질환) and 시술명」처럼 and/or 가 붙는다).
+  if(w ~ /^Diagnosis[ \t]/ && w ~ /[Tt]able[ \t]*[0-9]+/ && w !~ /( and | or |not )/) return "DXTBL";
   if(w ~ /\([Tt]able[ \t]*[0-9]+\)$/) return "DXTBL";
   if(w ~ /(시술명|주진단명|부가코드|인공호흡|주진단|기타진단)/ && w ~ /( and | or |not |\(|table)/) return "DEF";
   # 시술·진단 표를 가리키지 않는 조건식 (예: 입원시 체중 < 750g · 재원기간 < 5일 · Any OR Procedures)
@@ -176,6 +190,7 @@ function def_put(w,   z){
 }
 
 END{
+  ranges();
   for(i=1;i<=N;i++){
     p=PG[i]; m=NC[i]; w=W[i]; f1=F[i,1]; f2=F[i,2]; mdc=MD[i];
 
@@ -190,8 +205,18 @@ END{
     if(p>=P_BODY_S && p<=P_BODY_E){
       # MDC별 KCD 주진단 목록
       if(w ~ /분류(된|되는) KCD 주진단명/){ defs_flush(); dxmode=1; dxmdc=mdc; dxpart=""; ndx=0; continue }
+      k=kind(i);
+      # 판에 따라 **한글명이 코드보다 앞줄에** 찍힌다(1.5 · 1.4). 코드만 있는 줄이면 앞줄에서 이름을 가져온다.
+      #     골반적출술, 근치적 자궁절제술 …    ← 한글명
+      #   N01                                ← 코드 (혼자)
+      #     PELVIC EVISCERATION, …           ← 영문명
+      # 진단 목록을 읽는 중(dxmode)에도 이걸 먼저 봐야 목록이 끝난 줄 안다.
+      if(k=="TXT" && m==1 && f1 ~ /^[A-Z][0-9]{2,4}$/ && PK=="TXT" && PW ~ /[가-힣]/ && PW !~ /^[A-Z][0-9]/){
+        w=f1" "PW; NC[i]=2; F[i,1]=f1; F[i,2]=PW; W[i]=w; m=2; f2=PW;
+        k=(length(f1)==3? "GRP" : "DRG");
+      }
+      PK=k; PW=W[i];
       if(dxmode){
-        k=kind(i);
         # MDC 18-1(HIV)만 주진단 목록이 표 세 개로 나뉘어 있다
         # (HIV 주진단명 table1 or (HIV 관련 주진단명 table2 and HIV 기타진단명 table3)).
         # 표 이름이 나오면 앞 표를 내보내고 새 표로 넘어간다 — 조건을 그대로 따지려면 나뉘어 있어야 한다.
@@ -202,10 +227,14 @@ END{
         if(k=="GRP" || k=="DRG"){ dx_emit(); dxmode=0 }
         else { if(haskcd(i)) for(j=1;j<=m;j++) if(F[i,j] ~ /^[A-Z][0-9]{2,5}$/){ ndx++; DX[ndx]=F[i,j] } ; continue }
       }
-      k=kind(i);
       # MDC 08 끝의 부위별 진단 표 — 어느 질병군에도 매이지 않고 MDC 전체가 함께 쓴다.
       # 정의식에서 「Diagnosis Table6(견부 질환)」처럼 이름으로 부른다.
-      if(k=="DXTBL"){ defs_flush(); dt_emit(); dtmdc=mdc; dtname=w; ndt=0; dtmode=1; continue }
+      if(k=="DXTBL"){
+        # 표가 시작되기 전에 **차례**로 표 이름만 줄줄이 적어 둔 데가 있다(1.4 · 1.5).
+        # 바로 다음 줄도 표 이름이면 그건 차례 줄이라 건너뛴다.
+        if(i<N && kind(i+1)=="DXTBL") continue;
+        defs_flush(); dt_emit(); dtmdc=mdc; dtname=w; ndt=0; dtmode=1; continue;
+      }
       if(dtmode){
         if(k=="GRP" || k=="DRG"){ dt_emit(); dtmode=0 }
         else { if(haskcd(i)) tbl_dt(i); continue }

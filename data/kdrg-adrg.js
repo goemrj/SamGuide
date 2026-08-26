@@ -1511,7 +1511,7 @@ var KDRG_DEF = [
   { c:"P671", mdc:"15", grp:"P67", n:"신생아, 입원시 체중 > 2499g(중요 수술 미시행, 다발성 주요 문제 동반)", e:"Neonate, Admission Weight>2499g without Significant OR Procedure with Multiple Major Problems", def:"(시술명 table3 or 인공호흡 > 24 hours or 주요 문제) and 다발성 주요 문제", ts:557 },
   { c:"P672", mdc:"15", grp:"P67", n:"신생아, 입원시 체중 > 2499g(중요 수술 미시행, 주요 문제 동반)", e:"Neonate, Admission Weight>2499g without Significant OR Procedure with Major Problem", def:"시술명 table3 or 인공호흡 > 24 hours or 주요 문제", ts:557 },
   { c:"P673", mdc:"15", grp:"P67", n:"신생아, 입원시 체중 > 2499g(중요 수술 미시행, 기타 문제 동반)", e:"Neonate, Admission Weight>2499g without Significant OR Procedure with Other Problem", def:"시술명 table4 or 주진단명 또는 기타진단명 table1", ts:557 },
-  { c:"P674", mdc:"15", grp:"P67", n:"신생아, 입원시 체중 > 2499g(중요 수술 미시행, 문제 미동반)", e:"Neonate, Admission Weight>2499g without Significant OR Procedure without Problem", def:"at least 2 diagnoses in table 1", ts:557 },
+  { c:"P674", mdc:"15", grp:"P67", n:"신생아, 입원시 체중 > 2499g(중요 수술 미시행, 문제 미동반)", e:"Neonate, Admission Weight>2499g without Significant OR Procedure without Problem", def:"", ts:557 },
   { c:"Q0101", mdc:"16", grp:"Q01", n:"비장 적출술, 연령 ≤18세", e:"Splenectomy, Age ≤18", def:"시술명", ts:558 },
   { c:"Q0102", mdc:"16", grp:"Q01", n:"비장 적출술, 연령 >18세", e:"Splenectomy, Age >18", def:"시술명", ts:558 },
   { c:"Q0201", mdc:"16", grp:"Q02", n:"기타 혈액 및 조혈기관 수술, 연령 ≤18세", e:"Other OR Procedures for Blood and Blood-Forming Organs, Age ≤18", def:"Q01의 시술명 table을 제외한 OR Procedures", ts:559 },
