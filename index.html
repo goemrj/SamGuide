@@ -518,7 +518,11 @@
       </div>
 
       <div class="toolbar" id="sc-claim-row" style="display:none;"><div class="chips chips-seg" id="sc-claims"></div></div>
-      <div class="toolbar" id="sc-filter-row" style="display:none;"><div class="chips chips-rec" id="sc-only"></div></div>
+      <div class="toolbar" id="sc-filter-row" style="display:none;">
+        <div class="chips chips-rec" id="sc-only"></div>
+        <!-- 파일이 적어 온 서식버전으로 재지만, 손으로 바꿔 볼 수도 있다 -->
+        <label class="saved-note">서식버전 <select class="field-input" id="sc-ver"></select></label>
+      </div>
 
       <div id="sc-out"></div>
     </section>

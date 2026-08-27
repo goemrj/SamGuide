@@ -22,7 +22,8 @@
    ------------------------------------------------------------------------ */
 
 const SC = { list: [], claim: '', why: '', forced: false, onlyBad: true, cands: [],
-             res: [], view: null, caret: 1, vtab: 'raw', vwrap: true };
+             res: [], view: null, caret: 1, vtab: 'raw', vwrap: true,
+             verPick: '', verAuto: {h:'',d:''}, verUsed: {h:'',d:''} };
 
 const SC_DEC = new TextDecoder('euc-kr');
 function scText(bytes){ return SC_DEC.decode(bytes); }
@@ -114,6 +115,83 @@ function scSpec(claim){
 
 const SC_SPECS = {};
 availableClaims().forEach(([k]) => { SC_SPECS[k] = scSpec(k); });
+
+/* ---------- 서식버전에 맞춘 규격 (2026-08-27) ----------
+   청구 파일은 **자기가 어느 서식버전인지 청구서(H)에 적고 온다** — 1~3 청구서 서식버전,
+   4~6 명세서 서식버전. 지금 레이아웃으로만 재면 옛 버전 파일이 통째로 「길이 어긋남」이 된다
+   (자보 020 파일의 진료내역 133byte 를 021 의 135byte 로 재던 문제).
+
+   버전 자료(data/layout-versions.js)에는 코드표(서식번호·내역구분 값)가 없다 —
+   문서에서는 코드가 설명 글 안에 섞여 있어 떼어내지 않았다. 그래서 **자리·길이는 버전 자료**,
+   **코드표는 지금 레이아웃**에서 가져와 붙인다(코드값은 버전이 바뀌어도 거의 그대로다). */
+const SC_VREC = {};
+function scRecVer(claim, rk, ver){
+  const live = SC_SPECS[claim].recs[rk];
+  if (!ver || !live) return live;
+  const key = claim + '|' + rk + '|' + ver;
+  if (SC_VREC[key]) return SC_VREC[key];
+  const arr = sgVerFields(claim, rk, ver);
+  if (!arr) return (SC_VREC[key] = live);
+
+  const fields = arr.map(a => ({
+    pos: a[0], len: a[1] + (a[2] || 0), mode: a[3], name: a[4], desc: a[5] || '',
+    codes: null, fmt: (a[2] || 0) || undefined,
+  }));
+  const layout = {name: live.name, fields};
+  const byName = n => fields.find(f => f.name === n) || null;
+  const withCodes = (vf, lf) => (vf && lf) ? Object.assign({}, vf, {codes: lf.codes}) : null;
+
+  // 짧게 끝나도 되는 자리(참조란 · 치식)를 **필드 이름으로** 옮겨 온다 — 자리는 버전마다 다르다
+  const full = scFull(layout);
+  const set = new Set([full]);
+  for (const a of live.allowed){
+    if (a >= live.full) continue;
+    const after = live.layout.fields.find(f => f.pos === a + 1);
+    const vf = after && byName(after.name);
+    if (vf) set.add(vf.pos - 1);
+  }
+
+  return (SC_VREC[key] = {
+    key: rk, name: live.name, layout, ver,
+    form:  withCodes(byName('서식번호'), live.form),
+    kind:  withCodes(byName('내역구분'), live.kind),
+    ftype: byName('진료형태') || live.ftype,
+    cn:    byName('청구번호') || live.cn,
+    seq:   scSeqField(layout) || live.seq,
+    pname: scNameField(layout) || live.pname,
+    allowed: Array.from(set).sort((x, y) => x - y),
+    full,
+  });
+}
+
+/* 청구서는 1~3 의 버전, 명세서(A~F)는 4~6 의 버전을 따른다 — 둘은 따로 매겨진다. */
+function scSpecVer(claim, verH, verD){
+  const base = SC_SPECS[claim];
+  if (!verH && !verD) return base;
+  const recs = {};
+  for (const rk of Object.keys(base.recs)) recs[rk] = scRecVer(claim, rk, rk === 'H' ? verH : verD);
+  return {claim, recs, multiFile: base.multiFile, detailHead: base.detailHead, ftc: base.ftc};
+}
+
+/* 파일에서 서식버전을 읽는다. 청구서(H) 줄이 있어야 읽을 수 있다 —
+   명세서 파일만 붙이면 못 읽으니 그때는 사용자가 골라야 한다. */
+function scReadVers(list, claim){
+  const spec = SC_SPECS[claim], h = spec.recs.H;
+  if (!h) return {h: '', d: ''};
+  const f1 = scFieldNamed(h.layout, '청구서 서식버전') || scFieldNamed(h.layout, '청구서서식버전');
+  const f2 = scFieldNamed(h.layout, '명세서 서식버전') || scFieldNamed(h.layout, '명세서서식버전');
+  for (const file of list){
+    const roleHit = scRoleHits(file.name).find(x => x.claim === claim);
+    for (const b of file.lines){
+      if (!b.length) continue;
+      const pick = scPickRec(spec, b, roleHit ? roleHit.role : null);
+      if (!pick || pick.rec.key !== 'H') continue;
+      const rd = f => { const v = f ? scAscii(b, f.pos, f.len) : null; return v ? v.trim() : ''; };
+      return {h: rd(f1), d: rd(f2)};
+    }
+  }
+  return {h: '', d: ''};
+}
 
 /* ---------- 파일명 → 레코드 ----------
    레이아웃 파일이 들고 있는 판별 함수를 그대로 쓴다(여기에 파일명 규칙을 다시 적지 않는다).
@@ -348,8 +426,8 @@ function scNumBad(rec, bytes){
 }
 
 /* ---------- 파일 한 개 점검 ---------- */
-function scCheckFile(file, claim){
-  const spec = SC_SPECS[claim];
+function scCheckFile(file, claim, spec){
+  spec = spec || SC_SPECS[claim];
   const roleHit = scRoleHits(file.name).find(h => h.claim === claim);
   const fileRole = roleHit ? roleHit.role : null;
 
@@ -397,6 +475,17 @@ function scCheckFile(file, claim){
   };
 }
 
+/* 어느 서식버전으로 쟀는지 한 줄로. 파일에서 읽은 것과 직접 고른 것을 구분해 적는다. */
+function scVerText(){
+  const u = SC.verUsed || {}, a = SC.verAuto || {};
+  const same = u.h === u.d;
+  const shown = !u.h && !u.d ? '지금 레이아웃'
+    : same ? esc(u.h)
+    : '청구서 ' + esc(u.h || '지금') + ' · 명세서 ' + esc(u.d || '지금');
+  const how = SC.verPick ? '직접 고름' : (a.h || a.d) ? '파일에서 읽음' : '파일에 없음';
+  return '<b>' + shown + '</b> <span class="sc-dim">(' + how + ')</span>';
+}
+
 /* ---------- 그리기 ---------- */
 function scRender(){
   const wrap = $('sc-out');
@@ -428,7 +517,14 @@ function scRender(){
     return;
   }
 
-  const res = SC.list.map(f => scCheckFile(f, claim));
+  // 파일이 적어 온 서식버전으로 잰다. 사용자가 고른 것이 있으면 그것을 쓴다.
+  const auto = scReadVers(SC.list, claim);
+  SC.verAuto = auto;
+  const verH = SC.verPick || auto.h, verD = SC.verPick || auto.d;
+  const spec = scSpecVer(claim, verH, verD);
+  SC.verUsed = {h: verH, d: verD};
+
+  const res = SC.list.map(f => scCheckFile(f, claim, spec));
   scFillNames(res);                 // 수진자 이름을 일반내역에서 가져와 같은 명세서의 줄에 채운다
   scStructCheck(res, claim);        // 청구서 1줄 · 건수 = 일반내역 줄 수
   const tot = res.reduce((a, r) => ({
@@ -445,6 +541,21 @@ function scRender(){
     SC.onlyBad = c.dataset.only === '1'; scRender();
   }));
 
+  // 서식버전 — 파일에서 읽은 것이 기본, 손으로 바꿔 볼 수도 있다
+  const vsel = $('sc-ver');
+  const vlist = sgVerList(claim, 'A').concat(sgVerList(claim, 'H').filter(v => sgVerList(claim, 'A').indexOf(v) < 0)).sort();
+  if (!vlist.length){
+    vsel.disabled = true;
+    vsel.innerHTML = '<option value="">지금 레이아웃 — 버전 자료 없음</option>';
+  } else {
+    vsel.disabled = false;
+    vsel.innerHTML = '<option value="">' +
+      ((auto.h || auto.d) ? '파일이 적어 온 버전 (' + esc(auto.d || auto.h) + ')' : '지금 레이아웃') + '</option>' +
+      vlist.map(v => '<option value="' + esc(v) + '"' + (v === SC.verPick ? ' selected' : '') + '>' +
+        esc(v) + ' 버전으로 재기</option>').join('');
+  }
+  vsel.onchange = e => { SC.verPick = e.target.value; SC.open && SC.open.clear && SC.open.clear(); scRender(); };
+
   // 어긋난 줄이 먼저 보여야 한다 — 총계 한 줄 → 어긋난 줄 표 → 파일별 요약 순서로 둔다
   wrap.innerHTML =
     '<div class="card"><div class="meta-bar">' +
@@ -452,6 +563,7 @@ function scRender(){
         (SC.forced ? ' (직접 고름)' : SC.why ? ' — 짐작한 근거: ' + esc(SC.why) : '') + '</span>' +
       '<span>파일 <b>' + res.length + '</b>개</span>' +
       '<span>줄 <b>' + tot.lines.toLocaleString() + '</b></span>' +
+      '<span>서식버전 ' + scVerText() + '</span>' +
       '<span>길이 어긋남 <b>' + tot.bad.toLocaleString() + '</b></span>' +
       '<span>구조 오류 <b>' + tot.struct.toLocaleString() + '</b></span>' +
       '<span>판별 못한 줄 <b>' + tot.unknown.toLocaleString() + '</b></span>' +
@@ -1049,6 +1161,7 @@ async function scTakeFiles(fileList){
   SC.list = list;
   scCloseView();
   SC.forced = false;
+  SC.verPick = '';                  // 새 파일을 놓으면 파일이 적어 온 버전으로 되돌린다
   const det = scDetectClaim(list);
   SC.cands = det.cands;
   SC.claim = det.best;

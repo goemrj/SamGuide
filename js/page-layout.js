@@ -18,21 +18,9 @@ function recordBytes(layout){
 /* ---------- 서식버전 ---------- */
 function loVerData(){ return typeof SG_LAYOUT_VERSIONS === 'undefined' ? null : SG_LAYOUT_VERSIONS; }
 
-/* 지금 고른 청구분야 · 레코드를 담고 있는 문서 종류.
-   청구서와 명세서는 버전이 따로 매겨지고, **청구서(H010) 하나를 여러 분야가 함께 쓴다**
-   (건강보험 · 완화 · 질병군 · 의료급여정액 · 한방). 그래서 자료의 claim 은 쉼표로 나눈 목록이다. */
-function loDocKind(claim, rec){
-  const D = loVerData();
-  if (!D) return '';
-  const mine = Object.keys(D).filter(k => (D[k].claim || '').split(',').indexOf(claim) >= 0);
-  const hit = mine.find(k => Object.keys(D[k].vers).some(v => D[k].vers[v][rec]));
-  return hit || '';
-}
-function loVersions(){
-  const D = loVerData(), kind = loDocKind(lo.claim, lo.rec);
-  if (!D || !kind) return [];
-  return Object.keys(D[kind].vers).filter(v => D[kind].vers[v][lo.rec]).sort();
-}
+// 문서 찾기·버전 목록은 common.js 로 옮겼다 — SAM 변환오류 화면도 같은 것을 쓴다
+function loDocKind(claim, rec){ return sgVerDocKind(claim, rec); }
+function loVersions(){ return sgVerList(lo.claim, lo.rec); }
 
 // 버전 자료의 배열 한 줄 → 화면이 쓰는 필드 모양. 실제 바이트 = 길이 + 소수부.
 function loVerField(a){

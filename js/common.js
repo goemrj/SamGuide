@@ -59,6 +59,31 @@ function availableClaims(){
 }
 function layoutsOf(claim){ return CLAIM_TYPES[claim].layouts; }
 
+/* ---------- 서식버전 자료 찾기 — ③ SAM 파일 레이아웃과 SAM 변환오류가 함께 쓴다 ----------
+   data/layout-versions.js 는 **문서 단위**로 담겨 있다(청구서 · 의치과 · 한방 …).
+   청구서(H010) 하나를 여러 분야가 함께 쓰고, 청구서와 명세서는 버전이 따로 매겨진다.
+   그래서 "이 청구분야의 이 레코드"를 담은 문서가 무엇인지 먼저 찾아야 한다. */
+function sgVerDocKind(claim, rec){
+  if (typeof SG_LAYOUT_VERSIONS === 'undefined') return '';
+  const mine = Object.keys(SG_LAYOUT_VERSIONS)
+    .filter(k => (SG_LAYOUT_VERSIONS[k].claim || '').split(',').indexOf(claim) >= 0);
+  return mine.find(k => Object.keys(SG_LAYOUT_VERSIONS[k].vers)
+    .some(v => SG_LAYOUT_VERSIONS[k].vers[v][rec])) || '';
+}
+// 그 문서에서 이 레코드가 있는 버전 목록
+function sgVerList(claim, rec){
+  const kind = sgVerDocKind(claim, rec);
+  if (!kind) return [];
+  const V = SG_LAYOUT_VERSIONS[kind].vers;
+  return Object.keys(V).filter(v => V[v][rec]).sort();
+}
+// 그 버전의 필드 목록(배열 그대로). 없으면 null.
+function sgVerFields(claim, rec, ver){
+  const kind = sgVerDocKind(claim, rec);
+  const V = kind && SG_LAYOUT_VERSIONS[kind].vers[ver];
+  return (V && V[rec]) || null;
+}
+
 /* ---------- 화면 도우미 ---------- */
 
 // "전체 + 항목들" 형태의 필터 칩 한 줄. counter(값)는 그 칩에 붙일 개수를 돌려준다.
