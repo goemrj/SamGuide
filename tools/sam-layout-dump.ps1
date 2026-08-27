@@ -160,16 +160,25 @@ foreach ($key in ($targets.Keys | Sort-Object)) {
       elseif (& $has '간병')                { $r.letter = 'H2' }
     }
 
-    # 한 문서에 같은 글자가 두 번 나오는 경우가 있다 — DRG 087·091 은 진료내역이 둘(본 명세서 · 열외군)이다.
-    # 뒤에 나온 쪽에 번호를 붙여 따로 둔다(C · C2).
-    $seen = @{}
-    foreach ($r in $recs) {
-      if (-not $r.letter) { continue }
-      if ($seen.ContainsKey($r.letter)) {
-        $seen[$r.letter] = $seen[$r.letter] + 1
-        $r.letter = $r.letter + $seen[$r.letter]
-      } else { $seen[$r.letter] = 1 }
+    # 한 문서에 같은 글자가 두 번 나오는 경우가 있다.
+    #  · 문서 안의 **작은 예시 표**가 레코드처럼 잡히는 것 (DRG 087·091 의 항번호·줄번호·코드 5칸짜리).
+    #    글자가 겹치고 칸이 5개 이하면 조각으로 보고 버린다 — 실제 레코드는 그보다 크다.
+    #    (산재 상병내역처럼 4칸짜리 진짜 레코드도 있지만, 그것들은 글자가 겹치지 않는다.)
+    #  · 진짜로 둘인 경우는 뒤에 번호를 붙여 따로 둔다(C · C2).
+    # 겹칠 때 **칸이 많은 쪽이 원래 글자**를 갖는다 — 그래야 진료내역이 C 로 남는다.
+    $drop = New-Object System.Collections.Generic.List[object]
+    foreach ($g in ($recs | Where-Object { $_.letter } | Group-Object letter | Where-Object { $_.Count -gt 1 })) {
+      $sorted = $g.Group | Sort-Object { $_.items.Count } -Descending
+      for ($j = 1; $j -lt $sorted.Count; $j++) {
+        if ($sorted[$j].items.Count -le 5) {
+          Write-Host ("    · 조각 버림: {0} {1} — {2}칸" -f $t.kind, $sorted[$j].letter, $sorted[$j].items.Count)
+          $drop.Add($sorted[$j])
+        } else {
+          $sorted[$j].letter = $sorted[$j].letter + ($j + 1)
+        }
+      }
     }
+    foreach ($d in $drop) { [void]$recs.Remove($d) }
 
     $n = 0
     foreach ($r in $recs) {

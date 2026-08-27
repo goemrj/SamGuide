@@ -18,11 +18,13 @@ function recordBytes(layout){
 /* ---------- 서식버전 ---------- */
 function loVerData(){ return typeof SG_LAYOUT_VERSIONS === 'undefined' ? null : SG_LAYOUT_VERSIONS; }
 
-// 지금 고른 청구분야 · 레코드를 담고 있는 문서 종류 (청구서와 명세서는 버전이 따로 매겨진다)
+/* 지금 고른 청구분야 · 레코드를 담고 있는 문서 종류.
+   청구서와 명세서는 버전이 따로 매겨지고, **청구서(H010) 하나를 여러 분야가 함께 쓴다**
+   (건강보험 · 완화 · 질병군 · 의료급여정액 · 한방). 그래서 자료의 claim 은 쉼표로 나눈 목록이다. */
 function loDocKind(claim, rec){
   const D = loVerData();
   if (!D) return '';
-  const mine = Object.keys(D).filter(k => D[k].claim === claim);
+  const mine = Object.keys(D).filter(k => (D[k].claim || '').split(',').indexOf(claim) >= 0);
   const hit = mine.find(k => Object.keys(D[k].vers).some(v => D[k].vers[v][rec]));
   return hit || '';
 }
@@ -45,10 +47,16 @@ function loLayout(){
     return {name: D[kind].label + ' ' + lo.ver, fields: D[kind].vers[lo.ver][lo.rec].map(loVerField)};
   return layoutsOf(lo.claim)[lo.rec];
 }
+/* 레코드 칩 목록 — **늘 지금 레이아웃의 레코드를 다 보여 준다.**
+   버전을 고르면 그 버전에만 있는 레코드(DRG 087·091 의 둘째 진료내역 C2)를 뒤에 더한다.
+   청구서(H)와 명세서(A~F)는 서로 다른 문서라, 고른 버전이 담긴 문서의 레코드만 보여 주면
+   나머지 레코드로 넘어갈 길이 막힌다(2026-08-27). */
 function loRecKeys(){
+  const keys = Object.keys(layoutsOf(lo.claim));
   const D = loVerData(), kind = loDocKind(lo.claim, lo.rec);
-  if (lo.ver && D && kind && D[kind].vers[lo.ver]) return Object.keys(D[kind].vers[lo.ver]);
-  return Object.keys(layoutsOf(lo.claim));
+  if (lo.ver && D && kind && D[kind].vers[lo.ver])
+    for (const k of Object.keys(D[kind].vers[lo.ver])) if (keys.indexOf(k) < 0) keys.push(k);
+  return keys;
 }
 
 function renderClaims(){
@@ -70,7 +78,7 @@ function renderRecs(){
   const live = layoutsOf(lo.claim);
   $('lo-recs').innerHTML = loRecKeys().map(k =>
     '<button class="chip' + (k === lo.rec ? ' on' : '') + '" data-rec="' + k + '">' + esc(k) +
-    '<small>' + esc(live[k] ? live[k].name : '') + '</small></button>'
+    '<small>' + esc(live[k] ? live[k].name : '이 버전에만') + '</small></button>'
   ).join('');
   $('lo-recs').querySelectorAll('.chip').forEach(c => {
     c.addEventListener('click', () => {
@@ -81,21 +89,27 @@ function renderRecs(){
   });
 }
 
-// 서식버전 고르는 칸 — 자료가 없는 청구분야(첩약 · 신포괄 · 자보)는 잠근다
+/* 서식버전 고르는 칸. 자료가 없으면 잠그되 **왜 없는지 칸에 적어 둔다** —
+   잠긴 칸만 두면 "안 열린다"로 보인다(2026-08-27 사용자 지적).
+   첩약 · 신포괄 · 자보 · 자보한방은 참고파일에 .doc 레이아웃이 아예 없다(자보는 PDF · 신포괄은 xls). */
 function renderVers(){
   const sel = $('lo-ver'), vers = loVersions();
   if (!sel) return;
-  if (!vers.length){
-    sel.innerHTML = '<option value="">지금 쓰는 레이아웃</option>';
-    sel.disabled = true;
-    sel.title = '이 청구분야는 지난 서식버전 자료가 없습니다';
+  if (vers.length){
+    sel.disabled = false;
+    sel.title = '';
+    sel.innerHTML = '<option value="">지금 쓰는 레이아웃</option>' +
+      vers.map(v => '<option value="' + esc(v) + '"' + (v === lo.ver ? ' selected' : '') + '>' +
+        esc(v) + ' 버전</option>').join('');
     return;
   }
-  sel.disabled = false;
-  sel.title = '';
-  sel.innerHTML = '<option value="">지금 쓰는 레이아웃</option>' +
-    vers.map(v => '<option value="' + esc(v) + '"' + (v === lo.ver ? ' selected' : '') + '>' +
-      esc(v) + ' 버전</option>').join('');
+  const D = loVerData();
+  const anyRec = D && Object.keys(D).some(k => (D[k].claim || '').split(',').indexOf(lo.claim) >= 0);
+  const why = anyRec ? '이 레코드는 자료 없음' : '지난 버전 자료 없음';
+  sel.disabled = true;
+  sel.title = anyRec ? '이 레코드는 지난 서식버전 자료가 없습니다'
+                     : '이 청구분야는 지난 서식버전 자료가 없습니다 (참고파일에 레이아웃 문서가 없습니다)';
+  sel.innerHTML = '<option value="">지금 쓰는 레이아웃 — ' + why + '</option>';
 }
 
 function fmtLabel(f){

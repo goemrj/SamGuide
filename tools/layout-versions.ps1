@@ -18,17 +18,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# 문서 종류 → 화면에 쓸 이름과, 지금 화면의 어느 청구분야와 짝인지.
+# 문서 종류 → 화면에 쓸 이름과, 지금 화면의 **어느 청구분야들**과 짝인지(쉼표로 나눈다).
+#   청구서(H010) 하나를 건강보험·완화·질병군·의료급여정액·한방이 함께 쓴다 — 그래서 여럿이다.
+#   산재 청구서(M010.1)도 산재 의치과와 산재 한방이 함께 쓴다.
 # 짝이 없는 것(약국·보건·산재약제비)은 지금 화면에 청구분야가 없다 — 그래도 자료는 담아 둔다.
 $kinds = [ordered]@{
-  '청구서'          = @{ label = '청구서 (건강보험 · 의료급여 공통)'; claim = 'GEN'        }
-  '의치과'          = @{ label = '의과 · 치과 명세서';                claim = 'GEN'        }
+  '청구서'          = @{ label = '청구서 (건강보험 · 의료급여 공통)'; claim = 'GEN,WANHWA,DRG,MG,HANBANG' }
+  '의치과'          = @{ label = '의과 · 치과 명세서';                claim = 'GEN,WANHWA' }
   '한방'            = @{ label = '한방 명세서';                      claim = 'HANBANG'    }
   'DRG'             = @{ label = '질병군(DRG) 명세서';               claim = 'DRG'        }
   '의료급여정액'    = @{ label = '의료급여 정액 명세서';              claim = 'MG'         }
   '약국'            = @{ label = '약국 명세서';                      claim = ''           }
   '보건'            = @{ label = '보건기관 명세서';                   claim = ''           }
-  '산재청구서'      = @{ label = '산재 청구서 (의 · 치과)';           claim = 'SANJAE'     }
+  '산재청구서'      = @{ label = '산재 청구서 (의 · 치과)';           claim = 'SANJAE,SANJAE_HAN' }
   '산재의치과'      = @{ label = '산재 의 · 치과 명세서';             claim = 'SANJAE'     }
   '산재한의과'      = @{ label = '산재 한의과 명세서';                claim = 'SANJAE_HAN' }
   '산재약제비청구서'= @{ label = '산재 청구서 (약제비)';              claim = ''           }
