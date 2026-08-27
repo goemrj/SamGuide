@@ -483,8 +483,12 @@
       <div class="toolbar">
         <input class="field-input" id="lo-search" type="search" placeholder="항목명 · 설명 · 코드값 검색  (예: 특정내역, 산정특례, MT)">
         <input class="field-input" id="lo-pos" type="number" min="1" placeholder="바이트 위치">
+        <!-- 지난 서식버전 — data/layout-versions.js (심평원 레이아웃 문서에서 뽑은 것) -->
+        <label class="saved-note">서식버전 <select class="field-input" id="lo-ver"></select></label>
         <label class="saved-note"><input type="checkbox" id="lo-all"> 모든 청구분야에서 검색</label>
       </div>
+
+      <div id="lo-verbar"></div>
 
       <div class="card">
         <div class="meta-bar" id="lo-meta"></div>
@@ -776,6 +780,7 @@
 <script src="data/kdrg-sev.js"></script>
 <script src="data/memo-seed.js"></script>
 <!-- 열 너비 기본값 — common.js 보다 먼저 읽혀야 한다 -->
+<script src="data/layout-versions.js"></script>
 <script src="data/colw-defaults.js"></script>
 
 <!-- 공통(화면 전환·도우미) → 카테고리별 화면 한 개당 한 파일 -->
